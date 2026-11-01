@@ -845,6 +845,10 @@ function purgeForeignCalendars() {
 function openGoogleAuthModal() {
   const modal = document.getElementById("googleAuthModal");
   if (modal) modal.classList.remove("hidden");
+  const codeEl = document.getElementById("googleRedirectUriCode");
+  if (codeEl && chrome.identity && chrome.identity.getRedirectURL) {
+    codeEl.textContent = chrome.identity.getRedirectURL();
+  }
 }
 
 function closeGoogleAuthModal() {
