@@ -2332,14 +2332,12 @@ function setupWidgetDrag(widgetEl, getPos, savePos, title) {
     window.addEventListener("pointercancel", onPointerUp);
   });
 
-  // Double-clic sur la barre pour la réinitialiser en haut au centre
+  // Double-clic sur la barre pour la repositionner automatiquement dans un espace vide
   liveEditToolbar.addEventListener("dblclick", (e) => {
     if (e.target.closest("button") || e.target.closest("input") || e.target.closest("a")) return;
-    liveEditToolbar.style.left = "";
-    liveEditToolbar.style.top = "";
-    liveEditToolbar.style.bottom = "";
-    liveEditToolbar.style.transform = "";
-    showToast("Barre d'édition recentrée en haut");
+    toolbarWasManuallyDragged = false;
+    autoPositionLiveEditToolbar(true);
+    showToast("Barre d'édition placée automatiquement dans un espace vide");
   });
 }
 
@@ -3583,6 +3581,137 @@ function setupWidgetControls() {
   }
 }
 
+
+let toolbarWasManuallyDragged = false;
+
+// Positionne automatiquement la barre d'outils du mode édition dans un espace 100% vide (sans raccourcis, sans widgets, sans dock Windows)
+function autoPositionLiveEditToolbar(force = false) {
+  if (!liveEditToolbar || !isLiveEditMode) return;
+  if (toolbarWasManuallyDragged && !force) return;
+
+  liveEditToolbar.classList.remove("hidden");
+  const tbRect = liveEditToolbar.getBoundingClientRect();
+  const tbW = tbRect.width > 0 ? tbRect.width : 780;
+  const tbH = tbRect.height > 0 ? tbRect.height : 42;
+  const winW = window.innerWidth;
+  const winH = window.innerHeight;
+  const safetyMargin = 12; // 12px de marge de confort autour de chaque obstacle
+
+  // 1. Lister tous les obstacles sur la page
+  const obstacles = [];
+
+  // Raccourcis visibles sur le bureau courant
+  const pills = document.querySelectorAll("#quickPillsContainer .quick-pill");
+  pills.forEach((p) => {
+    const r = p.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) {
+      obstacles.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+    }
+  });
+
+  // Widgets flottants actifs
+  const widgets = document.querySelectorAll(".floating-widget:not(.hidden), .weather-widget:not(.hidden)");
+  widgets.forEach((w) => {
+    if (w.style.display !== "none") {
+      const r = w.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        obstacles.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+      }
+    }
+  });
+
+  // Dock des raccourcis Windows en bas
+  const dock = document.querySelector(".local-shortcuts-dock");
+  if (dock && dock.style.display !== "none") {
+    const r = dock.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) {
+      obstacles.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+    }
+  }
+
+  // Barre de pagination des bureaux
+  const pagination = document.querySelector(".desktop-pagination-bar");
+  if (pagination && pagination.style.display !== "none") {
+    const r = pagination.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) {
+      obstacles.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+    }
+  }
+
+  // Section de recherche centrale Google
+  const searchSec = document.querySelector(".center-search-section");
+  if (searchSec && searchSec.style.display !== "none") {
+    const r = searchSec.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) {
+      obstacles.push({ left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+    }
+  }
+
+  // 2. Fonction de calcul du chevauchement d'un rectangle candidat
+  function getOverlapArea(box) {
+    let overlap = 0;
+    for (const obs of obstacles) {
+      const xOverlap = Math.max(0, Math.min(box.right, obs.right + safetyMargin) - Math.max(box.left, obs.left - safetyMargin));
+      const yOverlap = Math.max(0, Math.min(box.bottom, obs.bottom + safetyMargin) - Math.max(box.top, obs.top - safetyMargin));
+      if (xOverlap > 0 && yOverlap > 0) {
+        overlap += (xOverlap * yOverlap);
+      }
+    }
+    return overlap;
+  }
+
+  // 3. Emplacements horizontaux candidats
+  const centeredLeft = Math.max(10, Math.round((winW - tbW) / 2));
+  const leftAlign = 18;
+  const rightAlign = Math.max(18, winW - tbW - 18);
+  const testXCoords = [centeredLeft, leftAlign, rightAlign];
+
+  // Emplacements verticaux candidats
+  const testYCoords = [14, 65, 115, 165, 220, 280, 340, 400, 460];
+  if (pagination) {
+    const pRect = pagination.getBoundingClientRect();
+    if (pRect.top > tbH + 30) {
+      testYCoords.push(Math.round(pRect.top - tbH - 16));
+    }
+  }
+
+  // Tester des pas réguliers de 25px sur toute la hauteur
+  for (let y = 14; y <= winH - tbH - 40; y += 25) {
+    if (!testYCoords.includes(y)) testYCoords.push(y);
+  }
+
+  let bestCandidate = null;
+  let minOverlap = Infinity;
+
+  // Parcourir les candidats en cherchant une zone sans aucun chevauchement (overlap === 0)
+  for (const x of testXCoords) {
+    for (const y of testYCoords) {
+      if (y < 10 || y + tbH > winH - 10) continue;
+      const box = { left: x, right: x + tbW, top: y, bottom: y + tbH };
+      const overlap = getOverlapArea(box);
+
+      if (overlap === 0) {
+        bestCandidate = { left: x, top: y };
+        minOverlap = 0;
+        break;
+      }
+
+      if (overlap < minOverlap) {
+        minOverlap = overlap;
+        bestCandidate = { left: x, top: y };
+      }
+    }
+    if (bestCandidate && minOverlap === 0) break;
+  }
+
+  if (bestCandidate) {
+    liveEditToolbar.style.transform = "none";
+    liveEditToolbar.style.bottom = "auto";
+    liveEditToolbar.style.left = `${bestCandidate.left}px`;
+    liveEditToolbar.style.top = `${bestCandidate.top}px`;
+  }
+}
+
 function setupToolbarDrag() {
   if (!liveEditToolbar) return;
 
@@ -3629,6 +3758,7 @@ function setupToolbarDrag() {
       window.removeEventListener("pointercancel", onPointerUp);
 
       if (hasMoved) {
+        toolbarWasManuallyDragged = true;
         liveEditToolbar.classList.remove("dragging-toolbar");
         try { liveEditToolbar.releasePointerCapture(e.pointerId); } catch (err) {}
       }
@@ -3727,6 +3857,7 @@ function toggleLiveEditMode(forceState) {
       topEditPageBtn.title = "Mode édition actif - Cliquez pour terminer";
     }
     showToast("Mode édition activé : déplacez les raccourcis et les widgets librement");
+    setTimeout(() => autoPositionLiveEditToolbar(), 60);
   } else {
     if (liveEditToolbar) liveEditToolbar.classList.add("hidden");
     if (editPageBtn) {
@@ -5724,6 +5855,7 @@ function goToDesktopPage(newPageIndex) {
       updateAllWidgetsVisibility();
       pillsContainer.style.opacity = "1";
       pillsContainer.style.transform = "none";
+      if (isLiveEditMode) autoPositionLiveEditToolbar();
     }, 120);
   } else {
     renderPills();
