@@ -435,7 +435,8 @@ const DEFAULT_WEATHER_SETTINGS = {
   lat: 48.8566,
   lon: 2.3522,
   posX: 78,
-  posY: 3.5
+  posY: 3.5,
+  page: 0
 };
 
 let weatherSettings = { ...DEFAULT_WEATHER_SETTINGS };
@@ -459,10 +460,10 @@ const weatherResetPosBtn = document.getElementById("weatherResetPosBtn");
 // ========================================================
 // WIDGETS INTERACTIFS ADDITIONNELS (Horloge, Notes, Pomodoro, Récents)
 // ========================================================
-const DEFAULT_CLOCK_SETTINGS = { enabled: true, posX: 36, posY: 16 };
-const DEFAULT_NOTES_SETTINGS = { enabled: false, posX: 4, posY: 58 };
-const DEFAULT_POMODORO_SETTINGS = { enabled: false, posX: 4, posY: 28 };
-const DEFAULT_RECENT_SETTINGS = { enabled: false, posX: 76, posY: 35, mode: "top" };
+const DEFAULT_CLOCK_SETTINGS = { enabled: true, posX: 36, posY: 16, page: 0 };
+const DEFAULT_NOTES_SETTINGS = { enabled: false, posX: 4, posY: 58, page: 0 };
+const DEFAULT_POMODORO_SETTINGS = { enabled: false, posX: 4, posY: 28, page: 0 };
+const DEFAULT_RECENT_SETTINGS = { enabled: false, posX: 76, posY: 35, mode: "top", page: 0 };
 
 let clockSettings = { ...DEFAULT_CLOCK_SETTINGS };
 let notesSettings = { ...DEFAULT_NOTES_SETTINGS };
@@ -478,6 +479,55 @@ const clockEnabledCheckbox = document.getElementById("clockEnabledCheckbox");
 const notesEnabledCheckbox = document.getElementById("notesEnabledCheckbox");
 const pomodoroEnabledCheckbox = document.getElementById("pomodoroEnabledCheckbox");
 const recentEnabledCheckbox = document.getElementById("recentEnabledCheckbox");
+
+// ========================================================
+// CHARGEMENT DU FOND D'ÉCRAN & DES RACCOURCIS (Garanti sans ReferenceError)
+// ========================================================
+async function loadWallpaper() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get("customWallpaper", (res) => {
+      try {
+        const bg = document.getElementById("wallpaperBg");
+        if (bg) {
+          if (res && res.customWallpaper) {
+            bg.style.backgroundImage = `url("${res.customWallpaper}")`;
+          } else {
+            bg.style.backgroundImage = `url("wallpaper.jpg")`;
+          }
+        }
+      } catch (err) {
+        console.warn("Erreur chargement fond d'écran:", err);
+      }
+      resolve();
+    });
+  });
+}
+
+async function loadPills() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(["quickPills", "pillsVersion"], (res) => {
+      try {
+        const isGenericDemo = Array.isArray(res.quickPills) &&
+          res.quickPills.length <= 14 &&
+          res.quickPills.some((p) => p.title === "Wikipédia" || p.title === "LinkedIn" || p.title === "Reddit");
+
+        const hasScatteredGrid = Array.isArray(res.quickPills) &&
+          res.quickPills.some((p) => typeof p.posY === "number" && (p.posY >= 66.0 || p.posY === 74.5));
+
+        if (Array.isArray(res.quickPills) && res.quickPills.length > 0 && !isGenericDemo && !hasScatteredGrid) {
+          quickPills = res.quickPills;
+        } else {
+          quickPills = JSON.parse(JSON.stringify(DEFAULT_PILLS));
+          chrome.storage.local.set({ quickPills, pillsVersion: "5.1" });
+        }
+        renderPills();
+      } catch (err) {
+        console.warn("Erreur chargement raccourcis:", err);
+      }
+      resolve();
+    });
+  });
+}
 
 document.addEventListener("DOMContentLoaded", async () => {
   if (window.I18N && typeof I18N.init === "function") {
@@ -1021,44 +1071,7 @@ function groupByCategory() {
   showToast("Raccourcis regroupés par catégories (aucun sous un widget)");
 }
 
-// Fond d'écran
-async function loadWallpaper() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get("customWallpaper", (res) => {
-      if (res.customWallpaper) {
-        wallpaperBg.style.backgroundImage = `url("${res.customWallpaper}")`;
-      } else {
-        wallpaperBg.style.backgroundImage = `url("wallpaper.jpg")`;
-      }
-      resolve();
-    });
-  });
-}
 
-// Raccourcis rapides avec Drag & Drop et Clic Droit
-async function loadPills() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(["quickPills", "pillsVersion"], (res) => {
-      // Detection : si vide ou si ecrase par la liste de demo temporaire
-      const isGenericDemo = Array.isArray(res.quickPills) &&
-        res.quickPills.length <= 14 &&
-        res.quickPills.some((p) => p.title === "Wikipédia" || p.title === "LinkedIn" || p.title === "Reddit");
-
-      // Detection de l'ancienne grille eparpillee sur tout l'ecran (posY >= 66 ou 74.5)
-      const hasScatteredGrid = Array.isArray(res.quickPills) &&
-        res.quickPills.some((p) => typeof p.posY === "number" && (p.posY >= 66.0 || p.posY === 74.5));
-
-      if (Array.isArray(res.quickPills) && res.quickPills.length > 0 && !isGenericDemo && !hasScatteredGrid) {
-        quickPills = res.quickPills;
-      } else {
-        quickPills = JSON.parse(JSON.stringify(DEFAULT_PILLS));
-        chrome.storage.local.set({ quickPills, pillsVersion: "5.1" });
-      }
-      renderPills();
-      resolve();
-    });
-  });
-}
 
 function restoreOriginalPills() {
   pushPillsHistory();
@@ -2839,13 +2852,16 @@ async function loadAllWidgetsSettings() {
 
 function shouldShowWidgetOnCurrentPage(settings) {
   if (!settings || !settings.enabled) return false;
-  if (typeof settings.page !== "number" || settings.page === -1) return true;
-  return settings.page === currentDesktopPageIndex;
+  // Par défaut chaque widget est affecté au Bureau 1 (page 0) : il ne reste PAS sur les autres bureaux !
+  const widgetPage = (typeof settings.page === "number") ? settings.page : 0;
+  if (widgetPage === -1) return true; // -1 = seulement si l'utilisateur choisit explicitement "Tous les bureaux"
+  return widgetPage === currentDesktopPageIndex;
 }
 
 function updateWidgetDesktopBadges() {
   const widgetConfigs = [
     { widget: clockWidget, settings: clockSettings, key: "clockSettings", name: "Horloge" },
+    { widget: weatherWidget, settings: weatherSettings, key: "weatherSettings", name: "Météo" },
     { widget: notesWidget, settings: notesSettings, key: "notesSettings", name: "Bloc-notes" },
     { widget: pomodoroWidget, settings: pomodoroSettings, key: "pomodoroSettings", name: "Pomodoro" },
     { widget: recentWidget, settings: recentSettings, key: "recentSettings", name: "Récents" }
@@ -2853,10 +2869,9 @@ function updateWidgetDesktopBadges() {
 
   widgetConfigs.forEach(({ widget, settings, key, name }) => {
     if (!widget) return;
-    const header = widget.querySelector(".widget-header");
-    if (!header) return;
+    const header = widget.querySelector(".widget-header") || widget.querySelector(".weather-inner") || widget;
 
-    let badge = header.querySelector(".widget-desktop-badge");
+    let badge = widget.querySelector(".widget-desktop-badge");
     if (!isLiveEditMode) {
       if (badge) badge.remove();
       return;
@@ -2866,22 +2881,29 @@ function updateWidgetDesktopBadges() {
       badge = document.createElement("button");
       badge.type = "button";
       badge.className = "widget-desktop-badge";
-      header.appendChild(badge);
+      if (header.classList && header.classList.contains("widget-header")) {
+        header.appendChild(badge);
+      } else {
+        widget.appendChild(badge);
+      }
     }
 
-    const currentPageVal = (typeof settings.page === "number") ? settings.page : -1;
-    const label = currentPageVal === -1 ? "Tous" : `${currentPageVal + 1}`;
-    badge.textContent = `🖥️ Bureau : ${label}`;
-    badge.title = `Affichage de ce widget : ${currentPageVal === -1 ? "Tous les bureaux" : "Bureau " + (currentPageVal + 1)} (Cliquer pour changer)`;
+    // Par défaut, affecté au Bureau 1 (page 0)
+    const currentPageVal = (typeof settings.page === "number") ? settings.page : 0;
+    const label = currentPageVal === -1 ? "Tous les bureaux" : `Bureau ${currentPageVal + 1}`;
+    badge.textContent = `🖥️ ${currentPageVal === -1 ? "Tous" : (currentPageVal + 1)}`;
+    badge.title = `Ce widget est affecté à : ${label} (Cliquer pour changer)`;
 
     badge.onclick = (e) => {
       e.stopPropagation();
       let nextVal = currentPageVal + 1;
-      if (nextVal >= totalDesktopPages) nextVal = -1; // -1 = Tous les bureaux
+      if (nextVal >= totalDesktopPages) {
+        nextVal = (currentPageVal === -1) ? 0 : -1;
+      }
       settings.page = nextVal;
       chrome.storage.local.set({ [key]: settings });
       updateAllWidgetsVisibility();
-      showToast(`${name} : ${nextVal === -1 ? "Visible sur tous les bureaux" : "Assigné au Bureau " + (nextVal + 1)}`);
+      showToast(`${name} : ${nextVal === -1 ? "Visible sur tous les bureaux" : "Affecté au Bureau " + (nextVal + 1)}`);
     };
   });
 }
@@ -2890,15 +2912,27 @@ function updateAllWidgetsVisibility() {
   if (clockWidget) {
     const show = shouldShowWidgetOnCurrentPage(clockSettings);
     clockWidget.classList.toggle("hidden", !show);
+    clockWidget.style.display = show ? "" : "none";
     clockWidget.style.left = `${clockSettings.posX}%`;
     clockWidget.style.top = `${clockSettings.posY}%`;
     if (clockSettings.width) applyWidgetDimensions(clockWidget, clockSettings.width, clockSettings.height);
   }
   if (clockEnabledCheckbox) clockEnabledCheckbox.checked = clockSettings.enabled;
 
+  if (weatherWidget) {
+    const show = shouldShowWidgetOnCurrentPage(weatherSettings);
+    weatherWidget.classList.toggle("hidden", !show);
+    weatherWidget.style.display = show ? "" : "none";
+    weatherWidget.style.left = `${weatherSettings.posX}%`;
+    weatherWidget.style.top = `${weatherSettings.posY}%`;
+    if (weatherSettings.width) applyWidgetDimensions(weatherWidget, weatherSettings.width, weatherSettings.height);
+  }
+  if (weatherEnabledCheckbox) weatherEnabledCheckbox.checked = weatherSettings.enabled;
+
   if (notesWidget) {
     const show = shouldShowWidgetOnCurrentPage(notesSettings);
     notesWidget.classList.toggle("hidden", !show);
+    notesWidget.style.display = show ? "" : "none";
     notesWidget.style.left = `${notesSettings.posX}%`;
     notesWidget.style.top = `${notesSettings.posY}%`;
     if (notesSettings.width) applyWidgetDimensions(notesWidget, notesSettings.width, notesSettings.height);
@@ -2908,6 +2942,7 @@ function updateAllWidgetsVisibility() {
   if (pomodoroWidget) {
     const show = shouldShowWidgetOnCurrentPage(pomodoroSettings);
     pomodoroWidget.classList.toggle("hidden", !show);
+    pomodoroWidget.style.display = show ? "" : "none";
     pomodoroWidget.style.left = `${pomodoroSettings.posX}%`;
     pomodoroWidget.style.top = `${pomodoroSettings.posY}%`;
     if (pomodoroSettings.width) applyWidgetDimensions(pomodoroWidget, pomodoroSettings.width, pomodoroSettings.height);
@@ -2917,15 +2952,12 @@ function updateAllWidgetsVisibility() {
   if (recentWidget) {
     const show = shouldShowWidgetOnCurrentPage(recentSettings);
     recentWidget.classList.toggle("hidden", !show);
+    recentWidget.style.display = show ? "" : "none";
     recentWidget.style.left = `${recentSettings.posX}%`;
     recentWidget.style.top = `${recentSettings.posY}%`;
     if (recentSettings.width) applyWidgetDimensions(recentWidget, recentSettings.width, recentSettings.height);
   }
   if (recentEnabledCheckbox) recentEnabledCheckbox.checked = recentSettings.enabled;
-
-  if (weatherWidget && weatherSettings.width) {
-    applyWidgetDimensions(weatherWidget, weatherSettings.width, weatherSettings.height);
-  }
 
   updateWidgetDesktopBadges();
 }
