@@ -2331,6 +2331,16 @@ function setupWidgetDrag(widgetEl, getPos, savePos, title) {
     window.addEventListener("pointerup", onPointerUp);
     window.addEventListener("pointercancel", onPointerUp);
   });
+
+  // Double-clic sur la barre pour la réinitialiser en haut au centre
+  liveEditToolbar.addEventListener("dblclick", (e) => {
+    if (e.target.closest("button") || e.target.closest("input") || e.target.closest("a")) return;
+    liveEditToolbar.style.left = "";
+    liveEditToolbar.style.top = "";
+    liveEditToolbar.style.bottom = "";
+    liveEditToolbar.style.transform = "";
+    showToast("Barre d'édition recentrée en haut");
+  });
 }
 
 function setupAllWidgetsDrag() {

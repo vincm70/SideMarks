@@ -907,10 +907,11 @@ html, body {
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
 }
 
-/* Barre d'outils flottante du Mode Édition (En bas par défaut, ultra-compacte, déplaçable) */
+/* Barre d'outils flottante du Mode Édition (En haut par défaut pour éviter de masquer le dock Windows et la pagination, déplaçable) */
 .live-edit-toolbar {
   position: fixed;
-  bottom: 24px;
+  top: 18px;
+  bottom: auto;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
