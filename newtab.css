@@ -2088,3 +2088,356 @@ html, body {
   z-index: 1200;
   display: none;
 }
+
+
+/* ========================================================
+   ONGLETS DU BLOC-NOTES STYLE NOTEPAD++ (v5.3)
+   ======================================================== */
+.notes-tabs-bar {
+  display: flex;
+  align-items: center;
+  background: rgba(10, 15, 24, 0.85);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 4px 6px 0 6px;
+  gap: 2px;
+  overflow-x: auto;
+}
+
+.notes-tabs-list {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.notes-tabs-list::-webkit-scrollbar {
+  display: none;
+}
+
+.notes-tab-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: none;
+  border-radius: 5px 5px 0 0;
+  color: #94a3b8;
+  font-size: 11.5px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  max-width: 140px;
+}
+
+.notes-tab-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f1f5f9;
+}
+
+.notes-tab-item.active {
+  background: rgba(30, 58, 138, 0.85);
+  border-color: #3b82f6;
+  border-bottom: 2px solid #60a5fa;
+  color: #fff;
+  font-weight: 600;
+}
+
+.notes-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notes-tab-close {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0 2px;
+  border-radius: 3px;
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+
+.notes-tab-close:hover {
+  background: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
+.notes-add-tab-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 2px 7px;
+  margin-left: 4px;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+
+.notes-add-tab-btn:hover {
+  background: #2563eb;
+  border-color: #60a5fa;
+  color: #fff;
+}
+
+/* ========================================================
+   NAVIGATION MULTI-BUREAUX STYLE SMARTPHONE (v5.3)
+   ======================================================== */
+.desktop-pagination-bar {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 24px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  z-index: 850;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+
+.desktop-pagination-bar:hover {
+  border-color: rgba(96, 165, 250, 0.5);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+}
+
+.desktop-dots-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.desktop-page-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid transparent;
+}
+
+.desktop-page-dot:hover {
+  background: rgba(255, 255, 255, 0.6);
+  transform: scale(1.2);
+}
+
+.desktop-page-dot.active {
+  width: 22px;
+  border-radius: 10px;
+  background: #3b82f6;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
+  border-color: #93c5fd;
+}
+
+.desktop-add-page-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  color: #94a3b8;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.desktop-add-page-btn:hover {
+  background: #2563eb;
+  color: #fff;
+  border-color: #60a5fa;
+  transform: scale(1.1);
+}
+
+.desktop-nav-arrow {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 52px;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 850;
+  transition: all 0.2s ease;
+  opacity: 0.35;
+}
+
+.desktop-nav-arrow:hover {
+  opacity: 1;
+  background: rgba(30, 58, 138, 0.85);
+  border-color: #60a5fa;
+  color: #fff;
+  box-shadow: 0 0 18px rgba(59, 130, 246, 0.5);
+}
+
+.desktop-arrow-prev {
+  left: 8px;
+  border-radius: 0 10px 10px 0;
+}
+
+.desktop-arrow-next {
+  right: 8px;
+  border-radius: 10px 0 0 10px;
+}
+
+
+/* ========================================================
+   ONGLETS DE NOTE AVEC COULEUR (NOTEPAD++) & SÉLECTEUR BUREAU
+   ======================================================== */
+.notes-tab-item {
+  position: relative;
+}
+
+.notes-tab-color-pip {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.notes-tab-color-pip:hover {
+  transform: scale(1.35);
+  border-color: #fff;
+}
+
+.notes-tab-color-menu {
+  position: fixed;
+  z-index: 10000;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 8px 10px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 175px;
+  user-select: none;
+}
+
+.notes-tab-color-menu-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.notes-tab-colors-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  align-items: center;
+}
+
+.notes-tab-color-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.notes-tab-color-btn:hover {
+  transform: scale(1.22);
+  border-color: #ffffff;
+}
+
+.notes-tab-custom-color-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 3px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  color: #cbd5e1;
+}
+
+.notes-tab-custom-color-row input[type="color"] {
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+}
+
+.notes-tab-reset-color-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #cbd5e1;
+  font-size: 10px;
+  border-radius: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.notes-tab-reset-color-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  color: #ef4444;
+}
+
+/* Badge de bureau pour widget en mode édition */
+.widget-desktop-badge {
+  background: rgba(168, 85, 247, 0.2);
+  border: 1px solid rgba(168, 85, 247, 0.5);
+  color: #d8b4fe;
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  user-select: none;
+  margin-left: 6px;
+}
+
+.widget-desktop-badge:hover {
+  background: rgba(168, 85, 247, 0.4);
+  color: #fff;
+  border-color: #c084fc;
+}

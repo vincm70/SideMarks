@@ -308,6 +308,12 @@ let currentSidebarTab = "bookmarks"; // 'bookmarks' | 'tabs'
 // ========================================================
 // SÉLECTION MULTIPLE & DÉPLACEMENT PAR BLOC (v5.3)
 // ========================================================
+// ========================================================
+// SYSTÈME MULTI-BUREAUX / SMARTPHONE PAGES (v5.3)
+// ========================================================
+let currentDesktopPageIndex = 0;
+let totalDesktopPages = 1;
+
 let selectedPillIndices = new Set();
 
 function clearPillSelection() {
@@ -503,6 +509,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   setupMarqueeSelection();
   setupDockDragAndDrop();
+  initMultiDesktop();
   setupWidgetControls();
   setupToolbarDrag();
   setupEvents();
@@ -625,7 +632,11 @@ function alignPills(direction, silent = false) {
   pillsLayoutMode = "free";
   updatePillsContainerLayout();
 
-  const N = quickPills.length;
+  const currentPillEntries = quickPills
+    .map((item, originalIndex) => ({ item, originalIndex }))
+    .filter(entry => ((typeof entry.item.page === "number" ? entry.item.page : 0) === currentDesktopPageIndex));
+
+  const N = currentPillEntries.length;
   if (N === 0) return;
 
   const containerRect = pillsContainer.getBoundingClientRect();
@@ -637,10 +648,10 @@ function alignPills(direction, silent = false) {
   const gapX = pillsSize === "large" ? 14 : (pillsSize === "compact" ? 7 : 10);
   const gapY = pillsSize === "large" ? 10 : (pillsSize === "compact" ? 5 : 6);
 
-  // Récupérer la largeur et hauteur réelle de chaque bouton
-  const sizes = quickPills.map((item, i) => {
+  // Récupérer la taille réelle de chaque raccourci du bureau courant
+  const sizes = currentPillEntries.map((entry, i) => {
     const el = pillElements[i];
-    const w = el && el.offsetWidth > 30 ? el.offsetWidth : Math.min(220, Math.max(75, (item.title || "").length * (pillsSize === "large" ? 9 : 8) + (pillsSize === "large" ? 44 : 36)));
+    const w = el && el.offsetWidth > 30 ? el.offsetWidth : Math.min(220, Math.max(75, (entry.item.title || "").length * (pillsSize === "large" ? 9 : 8) + (pillsSize === "large" ? 44 : 36)));
     const h = el && el.offsetHeight > 20 ? el.offsetHeight : defaultH;
     return { w, h };
   });
@@ -657,7 +668,7 @@ function alignPills(direction, silent = false) {
       let curY = startY;
       let colMaxW = 0;
 
-      quickPills.forEach((item, i) => {
+      currentPillEntries.forEach(({ item }, i) => {
         const { w, h } = sizes[i];
 
         let obs = getObstacleCollision(curX, curY, w, h, obstacles);
@@ -713,7 +724,7 @@ function alignPills(direction, silent = false) {
       let curY = startY;
       let rowMaxH = defaultH;
 
-      quickPills.forEach((item, i) => {
+      currentPillEntries.forEach(({ item }, i) => {
         const { w, h } = sizes[i];
 
         let obs = getObstacleCollision(curX, curY, w, h, obstacles);
@@ -866,11 +877,15 @@ function groupByCategory() {
   pillsLayoutMode = "free";
   updatePillsContainerLayout();
 
+  const currentPillEntries = quickPills
+    .map((item, originalIndex) => ({ item, originalIndex }))
+    .filter(entry => ((typeof entry.item.page === "number" ? entry.item.page : 0) === currentDesktopPageIndex));
+
   const groups = {};
-  quickPills.forEach((p) => {
-    const cat = (p.category || "Divers").trim() || "Divers";
+  currentPillEntries.forEach(({ item }) => {
+    const cat = (item.category || "Divers").trim() || "Divers";
     if (!groups[cat]) groups[cat] = [];
-    groups[cat].push(p);
+    groups[cat].push(item);
   });
 
   const catNames = Object.keys(groups);
@@ -882,7 +897,7 @@ function groupByCategory() {
   const pillElements = Array.from(pillsContainer.querySelectorAll(".quick-pill"));
 
   const sizeMap = new Map();
-  quickPills.forEach((item, i) => {
+  currentPillEntries.forEach(({ item }, i) => {
     const el = pillElements[i];
     const w = el && el.offsetWidth > 30 ? el.offsetWidth : Math.min(180, Math.max(75, (item.title || "").length * 8 + 36));
     const h = el && el.offsetHeight > 20 ? el.offsetHeight : 27;
@@ -1850,9 +1865,16 @@ function updateClock() {
   }
 }
 
-// 📝 2. Bloc-notes rapide / Post-it enrichi (Gras, Souligné, Taille, Couleurs, Liens cliquables)
+// 📝 2. Bloc-notes multi-onglets Notepad++ avec auto-linkify & synchronisation Google Drive
+let notesTabs = [
+  { id: "tab_1", title: "Note 1", content: "" }
+];
+let activeNotesTabId = "tab_1";
+
 function setupNotesWidget() {
   const editor = document.getElementById("notesContent");
+  const tabsList = document.getElementById("notesTabsList");
+  const addTabBtn = document.getElementById("addNotesTabBtn");
   const clearBtn = document.getElementById("clearNotesBtn");
   const boldBtn = document.getElementById("notesBoldBtn");
   const underlineBtn = document.getElementById("notesUnderlineBtn");
@@ -1863,19 +1885,279 @@ function setupNotesWidget() {
 
   if (!editor) return;
 
-  // Charger le contenu et la mise en forme enregistrés
-  chrome.storage.local.get({ notesHtml: "", notesContent: "", notesSettings: {} }, (res) => {
-    const html = res.notesHtml || (res.notesContent ? res.notesContent.replace(/\n/g, "<br>") : "");
-    editor.innerHTML = html;
+  // 1. Charger les onglets et notes (avec priorité sync cloud puis local)
+  chrome.storage.sync.get(["notesData", "notesHtml", "notesContent", "notesSettings"], (syncRes) => {
+    chrome.storage.local.get(["notesData", "notesHtml", "notesContent"], (localRes) => {
+      const data = syncRes.notesData || localRes.notesData;
+      if (data && Array.isArray(data.tabs) && data.tabs.length > 0) {
+        notesTabs = data.tabs;
+        activeNotesTabId = data.activeTabId || notesTabs[0].id;
+      } else {
+        // Migration de l'ancienne note unique si présente
+        const oldContent = syncRes.notesHtml || localRes.notesHtml || (localRes.notesContent ? localRes.notesContent.replace(/\n/g, "<br>") : "");
+        notesTabs = [
+          { id: "tab_1", title: "Note 1", content: oldContent || "" }
+        ];
+        activeNotesTabId = "tab_1";
+      }
 
-    if (notesSettings && notesSettings.fontSize) {
-      editor.style.fontSize = `${notesSettings.fontSize}px`;
+      const activeTab = notesTabs.find(t => t.id === activeNotesTabId) || notesTabs[0];
+      activeNotesTabId = activeTab.id;
+      editor.innerHTML = activeTab.content || "";
+
+      if (notesSettings && notesSettings.fontSize) {
+        editor.style.fontSize = `${notesSettings.fontSize}px`;
+      }
+      if (notesSettings && notesSettings.color) {
+        editor.style.color = notesSettings.color;
+        updateActiveNotesColorDot(notesSettings.color);
+      }
+
+      renderNotesTabs();
+    });
+  });
+
+  const TAB_PRESET_COLORS = [
+    { name: "Défaut", color: "transparent" },
+    { name: "Bleu", color: "#3b82f6" },
+    { name: "Vert", color: "#10b981" },
+    { name: "Jaune", color: "#f59e0b" },
+    { name: "Rouge", color: "#ef4444" },
+    { name: "Violet", color: "#8b5cf6" },
+    { name: "Rose", color: "#ec4899" },
+    { name: "Cyan", color: "#06b6d4" },
+    { name: "Orange", color: "#f97316" },
+    { name: "Gris", color: "#94a3b8" }
+  ];
+
+  let activeColorMenu = null;
+
+  function closeNotesTabColorMenu() {
+    if (activeColorMenu) {
+      activeColorMenu.remove();
+      activeColorMenu = null;
     }
-    if (notesSettings && notesSettings.color) {
-      editor.style.color = notesSettings.color;
-      updateActiveNotesColorDot(notesSettings.color);
+  }
+
+  window.addEventListener("click", (e) => {
+    if (activeColorMenu && !activeColorMenu.contains(e.target)) {
+      closeNotesTabColorMenu();
     }
   });
+
+  function openNotesTabColorMenu(tab, anchorEl, clientX, clientY) {
+    closeNotesTabColorMenu();
+
+    const menu = document.createElement("div");
+    menu.className = "notes-tab-color-menu";
+
+    const header = document.createElement("div");
+    header.className = "notes-tab-color-menu-title";
+    header.innerHTML = `<span>🎨 Couleur : ${tab.title}</span>`;
+    menu.appendChild(header);
+
+    const grid = document.createElement("div");
+    grid.className = "notes-tab-colors-grid";
+
+    TAB_PRESET_COLORS.forEach((p) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "notes-tab-color-btn";
+      btn.title = p.name;
+      if (p.color === "transparent") {
+        btn.style.background = "rgba(255, 255, 255, 0.1)";
+        btn.innerHTML = `<span style="font-size:10px;color:#94a3b8;line-height:1;display:block;text-align:center;">✕</span>`;
+      } else {
+        btn.style.background = p.color;
+      }
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        tab.color = p.color === "transparent" ? null : p.color;
+        closeNotesTabColorMenu();
+        renderNotesTabs();
+        saveNotesData();
+        showToast(`Couleur appliquée à « ${tab.title} »`);
+      });
+      grid.appendChild(btn);
+    });
+    menu.appendChild(grid);
+
+    // Ligne couleur personnalisée
+    const customRow = document.createElement("div");
+    customRow.className = "notes-tab-custom-color-row";
+
+    const customLabel = document.createElement("span");
+    customLabel.textContent = "Autre :";
+    customRow.appendChild(customLabel);
+
+    const colorInput = document.createElement("input");
+    colorInput.type = "color";
+    colorInput.value = tab.color && tab.color.startsWith("#") ? tab.color : "#3b82f6";
+    colorInput.addEventListener("change", (e) => {
+      tab.color = e.target.value;
+      closeNotesTabColorMenu();
+      renderNotesTabs();
+      saveNotesData();
+      showToast(`Couleur personnalisée appliquée`);
+    });
+    customRow.appendChild(colorInput);
+
+    const resetBtn = document.createElement("button");
+    resetBtn.type = "button";
+    resetBtn.className = "notes-tab-reset-color-btn";
+    resetBtn.textContent = "Réinitialiser";
+    resetBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      tab.color = null;
+      closeNotesTabColorMenu();
+      renderNotesTabs();
+      saveNotesData();
+    });
+    customRow.appendChild(resetBtn);
+
+    menu.appendChild(customRow);
+
+    document.body.appendChild(menu);
+    activeColorMenu = menu;
+
+    const rect = anchorEl.getBoundingClientRect();
+    let left = clientX !== undefined ? clientX : rect.left;
+    let top = (rect.bottom + 6);
+    if (left + 190 > window.innerWidth) left = window.innerWidth - 195;
+    if (top + 160 > window.innerHeight) top = rect.top - 165;
+
+    menu.style.left = `${Math.max(10, left)}px`;
+    menu.style.top = `${Math.max(10, top)}px`;
+  }
+
+  function renderNotesTabs() {
+    if (!tabsList) return;
+    tabsList.innerHTML = "";
+
+    notesTabs.forEach((tab) => {
+      const tabEl = document.createElement("div");
+      tabEl.className = "notes-tab-item" + (tab.id === activeNotesTabId ? " active" : "");
+      tabEl.title = `${tab.title} (Double-clic pour renommer | Clic droit pour couleur)`;
+
+      // Pastille de couleur (Style Notepad++)
+      const pip = document.createElement("span");
+      pip.className = "notes-tab-color-pip";
+      pip.title = "Choisir la couleur de l'onglet";
+      pip.style.background = (tab.color && tab.color !== "transparent") ? tab.color : "rgba(255,255,255,0.25)";
+      pip.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openNotesTabColorMenu(tab, pip);
+      });
+      tabEl.appendChild(pip);
+
+      const titleSpan = document.createElement("span");
+      titleSpan.className = "notes-tab-title";
+      titleSpan.textContent = tab.title || "Note";
+      tabEl.appendChild(titleSpan);
+
+      // Personnalisation visuelle de l'onglet si couleur définie
+      if (tab.color && tab.color !== "transparent") {
+        tabEl.style.borderTop = `3px solid ${tab.color}`;
+        if (tab.id === activeNotesTabId) {
+          tabEl.style.boxShadow = `0 -2px 10px ${tab.color}55`;
+          tabEl.style.borderColor = tab.color;
+          tabEl.style.background = `linear-gradient(to bottom, ${tab.color}33, rgba(30, 41, 59, 0.95))`;
+        } else {
+          tabEl.style.background = `linear-gradient(to bottom, ${tab.color}18, rgba(255, 255, 255, 0.05))`;
+        }
+      }
+
+      // Bouton fermeture d'onglet
+      const closeBtn = document.createElement("button");
+      closeBtn.type = "button";
+      closeBtn.className = "notes-tab-close";
+      closeBtn.textContent = "✕";
+      closeBtn.title = "Fermer cet onglet";
+      closeBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        closeNotesTab(tab.id);
+      });
+      tabEl.appendChild(closeBtn);
+
+      // Clic pour activer l'onglet
+      tabEl.addEventListener("click", () => {
+        if (tab.id === activeNotesTabId) return;
+        saveCurrentEditorToTab();
+        activeNotesTabId = tab.id;
+        const target = notesTabs.find(t => t.id === activeNotesTabId);
+        editor.innerHTML = (target && target.content) ? target.content : "";
+        renderNotesTabs();
+        saveNotesData();
+      });
+
+      // Double-clic pour renommer l'onglet (Notepad++)
+      tabEl.addEventListener("dblclick", (e) => {
+        e.stopPropagation();
+        const newTitle = prompt("Renommer cet onglet :", tab.title);
+        if (newTitle && newTitle.trim()) {
+          tab.title = newTitle.trim();
+          titleSpan.textContent = tab.title;
+          saveNotesData();
+        }
+      });
+
+      // Clic droit pour choisir la couleur de l'onglet (Style Notepad++)
+      tabEl.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openNotesTabColorMenu(tab, tabEl, e.clientX, e.clientY);
+      });
+
+      tabsList.appendChild(tabEl);
+    });
+  }
+
+  function saveCurrentEditorToTab() {
+    const cur = notesTabs.find(t => t.id === activeNotesTabId);
+    if (cur) {
+      cur.content = editor.innerHTML;
+    }
+  }
+
+  function closeNotesTab(tabId) {
+    if (notesTabs.length <= 1) {
+      if (confirm("Effacer le contenu de cet onglet ?")) {
+        notesTabs[0].content = "";
+        editor.innerHTML = "";
+        saveNotesData();
+      }
+      return;
+    }
+
+    const targetTab = notesTabs.find(t => t.id === tabId);
+    if (targetTab && targetTab.content && targetTab.content.trim()) {
+      if (!confirm(`Fermer et supprimer l'onglet « ${targetTab.title} » ?`)) return;
+    }
+
+    notesTabs = notesTabs.filter(t => t.id !== tabId);
+    if (activeNotesTabId === tabId) {
+      activeNotesTabId = notesTabs[0].id;
+      editor.innerHTML = notesTabs[0].content || "";
+    }
+    renderNotesTabs();
+    saveNotesData();
+  }
+
+  // Ajouter un nouvel onglet (+)
+  if (addTabBtn) {
+    addTabBtn.addEventListener("click", () => {
+      saveCurrentEditorToTab();
+      const newId = "tab_" + Date.now();
+      const newTitle = `Note ${notesTabs.length + 1}`;
+      notesTabs.push({ id: newId, title: newTitle, content: "" });
+      activeNotesTabId = newId;
+      editor.innerHTML = "";
+      renderNotesTabs();
+      editor.focus();
+      saveNotesData();
+      showToast(`Nouvel onglet « ${newTitle} » créé`);
+    });
+  }
 
   function updateActiveNotesColorDot(color) {
     colorDots.forEach((dot) => {
@@ -1883,101 +2165,87 @@ function setupNotesWidget() {
     });
   }
 
+  // Sauvegarde transparente (Cloud Google Drive + Sync Chrome + Local)
   let debounce = null;
-  function saveNotes() {
+  function saveNotesData() {
+    saveCurrentEditorToTab();
     clearTimeout(debounce);
     debounce = setTimeout(() => {
+      const payload = {
+        tabs: notesTabs,
+        activeTabId: activeNotesTabId
+      };
       chrome.storage.local.set({
+        notesData: payload,
         notesHtml: editor.innerHTML,
         notesContent: editor.innerText,
         notesSettings
       });
-    }, 300);
-  }
+      chrome.storage.sync.set({
+        notesData: payload,
+        notesHtml: editor.innerHTML,
+        notesContent: editor.innerText
+      });
 
-  editor.addEventListener("input", saveNotes);
-
-  // Mettre en gras (B)
-  if (boldBtn) {
-    boldBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      document.execCommand("bold", false, null);
-      saveNotes();
-    });
-  }
-
-  // Souligner (U)
-  if (underlineBtn) {
-    underlineBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      document.execCommand("underline", false, null);
-      saveNotes();
-    });
-  }
-
-  // Réduire la taille de police (A-)
-  if (sizeDownBtn) {
-    sizeDownBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      notesSettings.fontSize = Math.max(10, (notesSettings.fontSize || 13) - 2);
-      editor.style.fontSize = `${notesSettings.fontSize}px`;
-      saveNotes();
-      showToast(`Taille du texte : ${notesSettings.fontSize}px`);
-    });
-  }
-
-  // Agrandir la taille de police (A+)
-  if (sizeUpBtn) {
-    sizeUpBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      notesSettings.fontSize = Math.min(26, (notesSettings.fontSize || 13) + 2);
-      editor.style.fontSize = `${notesSettings.fontSize}px`;
-      saveNotes();
-      showToast(`Taille du texte : ${notesSettings.fontSize}px`);
-    });
-  }
-
-  // Sélecteur de couleurs de texte
-  colorDots.forEach((dot) => {
-    dot.addEventListener("click", (e) => {
-      e.preventDefault();
-      const color = dot.dataset.color;
-      updateActiveNotesColorDot(color);
-
-      const sel = window.getSelection();
-      if (sel && sel.toString().length > 0) {
-        // Appliquer la couleur uniquement au texte sélectionné
-        document.execCommand("foreColor", false, color);
-      } else {
-        // Modifier la couleur par défaut de tout le bloc-notes
-        editor.style.color = color;
-        notesSettings.color = color;
+      // Synchronisation Google Drive automatique si activée
+      if (window.DriveSync && typeof DriveSync.triggerAutoSyncIfEnabled === "function") {
+        DriveSync.triggerAutoSyncIfEnabled();
       }
-      saveNotes();
-    });
+    }, 400);
+  }
+
+  editor.addEventListener("input", saveNotesData);
+
+  // Auto-Linkify : transforme automatiquement les URLs en liens cliquables
+  function autoLinkifyText() {
+    const sel = window.getSelection();
+    if (!sel || !sel.focusNode) return;
+    const node = sel.focusNode;
+    if (node.nodeType === 3) { // TextNode
+      if (node.parentNode && node.parentNode.tagName === "A") return;
+      const val = node.nodeValue || "";
+      const urlRegex = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi;
+      if (urlRegex.test(val)) {
+        urlRegex.lastIndex = 0;
+        const parent = node.parentNode;
+        const temp = document.createElement("span");
+        temp.innerHTML = val.replace(urlRegex, (match) => {
+          const href = /^https?:\/\//i.test(match) ? match : `https://${match}`;
+          return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="notes-link" title="Ouvrir : ${href}">${match}</a>`;
+        });
+        while (temp.firstChild) {
+          parent.insertBefore(temp.firstChild, node);
+        }
+        parent.removeChild(node);
+        saveNotesData();
+      }
+    }
+  }
+
+  // Détection automatique lors de la frappe d'un Espace ou Entrée
+  editor.addEventListener("keyup", (e) => {
+    if (e.key === " " || e.key === "Enter") {
+      autoLinkifyText();
+    }
   });
 
-  // Insérer un lien cliquable (🔗)
-  if (linkBtn) {
-    linkBtn.addEventListener("click", (e) => {
+  // Détection automatique lors du collage
+  editor.addEventListener("paste", (e) => {
+    const text = (e.clipboardData || window.clipboardData)?.getData("text") || "";
+    const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+    if (text && urlRegex.test(text.trim())) {
       e.preventDefault();
-      const sel = window.getSelection();
-      const selectedText = sel ? sel.toString().trim() : "";
-      const rawUrl = prompt("Entrez ou collez l'adresse URL du lien (ex: https://...) :", "https://");
-      if (!rawUrl || rawUrl.trim() === "" || rawUrl.trim() === "https://") return;
+      const html = text.replace(urlRegex, (match) => {
+        const href = /^https?:\/\//i.test(match) ? match : `https://${match}`;
+        return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="notes-link" title="Ouvrir : ${href}">${match}</a>`;
+      });
+      document.execCommand("insertHTML", false, html);
+      saveNotesData();
+      showToast("Lien(s) cliquable(s) détecté(s) et inséré(s) !");
+    }
+  });
 
-      const url = /^https?:\/\//i.test(rawUrl.trim()) ? rawUrl.trim() : `https://${rawUrl.trim()}`;
-      if (selectedText) {
-        document.execCommand("createLink", false, url);
-      } else {
-        document.execCommand("insertHTML", false, `<a href="${url}" target="_blank" rel="noopener noreferrer" class="notes-link" title="Ouvrir : ${url}">${url}</a>&nbsp;`);
-      }
-      saveNotes();
-      showToast("Lien cliquable inséré");
-    });
-  }
-
-  // Clic direct sur un lien cliquable dans la note pour l'ouvrir dans un nouvel onglet
+  // Clic direct sur un lien cliquable dans la note
   editor.addEventListener("click", (e) => {
     const link = e.target.closest("a");
     if (link && link.href) {
@@ -1986,25 +2254,86 @@ function setupNotesWidget() {
     }
   });
 
-  // Détection automatique lors du collage d'une URL
-  editor.addEventListener("paste", (e) => {
-    const text = (e.clipboardData || window.clipboardData)?.getData("text") || "";
-    if (text && /^https?:\/\/[^\s]+$/i.test(text.trim())) {
+  // Outils de formatage
+  if (boldBtn) {
+    boldBtn.addEventListener("click", (e) => {
       e.preventDefault();
-      const url = text.trim();
-      document.execCommand("insertHTML", false, `<a href="${url}" target="_blank" rel="noopener noreferrer" class="notes-link" title="Ouvrir : ${url}">${url}</a>&nbsp;`);
-      saveNotes();
-      showToast("Lien cliquable ajouté !");
-    }
+      document.execCommand("bold", false, null);
+      saveNotesData();
+    });
+  }
+
+  if (underlineBtn) {
+    underlineBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      document.execCommand("underline", false, null);
+      saveNotesData();
+    });
+  }
+
+  if (sizeDownBtn) {
+    sizeDownBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      notesSettings.fontSize = Math.max(10, (notesSettings.fontSize || 13) - 2);
+      editor.style.fontSize = `${notesSettings.fontSize}px`;
+      saveNotesData();
+      showToast(`Taille du texte : ${notesSettings.fontSize}px`);
+    });
+  }
+
+  if (sizeUpBtn) {
+    sizeUpBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      notesSettings.fontSize = Math.min(26, (notesSettings.fontSize || 13) + 2);
+      editor.style.fontSize = `${notesSettings.fontSize}px`;
+      saveNotesData();
+      showToast(`Taille du texte : ${notesSettings.fontSize}px`);
+    });
+  }
+
+  colorDots.forEach((dot) => {
+    dot.addEventListener("click", (e) => {
+      e.preventDefault();
+      const color = dot.dataset.color;
+      updateActiveNotesColorDot(color);
+
+      const sel = window.getSelection();
+      if (sel && sel.toString().length > 0) {
+        document.execCommand("foreColor", false, color);
+      } else {
+        editor.style.color = color;
+        notesSettings.color = color;
+      }
+      saveNotesData();
+    });
   });
 
-  // Effacer la note
+  if (linkBtn) {
+    linkBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const sel = window.getSelection();
+      const selectedText = sel ? sel.toString().trim() : "";
+      const rawUrl = prompt("Entrez ou collez l'adresse URL du lien :", "https://");
+      if (!rawUrl || rawUrl.trim() === "" || rawUrl.trim() === "https://") return;
+
+      const url = /^https?:\/\//i.test(rawUrl.trim()) ? rawUrl.trim() : `https://${rawUrl.trim()}`;
+      if (selectedText) {
+        document.execCommand("createLink", false, url);
+      } else {
+        document.execCommand("insertHTML", false, `<a href="${url}" target="_blank" rel="noopener noreferrer" class="notes-link" title="Ouvrir : ${url}">${url}</a>&nbsp;`);
+      }
+      saveNotesData();
+      showToast("Lien cliquable inséré");
+    });
+  }
+
   if (clearBtn) {
     clearBtn.addEventListener("click", () => {
-      if (editor.innerText.trim() && confirm("Effacer tout le texte du bloc-notes ?")) {
+      const cur = notesTabs.find(t => t.id === activeNotesTabId);
+      if (editor.innerText.trim() && confirm(`Effacer le contenu de l'onglet « ${cur ? cur.title : 'Note'} » ?`)) {
         editor.innerHTML = "";
-        saveNotes();
-        showToast("Bloc-notes effacé");
+        saveNotesData();
+        showToast("Contenu de l'onglet effacé");
       }
     });
   }
@@ -2426,9 +2755,59 @@ async function loadAllWidgetsSettings() {
   });
 }
 
+function shouldShowWidgetOnCurrentPage(settings) {
+  if (!settings || !settings.enabled) return false;
+  if (typeof settings.page !== "number" || settings.page === -1) return true;
+  return settings.page === currentDesktopPageIndex;
+}
+
+function updateWidgetDesktopBadges() {
+  const widgetConfigs = [
+    { widget: clockWidget, settings: clockSettings, key: "clockSettings", name: "Horloge" },
+    { widget: notesWidget, settings: notesSettings, key: "notesSettings", name: "Bloc-notes" },
+    { widget: pomodoroWidget, settings: pomodoroSettings, key: "pomodoroSettings", name: "Pomodoro" },
+    { widget: recentWidget, settings: recentSettings, key: "recentSettings", name: "Récents" }
+  ];
+
+  widgetConfigs.forEach(({ widget, settings, key, name }) => {
+    if (!widget) return;
+    const header = widget.querySelector(".widget-header");
+    if (!header) return;
+
+    let badge = header.querySelector(".widget-desktop-badge");
+    if (!isLiveEditMode) {
+      if (badge) badge.remove();
+      return;
+    }
+
+    if (!badge) {
+      badge = document.createElement("button");
+      badge.type = "button";
+      badge.className = "widget-desktop-badge";
+      header.appendChild(badge);
+    }
+
+    const currentPageVal = (typeof settings.page === "number") ? settings.page : -1;
+    const label = currentPageVal === -1 ? "Tous" : `${currentPageVal + 1}`;
+    badge.textContent = `🖥️ Bureau : ${label}`;
+    badge.title = `Affichage de ce widget : ${currentPageVal === -1 ? "Tous les bureaux" : "Bureau " + (currentPageVal + 1)} (Cliquer pour changer)`;
+
+    badge.onclick = (e) => {
+      e.stopPropagation();
+      let nextVal = currentPageVal + 1;
+      if (nextVal >= totalDesktopPages) nextVal = -1; // -1 = Tous les bureaux
+      settings.page = nextVal;
+      chrome.storage.local.set({ [key]: settings });
+      updateAllWidgetsVisibility();
+      showToast(`${name} : ${nextVal === -1 ? "Visible sur tous les bureaux" : "Assigné au Bureau " + (nextVal + 1)}`);
+    };
+  });
+}
+
 function updateAllWidgetsVisibility() {
   if (clockWidget) {
-    clockWidget.classList.toggle("hidden", !clockSettings.enabled);
+    const show = shouldShowWidgetOnCurrentPage(clockSettings);
+    clockWidget.classList.toggle("hidden", !show);
     clockWidget.style.left = `${clockSettings.posX}%`;
     clockWidget.style.top = `${clockSettings.posY}%`;
     if (clockSettings.width) applyWidgetDimensions(clockWidget, clockSettings.width, clockSettings.height);
@@ -2436,7 +2815,8 @@ function updateAllWidgetsVisibility() {
   if (clockEnabledCheckbox) clockEnabledCheckbox.checked = clockSettings.enabled;
 
   if (notesWidget) {
-    notesWidget.classList.toggle("hidden", !notesSettings.enabled);
+    const show = shouldShowWidgetOnCurrentPage(notesSettings);
+    notesWidget.classList.toggle("hidden", !show);
     notesWidget.style.left = `${notesSettings.posX}%`;
     notesWidget.style.top = `${notesSettings.posY}%`;
     if (notesSettings.width) applyWidgetDimensions(notesWidget, notesSettings.width, notesSettings.height);
@@ -2444,7 +2824,8 @@ function updateAllWidgetsVisibility() {
   if (notesEnabledCheckbox) notesEnabledCheckbox.checked = notesSettings.enabled;
 
   if (pomodoroWidget) {
-    pomodoroWidget.classList.toggle("hidden", !pomodoroSettings.enabled);
+    const show = shouldShowWidgetOnCurrentPage(pomodoroSettings);
+    pomodoroWidget.classList.toggle("hidden", !show);
     pomodoroWidget.style.left = `${pomodoroSettings.posX}%`;
     pomodoroWidget.style.top = `${pomodoroSettings.posY}%`;
     if (pomodoroSettings.width) applyWidgetDimensions(pomodoroWidget, pomodoroSettings.width, pomodoroSettings.height);
@@ -2452,7 +2833,8 @@ function updateAllWidgetsVisibility() {
   if (pomodoroEnabledCheckbox) pomodoroEnabledCheckbox.checked = pomodoroSettings.enabled;
 
   if (recentWidget) {
-    recentWidget.classList.toggle("hidden", !recentSettings.enabled);
+    const show = shouldShowWidgetOnCurrentPage(recentSettings);
+    recentWidget.classList.toggle("hidden", !show);
     recentWidget.style.left = `${recentSettings.posX}%`;
     recentWidget.style.top = `${recentSettings.posY}%`;
     if (recentSettings.width) applyWidgetDimensions(recentWidget, recentSettings.width, recentSettings.height);
@@ -2462,6 +2844,8 @@ function updateAllWidgetsVisibility() {
   if (weatherWidget && weatherSettings.width) {
     applyWidgetDimensions(weatherWidget, weatherSettings.width, weatherSettings.height);
   }
+
+  updateWidgetDesktopBadges();
 }
 
 function setupWidgetControls() {
@@ -2712,6 +3096,10 @@ function startInlineEdit(span, index) {
 function renderPills() {
   pillsContainer.innerHTML = "";
   quickPills.forEach((item, index) => {
+    const itemPage = (typeof item.page === "number") ? item.page : 0;
+    if (itemPage !== currentDesktopPageIndex) {
+      return; // Afficher uniquement les raccourcis du bureau courant
+    }
     const a = document.createElement("a");
     a.className = "quick-pill" + (isLiveEditMode ? " edit-active" : "");
     if (!isLiveEditMode) {
@@ -3703,7 +4091,7 @@ async function saveSingleEdit() {
     const posX = Math.round((5 + col * 18) * 10) / 10;
     const posY = Math.round((8 + row * 7.5) * 10) / 10;
 
-    quickPills.push({ title: newTitle, url: newUrl, category: newCategory, posX, posY });
+    quickPills.push({ title: newTitle, url: newUrl, category: newCategory, posX, posY, page: currentDesktopPageIndex });
     savePills();
     updateCategoriesDatalist();
     showToast(`Raccourci « ${newTitle} » ajouté !`);
@@ -4016,7 +4404,7 @@ function setupEvents() {
     if (!url.startsWith("http://") && !url.startsWith("https://") && !url.startsWith("chrome://")) {
       url = "https://" + url;
     }
-    quickPills.unshift({ title, url, category });
+    quickPills.unshift({ title, url, category, page: currentDesktopPageIndex });
     savePills();
     updateCategoriesDatalist();
     newPillTitle.value = "";
@@ -4077,7 +4465,7 @@ function setupEvents() {
       openSingleEditModal(target);
     } else if (action === "pin-top") {
       if (target.type === "bookmark" && target.node.url) {
-        quickPills.unshift({ title: target.node.title || target.node.url, url: target.node.url });
+        quickPills.unshift({ title: target.node.title || target.node.url, url: target.node.url, page: currentDesktopPageIndex });
         savePills();
         showToast("Épinglé en haut !");
       }
@@ -4446,4 +4834,190 @@ function addLocalShortcutDirectly(title, path, icon) {
       showToast(`Raccourci « ${title} » ajouté au dock Windows !`);
     });
   });
+}
+
+
+// ========================================================
+// NAVIGATION MULTI-BUREAUX & GESTES SWIPE SMARTPHONE (v5.3)
+// ========================================================
+function initMultiDesktop() {
+  const prevBtn = document.getElementById("desktopPrevPageBtn");
+  const nextBtn = document.getElementById("desktopNextPageBtn");
+  const addPageBtn = document.getElementById("addDesktopPageBtn");
+  const moveBtn = document.getElementById("moveSelectionToPageBtn");
+
+  // Déterminer le nombre maximum de bureaux utilisés dans les raccourcis
+  chrome.storage.local.get({ totalDesktopPages: 1 }, (res) => {
+    let maxPageInPills = 0;
+    quickPills.forEach(p => {
+      if (typeof p.page === "number" && p.page > maxPageInPills) {
+        maxPageInPills = p.page;
+      }
+    });
+    totalDesktopPages = Math.max(1, Math.max(res.totalDesktopPages || 1, maxPageInPills + 1));
+    renderDesktopPagination();
+    updateDesktopNavControls();
+  });
+
+  if (prevBtn) {
+    prevBtn.addEventListener("click", () => goToDesktopPage(currentDesktopPageIndex - 1));
+  }
+  if (nextBtn) {
+    nextBtn.addEventListener("click", () => goToDesktopPage(currentDesktopPageIndex + 1));
+  }
+
+  if (addPageBtn) {
+    addPageBtn.addEventListener("click", () => {
+      totalDesktopPages++;
+      chrome.storage.local.set({ totalDesktopPages });
+      goToDesktopPage(totalDesktopPages - 1);
+      showToast(`Bureau ${totalDesktopPages} créé !`);
+    });
+  }
+
+  if (moveBtn) {
+    moveBtn.addEventListener("click", () => {
+      if (selectedPillIndices.size === 0) return;
+      const targetStr = prompt(`Vers quel bureau déplacer ces ${selectedPillIndices.size} raccourci(s) ? (1 à ${totalDesktopPages}) :`, (currentDesktopPageIndex + 1).toString());
+      if (!targetStr) return;
+      const targetNum = parseInt(targetStr, 10);
+      if (isNaN(targetNum) || targetNum < 1) return;
+
+      const targetIdx = targetNum - 1;
+      if (targetIdx >= totalDesktopPages) {
+        totalDesktopPages = targetIdx + 1;
+        chrome.storage.local.set({ totalDesktopPages });
+      }
+
+      pushPillsHistory();
+      selectedPillIndices.forEach(idx => {
+        if (quickPills[idx]) {
+          quickPills[idx].page = targetIdx;
+        }
+      });
+      savePills();
+      clearPillSelection();
+      renderPills();
+      renderDesktopPagination();
+      showToast(`Raccourcis déplacés vers le Bureau ${targetNum} !`);
+    });
+  }
+
+  // Raccourcis clavier Alt + Flèche gauche / Flèche droite
+  window.addEventListener("keydown", (e) => {
+    if (e.altKey && e.key === "ArrowLeft") {
+      e.preventDefault();
+      goToDesktopPage(currentDesktopPageIndex - 1);
+    } else if (e.altKey && e.key === "ArrowRight") {
+      e.preventDefault();
+      goToDesktopPage(currentDesktopPageIndex + 1);
+    }
+  });
+
+  // Gestes Swipe à la souris et au toucher (smartphone)
+  setupSwipeNavigation();
+}
+
+function renderDesktopPagination() {
+  const container = document.getElementById("desktopDotsContainer");
+  if (!container) return;
+  container.innerHTML = "";
+
+  for (let i = 0; i < totalDesktopPages; i++) {
+    const dot = document.createElement("div");
+    dot.className = "desktop-page-dot" + (i === currentDesktopPageIndex ? " active" : "");
+    dot.title = `Bureau ${i + 1}`;
+    dot.addEventListener("click", () => goToDesktopPage(i));
+
+    // Double-clic en mode édition pour supprimer un bureau vide
+    dot.addEventListener("dblclick", () => {
+      if (!isLiveEditMode) return;
+      if (totalDesktopPages <= 1) return;
+      const pillsOnPage = quickPills.filter(p => (p.page || 0) === i);
+      if (pillsOnPage.length > 0) {
+        alert(`Le Bureau ${i + 1} contient ${pillsOnPage.length} raccourci(s). Déplacez-les avant de supprimer ce bureau.`);
+        return;
+      }
+      if (confirm(`Supprimer le Bureau ${i + 1} vide ?`)) {
+        totalDesktopPages--;
+        // Décaler les pages supérieures
+        quickPills.forEach(p => {
+          if (p.page && p.page > i) p.page--;
+        });
+        savePills();
+        chrome.storage.local.set({ totalDesktopPages });
+        goToDesktopPage(Math.min(currentDesktopPageIndex, totalDesktopPages - 1));
+        showToast(`Bureau supprimé`);
+      }
+    });
+
+    container.appendChild(dot);
+  }
+
+  updateDesktopNavControls();
+}
+
+function updateDesktopNavControls() {
+  const prevBtn = document.getElementById("desktopPrevPageBtn");
+  const nextBtn = document.getElementById("desktopNextPageBtn");
+
+  if (prevBtn) {
+    prevBtn.classList.toggle("hidden", currentDesktopPageIndex <= 0);
+  }
+  if (nextBtn) {
+    nextBtn.classList.toggle("hidden", currentDesktopPageIndex >= totalDesktopPages - 1);
+  }
+}
+
+function goToDesktopPage(newPageIndex) {
+  if (newPageIndex < 0 || newPageIndex >= totalDesktopPages) return;
+  currentDesktopPageIndex = newPageIndex;
+
+  // Animation douce de transition
+  if (pillsContainer) {
+    pillsContainer.style.opacity = "0.3";
+    pillsContainer.style.transform = "scale(0.98)";
+    setTimeout(() => {
+      renderPills();
+      updateAllWidgetsVisibility();
+      pillsContainer.style.opacity = "1";
+      pillsContainer.style.transform = "none";
+    }, 120);
+  } else {
+    renderPills();
+    updateAllWidgetsVisibility();
+  }
+
+  renderDesktopPagination();
+  showToast(`Bureau ${currentDesktopPageIndex + 1}`);
+}
+
+function setupSwipeNavigation() {
+  const area = document.querySelector(".main-content-area");
+  if (!area) return;
+
+  let touchStartX = 0;
+  let touchStartY = 0;
+
+  area.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) return;
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+
+  area.addEventListener("touchend", (e) => {
+    if (e.changedTouches.length !== 1) return;
+    const diffX = e.changedTouches[0].clientX - touchStartX;
+    const diffY = e.changedTouches[0].clientY - touchStartY;
+
+    if (Math.abs(diffX) > 60 && Math.abs(diffX) > Math.abs(diffY) * 1.5) {
+      if (diffX < 0) {
+        // Glissement vers la gauche -> page suivante
+        goToDesktopPage(currentDesktopPageIndex + 1);
+      } else {
+        // Glissement vers la droite -> page précédente
+        goToDesktopPage(currentDesktopPageIndex - 1);
+      }
+    }
+  }, { passive: true });
 }

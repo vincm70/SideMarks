@@ -60,8 +60,13 @@
           <div class="widget-header">
             <span class="widget-title">📝 Bloc-notes</span>
             <div class="notes-header-actions">
-              <button type="button" id="clearNotesBtn" class="widget-header-btn" title="Effacer les notes">🗑️</button>
+              <button type="button" id="clearNotesBtn" class="widget-header-btn" title="Effacer l'onglet actuel">🗑️</button>
             </div>
+          </div>
+          <!-- Barre d'onglets style Notepad++ -->
+          <div class="notes-tabs-bar" id="notesTabsBar">
+            <div class="notes-tabs-list" id="notesTabsList"></div>
+            <button type="button" id="addNotesTabBtn" class="notes-add-tab-btn" title="Nouvel onglet (Notepad++)">+</button>
           </div>
           <!-- Barre d'outils de formatage enrichi -->
           <div class="notes-toolbar">
@@ -215,6 +220,7 @@
           <!-- Indicateur et actions de sélection groupée (Bloc) -->
           <div id="selectionGroupControls" class="btn-group hidden" style="background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(96, 165, 250, 0.4); border-radius: 4px; padding: 1px 4px; align-items: center; gap: 4px;">
             <span id="selectedPillsCountText" style="font-size: 11px; color: #93c5fd; font-weight: 600; padding: 0 4px; white-space: nowrap;">0 sélectionné(s)</span>
+            <button type="button" id="moveSelectionToPageBtn" class="btn-xs" style="background: rgba(168, 85, 247, 0.35); border: 1px solid rgba(168, 85, 247, 0.6); color: #e9d5ff;" title="Déplacer les raccourcis sélectionnés vers un autre bureau">📲 Déplacer bureau</button>
             <button type="button" id="clearSelectionBtn" class="btn-xs" style="background: transparent; color: #cbd5e1; padding: 2px 5px;" title="Désélectionner tout">✕</button>
           </div>
           <button type="button" id="liveAddPillBtn" class="btn-xs btn-xs-primary" title="Ajouter un nouveau raccourci (Nom, URL, Catégorie)">+ Ajouter</button>
@@ -230,6 +236,20 @@
         <div id="dockItemsContainer" class="dock-items-container">
           <!-- Rempli dynamiquement -->
         </div>
+      </div>
+
+            <!-- Navigation Multi-Bureaux style Smartphone (v5.3) -->
+      <button type="button" id="desktopPrevPageBtn" class="desktop-nav-arrow desktop-arrow-prev hidden" title="Bureau précédent (Alt + Gauche)">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+      </button>
+      <button type="button" id="desktopNextPageBtn" class="desktop-nav-arrow desktop-arrow-next hidden" title="Bureau suivant (Alt + Droite)">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+      </button>
+
+      <!-- Barre de pagination à points ● ○ ○ -->
+      <div id="desktopPaginationBar" class="desktop-pagination-bar" title="Bureaux virtuels (Glissez gauche/droite pour naviguer)">
+        <div id="desktopDotsContainer" class="desktop-dots-container"></div>
+        <button type="button" id="addDesktopPageBtn" class="desktop-add-page-btn" title="Ajouter un nouveau bureau (Page)">+</button>
       </div>
 
       <!-- Bouton d'édition discret en bas à gauche -->

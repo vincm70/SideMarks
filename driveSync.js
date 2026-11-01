@@ -87,9 +87,14 @@ const DriveSync = {
   async generateBackupPayload() {
     return new Promise((resolve) => {
       chrome.storage.local.get(
-        ["quickPills", "customWallpaper", "wallpaperSettings", "collapsedFolders"],
+        [
+          "quickPills", "customWallpaper", "wallpaperSettings", "collapsedFolders",
+          "notesData", "notesHtml", "notesContent", "notesSettings",
+          "clockSettings", "pomodoroSettings", "recentSettings", "weatherSettings",
+          "dockShortcuts", "totalDesktopPages", "pillsSize"
+        ],
         (localRes) => {
-          chrome.storage.sync.get("settings", (syncRes) => {
+          chrome.storage.sync.get(["settings", "notesData", "notesHtml", "notesContent"], (syncRes) => {
             const payload = {
               app: "SideMarks",
               publisher: "TOUZIO APPS",
@@ -97,6 +102,17 @@ const DriveSync = {
               exportedAt: new Date().toISOString(),
               settings: syncRes.settings || {},
               quickPills: localRes.quickPills || [],
+              notesData: syncRes.notesData || localRes.notesData || null,
+              notesHtml: syncRes.notesHtml || localRes.notesHtml || "",
+              notesContent: syncRes.notesContent || localRes.notesContent || "",
+              notesSettings: localRes.notesSettings || null,
+              clockSettings: localRes.clockSettings || null,
+              pomodoroSettings: localRes.pomodoroSettings || null,
+              recentSettings: localRes.recentSettings || null,
+              weatherSettings: localRes.weatherSettings || null,
+              dockShortcuts: localRes.dockShortcuts || null,
+              totalDesktopPages: localRes.totalDesktopPages || 1,
+              pillsSize: localRes.pillsSize || "standard",
               wallpaperSettings: localRes.wallpaperSettings || null,
               customWallpaper: localRes.customWallpaper || null,
               collapsedFolders: localRes.collapsedFolders || []
@@ -120,6 +136,26 @@ const DriveSync = {
 
       if (payload.settings) syncData.settings = payload.settings;
       if (payload.quickPills) localData.quickPills = payload.quickPills;
+      if (payload.notesData) {
+        syncData.notesData = payload.notesData;
+        localData.notesData = payload.notesData;
+      }
+      if (payload.notesHtml) {
+        syncData.notesHtml = payload.notesHtml;
+        localData.notesHtml = payload.notesHtml;
+      }
+      if (payload.notesContent) {
+        syncData.notesContent = payload.notesContent;
+        localData.notesContent = payload.notesContent;
+      }
+      if (payload.notesSettings) localData.notesSettings = payload.notesSettings;
+      if (payload.clockSettings) localData.clockSettings = payload.clockSettings;
+      if (payload.pomodoroSettings) localData.pomodoroSettings = payload.pomodoroSettings;
+      if (payload.recentSettings) localData.recentSettings = payload.recentSettings;
+      if (payload.weatherSettings) localData.weatherSettings = payload.weatherSettings;
+      if (payload.dockShortcuts) localData.dockShortcuts = payload.dockShortcuts;
+      if (payload.totalDesktopPages) localData.totalDesktopPages = payload.totalDesktopPages;
+      if (payload.pillsSize) localData.pillsSize = payload.pillsSize;
       if (payload.wallpaperSettings) localData.wallpaperSettings = payload.wallpaperSettings;
       if (payload.customWallpaper) localData.customWallpaper = payload.customWallpaper;
       if (payload.collapsedFolders) localData.collapsedFolders = payload.collapsedFolders;

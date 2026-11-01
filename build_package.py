@@ -1,7 +1,7 @@
 import zipfile
 import os
 
-zip_name = 'SideMarks_v5.2.zip'
+zip_name = 'SideMarks_v5.3.zip'
 
 # Fichiers à exclure de l'archive publique
 exclude_files = {
@@ -13,6 +13,7 @@ exclude_files = {
     'SideMarks_v5.0.zip',
     'SideMarks_v5.1.zip',
     'SideMarks_v5.2.zip',
+    'SideMarks_v5.3.zip',
     'Bookmark_Original_v1.0.zip',
     'original_family_wallpaper.jpg',
     'default_public_wallpaper.jpg',
@@ -32,7 +33,7 @@ exclude_files = {
     'SideMarks_Capture_3_Fonctionnalites.jpg'
 }
 
-print("Création du package d'installation public v5.2...")
+print("Création du package d'installation public v5.3...")
 
 with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as zipf:
     for root, dirs, files in os.walk('.'):
