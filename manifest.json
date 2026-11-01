@@ -19,17 +19,20 @@
     "notifications"
   ],
   "host_permissions": [
+    "https://www.googleapis.com/*",
+    "https://tasks.googleapis.com/*",
     "https://api.open-meteo.com/*",
     "https://geocoding-api.open-meteo.com/*",
-    "https://formsubmit.co/*",
-    "http://127.0.0.1:8766/*",
-    "http://localhost:8766/*"
+    "https://formsubmit.co/*"
   ],
   "oauth2": {
-    "client_id": "VOTRE_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
+    "client_id": "266928074814-gfsj5gntbtjo54qi3c9qm852htabc4ve.apps.googleusercontent.com",
     "scopes": [
-      "https://www.googleapis.com/auth/drive.appdata",
-      "https://www.googleapis.com/auth/userinfo.email"
+      "https://www.googleapis.com/auth/calendar.readonly",
+      "https://www.googleapis.com/auth/calendar.events",
+      "https://www.googleapis.com/auth/tasks",
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/drive.appdata"
     ]
   },
   "chrome_url_overrides": {

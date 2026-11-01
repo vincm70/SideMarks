@@ -483,8 +483,8 @@ const DEFAULT_AGENDA_SETTINGS = {
   syncUrl: "",
   agendas: {
     default: { name: "Principal", events: {} },
-    rdvtzt: { name: "Rendez-vous RDVTZT", events: {} },
-    famille: { name: "Famille & Scolaire", events: {} },
+    perso: { name: "Personnel", events: {} },
+    famille: { name: "Famille", events: {} },
     pro: { name: "Professionnel", events: {} }
   }
 };
@@ -756,117 +756,197 @@ function setupCalculatorWidget() {
 // ========================================================
 
 // ========================================================
-// 🔄 SYNCHRONISATION EN DIRECT GOOGLE CALENDAR & GOOGLE TASKS
+// 🔄 SYNCHRONISATION OFFICIELLE GOOGLE CALENDAR & TASKS (COMPTE DU PROFIL CONNECTÉ)
 // ========================================================
-async function syncGoogleCalendarAndTasks(silent = false) {
-  try {
-    const resp = await fetch("http://127.0.0.1:8766/api/state", { cache: "no-store" });
-    if (!resp.ok) throw new Error("Réponse serveur : " + resp.status);
-    const data = await resp.json();
 
-    let newEventsCount = 0;
-    let newTasksCount = 0;
-
-    // 1. Calendriers & Événements Google
-    if (Array.isArray(data.events)) {
-      googleEventsList = data.events.map(ev => {
-        const start = ev.start || {};
-        let dateStr = "";
-        let timeStr = "Journée";
-        if (start.dateTime) {
-          dateStr = start.dateTime.slice(0, 10);
-          timeStr = start.dateTime.slice(11, 16);
-        } else if (start.date) {
-          dateStr = start.date;
-          timeStr = "Journée";
-        }
-        return {
-          id: ev.id,
-          calendarId: ev.calendarId,
-          calendarTitle: ev.calendarTitle || "Agenda",
-          title: ev.title || "Sans titre",
-          notes: ev.notes || "",
-          htmlLink: ev.htmlLink || "",
-          dateStr,
-          timeStr,
-          isAllDay: timeStr === "Journée"
-        };
-      });
-      chrome.storage.local.set({ googleEventsList });
-      newEventsCount = googleEventsList.length;
-    }
-
-    if (Array.isArray(data.calendars)) {
-      googleCalendarsList = data.calendars;
-      chrome.storage.local.set({ googleCalendarsList });
-    }
-
-    // 2. Google Tasks
-    if (Array.isArray(data.tasks)) {
-      const groupsMap = {};
-      if (Array.isArray(data.groups)) {
-        data.groups.forEach(g => { groupsMap[g.id] = g.title; });
-      }
-
-      tasksList = data.tasks.map(t => {
-        let priority = "NONE";
-        const groupTitle = groupsMap[t.groupId] || "Général";
-        const pMatch = (t.notes || "").match(/(?:priorité|priority)[^P0-4]*(P[0-4])/i);
-        if (pMatch) {
-          priority = pMatch[1].toUpperCase();
-        } else if (groupTitle.toUpperCase() === "P0") {
-          priority = "P0";
-        } else if (groupTitle.toUpperCase() === "P1") {
-          priority = "P1";
-        } else if (groupTitle.toUpperCase() === "P2") {
-          priority = "P2";
-        }
-
-        const isDone = t.status === "completed" || t.status === "done";
-
-        return {
-          id: t.id,
-          title: t.title || "Tâche sans titre",
-          priority,
-          groupId: groupTitle,
-          status: isDone ? "done" : "todo",
-          due: t.due ? t.due.slice(0, 10) : "",
-          notes: t.notes || "",
-          subtasks: []
-        };
-      });
-
-      chrome.storage.local.set({ tasksData: tasksList });
-      newTasksCount = tasksList.length;
-    }
-
-    // Si aucun calendrier n'est coché dans agendaSettings, cocher par défaut les principaux
-    if (!agendaSettings.enabledCalendars || agendaSettings.enabledCalendars.length === 0) {
-      const allFoundCals = getDiscoveredCalendars();
-      agendaSettings.enabledCalendars = allFoundCals.map(c => c.name);
-      chrome.storage.local.set({ agendaSettings });
-    }
-
-    // Re-rendre immédiatement les deux widgets
-    if (typeof refreshAgendaDisplay === "function") refreshAgendaDisplay();
-    if (typeof refreshTasksDisplay === "function") refreshTasksDisplay();
-
-    if (!silent) {
-      showToast(`Google synchronisé : ${newEventsCount} événements, ${newTasksCount} tâches !`);
-    }
-  } catch (err) {
-    console.warn("Synchronisation locale Google indisponible :", err);
-    if (!silent) {
-      showToast("Serveur local Google non détecté (port 8766)");
-    }
+// Purge de sécurité stricte : élimine tout résidu de calendrier tiers (TZT)
+function purgeForeignCalendars() {
+  if (Array.isArray(googleCalendarsList)) {
+    googleCalendarsList = googleCalendarsList.filter(c => !c.name || (!c.name.includes("TZT") && !c.name.includes("Agenda_Privé")));
+    chrome.storage.local.set({ googleCalendarsList });
+  }
+  if (Array.isArray(googleEventsList)) {
+    googleEventsList = googleEventsList.filter(e => !e.calendarTitle || (!e.calendarTitle.includes("TZT") && !e.calendarTitle.includes("Agenda_Privé")));
+    chrome.storage.local.set({ googleEventsList });
+  }
+  if (agendaSettings && Array.isArray(agendaSettings.enabledCalendars)) {
+    agendaSettings.enabledCalendars = agendaSettings.enabledCalendars.filter(n => !n.includes("TZT") && !n.includes("Agenda_Privé"));
+    chrome.storage.local.set({ agendaSettings });
+  }
+  if (agendaSettings && agendaSettings.agendas) {
+    delete agendaSettings.agendas.rdvtzt;
+    chrome.storage.local.set({ agendaSettings });
   }
 }
 
-// Récupère tous les calendriers découverts (Google + locaux)
+async function syncGoogleCalendarAndTasks(interactive = false) {
+  purgeForeignCalendars();
+
+  if (!chrome.identity || !chrome.identity.getAuthToken) {
+    if (interactive) showToast("L'API Google Identity n'est pas disponible.");
+    return false;
+  }
+
+  return new Promise((resolve) => {
+    chrome.identity.getAuthToken({ interactive }, async (token) => {
+      if (chrome.runtime.lastError || !token) {
+        const errMsg = chrome.runtime.lastError ? chrome.runtime.lastError.message : "Jeton manquant";
+        console.log("Authentification Google requise :", errMsg);
+        if (interactive) {
+          showToast("Veuillez autoriser l'accès à Google Agenda pour ce compte.");
+        }
+        return resolve(false);
+      }
+
+      try {
+        // 1. Récupérer uniquement les calendriers du profil Google actuellement connecté
+        const calsRes = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (calsRes.ok) {
+          const calsData = await calsRes.json();
+          const fetchedCals = (calsData.items || []).map(item => ({
+            id: item.id,
+            name: item.summaryOverride || item.summary || "Agenda",
+            color: item.backgroundColor || "#3b82f6",
+            primary: Boolean(item.primary)
+          }));
+
+          googleCalendarsList = fetchedCals;
+          chrome.storage.local.set({ googleCalendarsList });
+
+          // Si aucun calendrier n'est encore coché, cocher les calendriers du compte
+          if (!Array.isArray(agendaSettings.enabledCalendars) || agendaSettings.enabledCalendars.length === 0) {
+            agendaSettings.enabledCalendars = googleCalendarsList.map(c => c.name);
+            chrome.storage.local.set({ agendaSettings });
+          }
+
+          // 2. Récupérer les événements des calendriers cochés (30j avant, 90j après)
+          const now = new Date();
+          const timeMin = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+          const timeMax = new Date(now.getFullYear(), now.getMonth() + 3, 1).toISOString();
+
+          const allEvents = [];
+          for (const cal of googleCalendarsList) {
+            if (agendaSettings.enabledCalendars.includes(cal.name)) {
+              try {
+                const evRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?singleEvents=true&timeMin=${timeMin}&timeMax=${timeMax}&maxResults=250`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                if (evRes.ok) {
+                  const evData = await evRes.json();
+                  (evData.items || []).forEach(ev => {
+                    const start = ev.start || {};
+                    let dateStr = "";
+                    let timeStr = "Journée";
+                    if (start.dateTime) {
+                      dateStr = start.dateTime.slice(0, 10);
+                      timeStr = start.dateTime.slice(11, 16);
+                    } else if (start.date) {
+                      dateStr = start.date;
+                      timeStr = "Journée";
+                    }
+                    allEvents.push({
+                      id: ev.id,
+                      calendarId: cal.id,
+                      calendarTitle: cal.name,
+                      title: ev.summary || "Sans titre",
+                      notes: ev.description || "",
+                      htmlLink: ev.htmlLink || "",
+                      dateStr,
+                      timeStr,
+                      isAllDay: timeStr === "Journée"
+                    });
+                  });
+                }
+              } catch (eCal) {
+                console.warn("Erreur chargement agenda :", cal.name, eCal);
+              }
+            }
+          }
+          googleEventsList = allEvents;
+          chrome.storage.local.set({ googleEventsList });
+        }
+
+        // 3. Récupérer les Google Tasks du compte connecté
+        try {
+          const listsRes = await fetch("https://tasks.googleapis.com/tasks/v1/users/@me/lists", {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (listsRes.ok) {
+            const listsData = await listsRes.json();
+            const allTasks = [];
+            for (const list of (listsData.items || [])) {
+              const tRes = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${encodeURIComponent(list.id)}/tasks?showCompleted=true&showHidden=true&maxResults=100`, {
+                headers: { Authorization: `Bearer ${token}` }
+              });
+              if (tRes.ok) {
+                const tData = await tRes.json();
+                (tData.items || []).forEach(t => {
+                  let priority = "NONE";
+                  const pMatch = (t.notes || "").match(/(?:priorité|priority)[^P0-4]*(P[0-4])/i);
+                  if (pMatch) priority = pMatch[1].toUpperCase();
+                  else if (list.title.toUpperCase() === "P0") priority = "P0";
+
+                  allTasks.push({
+                    id: t.id,
+                    title: t.title || "Tâche sans titre",
+                    groupId: list.title || "Général",
+                    rawGroupId: list.id,
+                    parent: t.parent || null,
+                    status: t.status === "completed" ? "done" : "todo",
+                    due: t.due ? t.due.slice(0, 10) : "",
+                    notes: t.notes || "",
+                    priority
+                  });
+                });
+              }
+            }
+            if (allTasks.length > 0) {
+              tasksList = allTasks;
+              chrome.storage.local.set({ tasksData: tasksList });
+            }
+          }
+        } catch (eTasks) {
+          console.warn("Erreur chargement Google Tasks :", eTasks);
+        }
+
+        if (typeof refreshAgendaDisplay === "function") refreshAgendaDisplay();
+        if (typeof refreshTasksDisplay === "function") refreshTasksDisplay();
+
+        if (interactive) {
+          showToast(`Google synchronisé : ${googleEventsList.length} événements, ${googleCalendarsList.length} agendas !`);
+        }
+        resolve(true);
+      } catch (err) {
+        console.error("Erreur synchro Google API :", err);
+        if (interactive) showToast("Erreur lors de la synchronisation avec Google");
+        resolve(false);
+      }
+    });
+  });
+}
+
+// Récupère uniquement les calendriers réels du compte connecté
 function getDiscoveredCalendars() {
+  purgeForeignCalendars();
   const cals = new Map();
 
-  // Calendriers issus de googleEventsList
+  // 1. Calendriers réels récupérés depuis Google Calendar pour ce profil
+  if (Array.isArray(googleCalendarsList)) {
+    googleCalendarsList.forEach(c => {
+      if (c.name && !cals.has(c.name)) {
+        cals.set(c.name, {
+          id: c.id || c.name,
+          name: c.name,
+          color: c.color || CALENDAR_COLOR_PALETTE[c.name] || "#3b82f6"
+        });
+      }
+    });
+  }
+
+  // 2. Calendriers trouvés dans les événements Google récupérés
   googleEventsList.forEach(e => {
     if (e.calendarTitle && !cals.has(e.calendarTitle)) {
       cals.set(e.calendarTitle, {
@@ -877,25 +957,20 @@ function getDiscoveredCalendars() {
     }
   });
 
-  // Calendriers prédéfinis TZT s'il en manque
-  const PRESETS = [
-    { name: "Agenda_Privé_TZT", color: "#3b82f6" },
-    { name: "REVEIL-RAPPEL TZT", color: "#10b981" },
-    { name: "Autres TZT", color: "#eab308" },
-    { name: "Vincent touzot (Partage)", color: "#a855f7" },
-    { name: "Emilie amor 150", color: "#ec4899" },
-    { name: "emilie amor (mimie)", color: "#f43f5e" },
-    { name: "ÉVÉNEMENT RECURRENTS (AMR)", color: "#f97316" },
-    { name: "Phases de la Lune", color: "#06b6d4" },
-    { name: "Numéros de semaine", color: "#64748b" },
-    { name: "Weather for Voisins-le-Bretonneux", color: "#38bdf8" }
-  ];
+  // 3. Agendas locaux personnalisés créés par l'utilisateur s'il y en a
+  if (agendaSettings && agendaSettings.agendas) {
+    Object.keys(agendaSettings.agendas).forEach(k => {
+      const ag = agendaSettings.agendas[k];
+      if (ag && ag.name && !cals.has(ag.name)) {
+        cals.set(ag.name, { id: ag.name, name: ag.name, color: ag.color || "#3b82f6" });
+      }
+    });
+  }
 
-  PRESETS.forEach(p => {
-    if (!cals.has(p.name)) {
-      cals.set(p.name, { id: p.name, name: p.name, color: p.color });
-    }
-  });
+  // S'il n'y a encore aucun calendrier Google connecté, proposer un agenda principal par défaut
+  if (cals.size === 0) {
+    cals.set("Mon Agenda", { id: "primary", name: "Mon Agenda", color: "#3b82f6" });
+  }
 
   return Array.from(cals.values());
 }
@@ -1840,7 +1915,7 @@ function setupAgendaWidget() {
   if (syncNowBtn) {
     syncNowBtn.addEventListener("click", async () => {
       syncNowBtn.textContent = "⏳ Synchronisation...";
-      await syncGoogleStateWithLocal();
+      await syncGoogleCalendarAndTasks(true);
       syncNowBtn.textContent = "🔄 Actualiser Google";
       renderCalendarsCheckboxList();
       renderCurrentView();
@@ -2529,7 +2604,7 @@ function setupTasksWidget() {
   if (syncBtn) {
     syncBtn.addEventListener("click", async () => {
       syncBtn.textContent = "⏳";
-      await syncGoogleStateWithLocal();
+      await syncGoogleCalendarAndTasks(true);
       syncBtn.textContent = "🔄";
       renderGroupTabs();
       renderTasks();
@@ -2618,7 +2693,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupAgendaWidget();
   setupTasksWidget();
   // Synchronisation silencieuse immédiate au démarrage si le serveur local est actif
-  syncGoogleCalendarAndTasks(true);
+  syncGoogleCalendarAndTasks(false);
   setupAllWidgetsDrag();
   setupAllWidgetsResize();
   setupWeatherControls();
