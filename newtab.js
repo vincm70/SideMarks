@@ -594,21 +594,27 @@ function getVisibleObstacles() {
   const containerRect = pillsContainer.getBoundingClientRect();
   const candidateIds = [
     'clockWidget', 'weatherWidget', 'notesWidget', 'pomodoroWidget', 'recentWidget', 
-    'googleSearchForm', 'localShortcutsDock', 'liveEditToolbar'
+    'googleSearchForm', 'localShortcutsDock', 'liveEditToolbar', 'desktopPaginationBar'
   ];
+
   candidateIds.forEach(id => {
     const el = document.getElementById(id);
-    if (el && !el.classList.contains('hidden') && el.offsetParent !== null) {
+    if (el) {
+      const style = window.getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden' || el.classList.contains('hidden') || el.style.display === 'none') {
+        return;
+      }
       const r = el.getBoundingClientRect();
-      if (r.width > 20 && r.height > 20) {
+      if (r.width > 15 && r.height > 15) {
+        // Marge de sécurité généreuse de 14px autour de chaque widget
         obstacles.push({
           id,
-          left: r.left - containerRect.left - 12,
-          top: r.top - containerRect.top - 12,
-          right: r.right - containerRect.left + 12,
-          bottom: r.bottom - containerRect.top + 12,
-          width: r.width + 24,
-          height: r.height + 24
+          left: r.left - containerRect.left - 14,
+          top: r.top - containerRect.top - 14,
+          right: r.right - containerRect.left + 14,
+          bottom: r.bottom - containerRect.top + 14,
+          width: r.width + 28,
+          height: r.height + 28
         });
       }
     }
@@ -625,7 +631,7 @@ function getObstacleCollision(x, y, w, h, obstacles) {
   return null;
 }
 
-// Alignement automatique des raccourcis (collés les uns après les autres sans trous ni superposition)
+// Alignement automatique des raccourcis (Strictement sans AUCUN raccourci masqué sous un widget)
 function alignPills(direction, silent = false) {
   if (!silent) pushPillsHistory();
   lastAlignmentDirection = direction;
@@ -656,13 +662,15 @@ function alignPills(direction, silent = false) {
     return { w, h };
   });
 
+  const obstacles = getVisibleObstacles();
+
   switch (direction) {
     case "left": {
-      // Colonnes sur le bord gauche en évitant les widgets
-      const obstacles = getVisibleObstacles();
-      const startX = 22;
+      // Colonnes sur le bord gauche en évitant STRICTEMENT tous les widgets
+      const startX = 24;
       const startY = 28;
-      const maxY = H - 45;
+      const maxY = H - 55;
+      const maxX = W - 30;
 
       let curX = startX;
       let curY = startY;
@@ -671,34 +679,37 @@ function alignPills(direction, silent = false) {
       currentPillEntries.forEach(({ item }, i) => {
         const { w, h } = sizes[i];
 
-        let obs = getObstacleCollision(curX, curY, w, h, obstacles);
         let loops = 0;
-        while (obs && loops < 50) {
+        while (loops < 100) {
           loops++;
+          const obs = getObstacleCollision(curX, curY, w, h, obstacles);
+          if (!obs) break;
+          // Sauter en dessous de l'obstacle
           curY = obs.bottom + gapY;
           if (curY + h > maxY) {
             curX += (colMaxW > 0 ? colMaxW : w) + gapX;
             curY = startY;
             colMaxW = 0;
           }
-          obs = getObstacleCollision(curX, curY, w, h, obstacles);
+          if (curX + w > maxX) break;
         }
 
         if (curY + h > maxY && curY > startY) {
-          curX += colMaxW + gapX;
+          curX += (colMaxW > 0 ? colMaxW : w) + gapX;
           curY = startY;
           colMaxW = 0;
-          obs = getObstacleCollision(curX, curY, w, h, obstacles);
-          loops = 0;
-          while (obs && loops < 50) {
-            loops++;
+          let loops2 = 0;
+          while (loops2 < 100) {
+            loops2++;
+            const obs = getObstacleCollision(curX, curY, w, h, obstacles);
+            if (!obs) break;
             curY = obs.bottom + gapY;
             if (curY + h > maxY) {
               curX += (colMaxW > 0 ? colMaxW : w) + gapX;
               curY = startY;
               colMaxW = 0;
             }
-            obs = getObstacleCollision(curX, curY, w, h, obstacles);
+            if (curX + w > maxX) break;
           }
         }
 
@@ -709,16 +720,16 @@ function alignPills(direction, silent = false) {
         if (w > colMaxW) colMaxW = w;
       });
 
-      if (!silent) showToast("Raccourcis alignés à gauche (aucun raccourci masqué)");
+      if (!silent) showToast("Raccourcis alignés à gauche (aucun sous un widget)");
       break;
     }
 
     case "top": {
-      // Rangées en haut en sautant les widgets
-      const obstacles = getVisibleObstacles();
-      const startX = 22;
+      // Rangées en haut en évitant STRICTEMENT tous les widgets
+      const startX = 24;
       const startY = 24;
-      const maxX = W - 25;
+      const maxX = W - 30;
+      const maxY = H - 55;
 
       let curX = startX;
       let curY = startY;
@@ -727,34 +738,37 @@ function alignPills(direction, silent = false) {
       currentPillEntries.forEach(({ item }, i) => {
         const { w, h } = sizes[i];
 
-        let obs = getObstacleCollision(curX, curY, w, h, obstacles);
         let loops = 0;
-        while (obs && loops < 50) {
+        while (loops < 100) {
           loops++;
+          const obs = getObstacleCollision(curX, curY, w, h, obstacles);
+          if (!obs) break;
+          // Sauter à droite de l'obstacle
           curX = obs.right + gapX;
           if (curX + w > maxX) {
             curX = startX;
             curY += rowMaxH + gapY;
-            rowMaxH = h;
+            rowMaxH = defaultH;
           }
-          obs = getObstacleCollision(curX, curY, w, h, obstacles);
+          if (curY + h > maxY) break;
         }
 
         if (curX + w > maxX && curX > startX) {
           curX = startX;
           curY += rowMaxH + gapY;
-          rowMaxH = h;
-          obs = getObstacleCollision(curX, curY, w, h, obstacles);
-          loops = 0;
-          while (obs && loops < 50) {
-            loops++;
+          rowMaxH = defaultH;
+          let loops2 = 0;
+          while (loops2 < 100) {
+            loops2++;
+            const obs = getObstacleCollision(curX, curY, w, h, obstacles);
+            if (!obs) break;
             curX = obs.right + gapX;
             if (curX + w > maxX) {
               curX = startX;
               curY += rowMaxH + gapY;
-              rowMaxH = h;
+              rowMaxH = defaultH;
             }
-            obs = getObstacleCollision(curX, curY, w, h, obstacles);
+            if (curY + h > maxY) break;
           }
         }
 
@@ -765,89 +779,127 @@ function alignPills(direction, silent = false) {
         if (h > rowMaxH) rowMaxH = h;
       });
 
-      if (!silent) showToast("Raccourcis alignés en haut (aucun raccourci masqué)");
+      if (!silent) showToast("Raccourcis alignés en haut (aucun sous un widget)");
       break;
     }
 
     case "right": {
-      // Colonnes sur le bord droit (accessible jusqu'au bord du volet latéral)
-      const rightEdge = W - 25;
+      // Colonnes sur le bord droit en évitant STRICTEMENT tous les widgets
       const startY = 28;
-      const gapY = 6;
-      const gapX = 10;
-      const maxY = H - 45;
+      const maxY = H - 55;
+      const minX = 24;
 
-      const columns = [];
-      let curCol = [];
+      let curRight = W - 25;
       let curY = startY;
+      let colMaxW = 0;
 
-      quickPills.forEach((item, i) => {
+      currentPillEntries.forEach(({ item }, i) => {
         const { w, h } = sizes[i];
-        if (curY + h > maxY && curCol.length > 0) {
-          columns.push(curCol);
-          curCol = [];
-          curY = startY;
+        let curX = curRight - w;
+
+        let loops = 0;
+        while (loops < 100) {
+          loops++;
+          const obs = getObstacleCollision(curX, curY, w, h, obstacles);
+          if (!obs) break;
+          // Sauter en dessous de l'obstacle
+          curY = obs.bottom + gapY;
+          if (curY + h > maxY) {
+            curRight = curX - gapX;
+            curY = startY;
+            colMaxW = 0;
+          }
+          curX = curRight - w;
+          if (curX < minX) break;
         }
-        curCol.push({ item, w, h });
+
+        if (curY + h > maxY && curY > startY) {
+          curRight = curX - gapX;
+          curY = startY;
+          colMaxW = 0;
+          curX = curRight - w;
+          let loops2 = 0;
+          while (loops2 < 100) {
+            loops2++;
+            const obs = getObstacleCollision(curX, curY, w, h, obstacles);
+            if (!obs) break;
+            curY = obs.bottom + gapY;
+            if (curY + h > maxY) {
+              curRight = curX - gapX;
+              curY = startY;
+              colMaxW = 0;
+            }
+            curX = curRight - w;
+            if (curX < minX) break;
+          }
+        }
+
+        item.posX = Math.round((Math.max(minX, curX) / W) * 1000) / 10;
+        item.posY = Math.round((curY / H) * 1000) / 10;
+
         curY += h + gapY;
-      });
-      if (curCol.length > 0) columns.push(curCol);
-
-      let curRight = rightEdge;
-      columns.forEach(col => {
-        const colW = Math.max(...col.map(c => c.w));
-        const colLeft = curRight - colW;
-        let y = startY;
-        col.forEach(({ item, h }) => {
-          item.posX = Math.round((colLeft / W) * 1000) / 10;
-          item.posY = Math.round((y / H) * 1000) / 10;
-          y += h + gapY;
-        });
-        curRight = colLeft - gapX;
+        if (w > colMaxW) colMaxW = w;
       });
 
-      showToast("Raccourcis alignés en colonnes à droite");
+      if (!silent) showToast("Raccourcis alignés à droite (aucun sous un widget)");
       break;
     }
 
     case "bottom": {
-      // Rangées en bas : les icônes se suivent l'une après l'autre
-      const startX = 22;
-      const gapX = 8;
-      const gapY = 6;
-      const maxX = W - 25; // Bord droit accessible jusqu'au volet latéral
+      // Rangées en bas en évitant STRICTEMENT le dock, la toolbar et les widgets
+      const startX = 24;
+      const maxX = W - 30;
+      const minY = 30;
 
-      const rows = [];
-      let curRow = [];
       let curX = startX;
+      let curY = Math.max(minY, H - 145);
+      let rowMaxH = defaultH;
 
-      quickPills.forEach((item, i) => {
+      currentPillEntries.forEach(({ item }, i) => {
         const { w, h } = sizes[i];
-        if (curX + w > maxX && curRow.length > 0) {
-          rows.push(curRow);
-          curRow = [];
-          curX = startX;
+
+        let loops = 0;
+        while (loops < 100) {
+          loops++;
+          const obs = getObstacleCollision(curX, curY, w, h, obstacles);
+          if (!obs) break;
+          // Sauter à droite de l'obstacle
+          curX = obs.right + gapX;
+          if (curX + w > maxX) {
+            curX = startX;
+            curY -= (rowMaxH + gapY);
+            rowMaxH = defaultH;
+          }
+          if (curY < minY) break;
         }
-        curRow.push({ item, w, h });
+
+        if (curX + w > maxX && curX > startX) {
+          curX = startX;
+          curY -= (rowMaxH + gapY);
+          rowMaxH = defaultH;
+          let loops2 = 0;
+          while (loops2 < 100) {
+            loops2++;
+            const obs = getObstacleCollision(curX, curY, w, h, obstacles);
+            if (!obs) break;
+            curX = obs.right + gapX;
+            if (curX + w > maxX) {
+              curX = startX;
+              curY -= (rowMaxH + gapY);
+              rowMaxH = defaultH;
+            }
+            if (curY < minY) break;
+          }
+        }
+
+        item.posX = Math.round((curX / W) * 1000) / 10;
+        item.posY = Math.round((Math.max(minY, curY) / H) * 1000) / 10;
+
         curX += w + gapX;
-      });
-      if (curRow.length > 0) rows.push(curRow);
-
-      const totalH = rows.length * (27 + gapY);
-      const startY = Math.max(40, H - totalH - 25);
-
-      let rowY = startY;
-      rows.forEach(row => {
-        let x = startX;
-        row.forEach(({ item, w }) => {
-          item.posX = Math.round((x / W) * 1000) / 10;
-          item.posY = Math.round((rowY / H) * 1000) / 10;
-          x += w + gapX;
-        });
-        rowY += 27 + gapY;
+        if (h > rowMaxH) rowMaxH = h;
       });
 
-      showToast("Raccourcis alignés en bas (collés l'un après l'autre)");
+      if (!silent) showToast("Raccourcis alignés en bas (aucun sous un widget)");
       break;
     }
   }
@@ -904,11 +956,13 @@ function groupByCategory() {
     sizeMap.set(item, { w, h });
   });
 
+  const obstacles = getVisibleObstacles();
   const startX = 24;
   const startY = 32;
   const gapY = 6;
   const gapX = 14;
-  const maxY = H - 50;
+  const maxY = H - 55;
+  const maxX = W - 30;
 
   let curX = startX;
 
@@ -919,10 +973,38 @@ function groupByCategory() {
 
     items.forEach((item) => {
       const { w, h } = sizeMap.get(item) || { w: 120, h: 27 };
+
+      let loops = 0;
+      while (loops < 100) {
+        loops++;
+        const obs = getObstacleCollision(curX, curY, w, h, obstacles);
+        if (!obs) break;
+        curY = obs.bottom + gapY;
+        if (curY + h > maxY) {
+          curX += (catMaxW > 0 ? catMaxW : w) + gapX;
+          curY = startY;
+          catMaxW = 0;
+        }
+        if (curX + w > maxX) break;
+      }
+
       if (curY + h > maxY && curY > startY) {
-        curX += catMaxW + gapX;
+        curX += (catMaxW > 0 ? catMaxW : w) + gapX;
         curY = startY;
         catMaxW = 0;
+        let loops2 = 0;
+        while (loops2 < 100) {
+          loops2++;
+          const obs = getObstacleCollision(curX, curY, w, h, obstacles);
+          if (!obs) break;
+          curY = obs.bottom + gapY;
+          if (curY + h > maxY) {
+            curX += (catMaxW > 0 ? catMaxW : w) + gapX;
+            curY = startY;
+            catMaxW = 0;
+          }
+          if (curX + w > maxX) break;
+        }
       }
 
       item.posX = Math.round((curX / W) * 1000) / 10;
@@ -936,46 +1018,7 @@ function groupByCategory() {
   });
 
   savePills();
-  showToast(`Raccourcis groupés par catégories (${catNames.join(", ")})`);
-}
-
-// Fond d'écran
-async function loadWallpaper() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get("customWallpaper", (res) => {
-      if (res.customWallpaper) {
-        wallpaperBg.style.backgroundImage = `url("${res.customWallpaper}")`;
-      } else {
-        wallpaperBg.style.backgroundImage = `url("wallpaper.jpg")`;
-      }
-      resolve();
-    });
-  });
-}
-
-// Raccourcis rapides avec Drag & Drop et Clic Droit
-async function loadPills() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(["quickPills", "pillsVersion"], (res) => {
-      // Detection : si vide ou si ecrase par la liste de demo temporaire
-      const isGenericDemo = Array.isArray(res.quickPills) &&
-        res.quickPills.length <= 14 &&
-        res.quickPills.some((p) => p.title === "Wikipédia" || p.title === "LinkedIn" || p.title === "Reddit");
-
-      // Detection de l'ancienne grille eparpillee sur tout l'ecran (posY >= 66 ou 74.5)
-      const hasScatteredGrid = Array.isArray(res.quickPills) &&
-        res.quickPills.some((p) => typeof p.posY === "number" && (p.posY >= 66.0 || p.posY === 74.5));
-
-      if (Array.isArray(res.quickPills) && res.quickPills.length > 0 && !isGenericDemo && !hasScatteredGrid) {
-        quickPills = res.quickPills;
-      } else {
-        quickPills = JSON.parse(JSON.stringify(DEFAULT_PILLS));
-        chrome.storage.local.set({ quickPills, pillsVersion: "5.1" });
-      }
-      renderPills();
-      resolve();
-    });
-  });
+  showToast("Raccourcis regroupés par catégories (aucun sous un widget)");
 }
 
 function restoreOriginalPills() {
@@ -4860,10 +4903,25 @@ function initMultiDesktop() {
   });
 
   if (prevBtn) {
-    prevBtn.addEventListener("click", () => goToDesktopPage(currentDesktopPageIndex - 1));
+    prevBtn.addEventListener("click", () => {
+      if (currentDesktopPageIndex > 0) {
+        goToDesktopPage(currentDesktopPageIndex - 1);
+      }
+    });
   }
+
   if (nextBtn) {
-    nextBtn.addEventListener("click", () => goToDesktopPage(currentDesktopPageIndex + 1));
+    nextBtn.addEventListener("click", () => {
+      if (currentDesktopPageIndex < totalDesktopPages - 1) {
+        goToDesktopPage(currentDesktopPageIndex + 1);
+      } else {
+        // Clic sur Suivant quand on est au dernier bureau (ou seul bureau) -> créer le bureau suivant !
+        totalDesktopPages++;
+        chrome.storage.local.set({ totalDesktopPages });
+        goToDesktopPage(totalDesktopPages - 1);
+        showToast(`Bureau ${totalDesktopPages} créé !`);
+      }
+    });
   }
 
   if (addPageBtn) {
@@ -4907,14 +4965,19 @@ function initMultiDesktop() {
   window.addEventListener("keydown", (e) => {
     if (e.altKey && e.key === "ArrowLeft") {
       e.preventDefault();
-      goToDesktopPage(currentDesktopPageIndex - 1);
+      if (currentDesktopPageIndex > 0) goToDesktopPage(currentDesktopPageIndex - 1);
     } else if (e.altKey && e.key === "ArrowRight") {
       e.preventDefault();
-      goToDesktopPage(currentDesktopPageIndex + 1);
+      if (currentDesktopPageIndex < totalDesktopPages - 1) {
+        goToDesktopPage(currentDesktopPageIndex + 1);
+      } else {
+        totalDesktopPages++;
+        chrome.storage.local.set({ totalDesktopPages });
+        goToDesktopPage(totalDesktopPages - 1);
+      }
     }
   });
 
-  // Gestes Swipe à la souris et au toucher (smartphone)
   setupSwipeNavigation();
 }
 
@@ -4924,13 +4987,23 @@ function renderDesktopPagination() {
   container.innerHTML = "";
 
   for (let i = 0; i < totalDesktopPages; i++) {
-    const dot = document.createElement("div");
-    dot.className = "desktop-page-dot" + (i === currentDesktopPageIndex ? " active" : "");
-    dot.title = `Bureau ${i + 1}`;
-    dot.addEventListener("click", () => goToDesktopPage(i));
+    const pill = document.createElement("button");
+    pill.type = "button";
+    pill.className = "desktop-page-pill" + (i === currentDesktopPageIndex ? " active" : "");
+    pill.title = `Passer au Bureau ${i + 1}${isLiveEditMode && totalDesktopPages > 1 ? " (Double-clic pour supprimer si vide)" : ""}`;
+
+    const dot = document.createElement("span");
+    dot.className = "page-dot";
+    pill.appendChild(dot);
+
+    const label = document.createElement("span");
+    label.textContent = `Bureau ${i + 1}`;
+    pill.appendChild(label);
+
+    pill.addEventListener("click", () => goToDesktopPage(i));
 
     // Double-clic en mode édition pour supprimer un bureau vide
-    dot.addEventListener("dblclick", () => {
+    pill.addEventListener("dblclick", () => {
       if (!isLiveEditMode) return;
       if (totalDesktopPages <= 1) return;
       const pillsOnPage = quickPills.filter(p => (p.page || 0) === i);
@@ -4940,7 +5013,6 @@ function renderDesktopPagination() {
       }
       if (confirm(`Supprimer le Bureau ${i + 1} vide ?`)) {
         totalDesktopPages--;
-        // Décaler les pages supérieures
         quickPills.forEach(p => {
           if (p.page && p.page > i) p.page--;
         });
@@ -4951,7 +5023,7 @@ function renderDesktopPagination() {
       }
     });
 
-    container.appendChild(dot);
+    container.appendChild(pill);
   }
 
   updateDesktopNavControls();
@@ -4962,10 +5034,24 @@ function updateDesktopNavControls() {
   const nextBtn = document.getElementById("desktopNextPageBtn");
 
   if (prevBtn) {
-    prevBtn.classList.toggle("hidden", currentDesktopPageIndex <= 0);
+    if (totalDesktopPages > 1 && currentDesktopPageIndex > 0) {
+      prevBtn.classList.remove("hidden");
+      prevBtn.style.display = "flex";
+      prevBtn.title = `Bureau ${currentDesktopPageIndex} (Alt + Gauche)`;
+    } else {
+      prevBtn.classList.add("hidden");
+      prevBtn.style.display = "none";
+    }
   }
+
   if (nextBtn) {
-    nextBtn.classList.toggle("hidden", currentDesktopPageIndex >= totalDesktopPages - 1);
+    nextBtn.classList.remove("hidden");
+    nextBtn.style.display = "flex";
+    if (totalDesktopPages > 1 && currentDesktopPageIndex < totalDesktopPages - 1) {
+      nextBtn.title = `Bureau ${currentDesktopPageIndex + 2} (Alt + Droite)`;
+    } else {
+      nextBtn.title = `Créer le Bureau ${totalDesktopPages + 1} (Alt + Droite)`;
+    }
   }
 }
 
@@ -4973,7 +5059,6 @@ function goToDesktopPage(newPageIndex) {
   if (newPageIndex < 0 || newPageIndex >= totalDesktopPages) return;
   currentDesktopPageIndex = newPageIndex;
 
-  // Animation douce de transition
   if (pillsContainer) {
     pillsContainer.style.opacity = "0.3";
     pillsContainer.style.transform = "scale(0.98)";
