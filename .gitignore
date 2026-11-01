@@ -1,0 +1,21 @@
+# Packages et archives
+*.zip
+*.tar.gz
+
+# Fichiers personnels & volumineux
+original_family_wallpaper.jpg
+wallpaper.jpg
+default_wallpaper_dataurl.js
+extracted_dataurl_wallpaper.txt
+
+# Python & caches
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE & Windows
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+*.log

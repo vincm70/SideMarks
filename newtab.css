@@ -1,0 +1,151 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  background-color: #0b0f19;
+  height: 100vh;
+  width: 100vw;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #ffffff;
+  user-select: none;
+}
+
+/* Fond d'écran Fullscreen */
+.wallpaper-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-image: url('wallpaper.jpg');
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  transition: background-image 0.3s ease;
+}
+
+/* Layout Principal : Zone Gauche + Volet Droit */
+.newtab-layout {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Zone Principale (Gauche) */
+.main-content-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 16px 24px;
+  position: relative;
+  overflow-y: auto;
+  scrollbar-width: none; /* Cache la barre blanche sous Firefox/Standard */
+  -ms-overflow-style: none;
+}
+
+.main-content-area::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Guides magnétiques d'alignement doux (Snap to guide) */
+.snap-guide {
+  position: absolute;
+  pointer-events: none;
+  z-index: 998;
+  opacity: 1;
+}
+
+.snap-guide.hidden {
+  display: none !important;
+}
+
+/* ========================================================
+   DOCK DES RACCOURCIS SYSTÈME LOCAUX WINDOWS (v5.2 Lab)
+   ======================================================== */
+.local-shortcuts-dock {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  border-radius: 30px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 15px rgba(168, 85, 247, 0.15);
+  z-index: 900;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  max-width: 80vw;
+  overflow-x: auto;
+}
+
+.local-shortcuts-dock:hover {
+  border-color: rgba(168, 85, 247, 0.6);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 0 25px rgba(168, 85, 247, 0.25);
+  transform: translateX(-50%) translateY(-2px);
+}
+
+.dock-header {
+  display: flex;
+  align-items: center;
+  padding-right: 8px;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.dock-lab-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #c084fc;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dock-items-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dock-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f1f5f9;
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.dock-item:hover {
+  background: rgba(168, 85, 247, 0.25);
+  border-color: #c084fc;
+  color: #fff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3);
+}
+
+.dock-item-icon {
+  font-size: 14px;
+}

@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>Options - SideMarks by TOUZIO APPS</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="options-container">
+    <header class="options-header">
+      <div class="logo-title">
+        <img src="icons/icon-48.png" alt="Logo" class="logo">
+        <div>
+          <h1>SideMarks</h1>
+          <p class="subtitle">par TOUZIO APPS – Paramètres et personnalisation</p>
+        </div>
+      </div>
+      <button id="saveBtn" class="btn btn-primary">Enregistrer les modifications</button>
+    </header>
+
+    <!-- Barre de recherche et de navigation rapide des paramètres (Sticky) -->
+    <div class="settings-nav-sticky" id="settingsNavSticky">
+      <!-- Barre de recherche principale -->
+      <div class="settings-search-wrapper">
+        <svg class="settings-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="settingsSearchInput" placeholder="Rechercher un paramètre (ex: moteur, météo, thème, raccourcis, couleur, fond, drive...)" autocomplete="off">
+        <button type="button" id="clearSettingsSearchBtn" class="clear-search-btn hidden" title="Effacer la recherche">✕</button>
+        <span id="settingsSearchResultsCount" class="settings-search-count hidden">0 résultat</span>
+      </div>
+
+      <!-- Onglets / Pilules de filtrage direct par zone -->
+      <div class="settings-nav-tabs" id="settingsNavTabs">
+        <button type="button" class="nav-tab-pill active" data-target="all">⚡ Tout afficher</button>
+        <button type="button" class="nav-tab-pill" data-target="supportFeedbackSection" style="border-color: rgba(236, 72, 153, 0.4); color: #f472b6;">❤️ Soutien & Idées</button>
+        <button type="button" class="nav-tab-pill" data-target="pillsSection">📌 Raccourcis</button>
+        <button type="button" class="nav-tab-pill" data-target="categoriesSection">🗂️ Catégories</button>
+        <button type="button" class="nav-tab-pill" data-target="wallpaperSection">🖼️ Fond d'écran</button>
+        <button type="button" class="nav-tab-pill" data-target="searchEnginesSection">🔍 Moteurs & IA</button>
+        <button type="button" class="nav-tab-pill" data-target="appearanceSection">🎨 Thèmes</button>
+        <button type="button" class="nav-tab-pill" data-target="behaviorSection">⚙️ Clics</button>
+        <button type="button" class="nav-tab-pill" data-target="widgetsSection">🧩 Widgets</button>
+        <button type="button" class="nav-tab-pill" data-target="cloudSyncSection">☁️ Sauvegarde</button>
+        <button type="button" class="nav-tab-pill" data-target="aboutSection">ℹ️ À propos</button>
+        <button type="button" class="nav-tab-pill" data-target="experimentalSection" style="border-color: rgba(168, 85, 247, 0.4); color: #c084fc;">🧪 Expérimental</button>
+      </div>
+    </div>
+
+
+    <main class="options-grid">
+
+      <!-- État aucun résultat -->
+      <div id="settingsNoResults" class="settings-no-results hidden">
+        <div class="no-results-icon">🔍</div>
+        <h3>Aucun paramètre correspondant</h3>
+        <p>Aucun réglage ne correspond à « <strong id="noResultsQuery"></strong> ».</p>
+        <button type="button" id="resetSettingsSearchBtn" class="btn btn-secondary">Réinitialiser la recherche</button>
+      </div>
+
+      
+      <!-- Section Soutenir le projet & Boîte à Idées (En haut des paramètres) -->
+      <section class="card full-width" id="supportFeedbackSection" data-section="supportFeedbackSection" data-title="Soutien & Boîte à idées" data-keywords="don soutien stripe café participer feedback idée suggestion bug amélioration avis chrome store touzio apps">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+          Soutenir SideMarks & Boîte à idées (TOUZIO APPS)
+        </h2>
+        <p class="section-desc" style="color: #8b949e; font-size: 13px; margin-bottom: 16px;">
+          SideMarks est une extension indépendante, gratuite et sans publicité. Vous pouvez soutenir son développement ou proposer vos idées pour les futures versions !
+        </p>
+
+        <div class="support-feedback-grid">
+          <!-- Carte 1 : Boîte à idées & Suggestions -->
+          <div class="support-subcard">
+            <h3 style="font-size: 14.5px; color: #fff; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+              <span>💡</span> Proposer une idée ou signaler un bug
+            </h3>
+            <p style="font-size: 12.5px; color: #8b949e; margin-bottom: 12px; line-height: 1.4;">
+              Une fonction que vous aimeriez voir dans la prochaine mise à jour ? Partagez-la en direct avec le développeur :
+            </p>
+
+            <!-- Soumission FormSubmit universelle sans restriction AJAX/Origin -->
+            <iframe name="formsubmit_silent_iframe" id="formsubmit_silent_iframe" style="display: none; width: 0; height: 0; border: none;"></iframe>
+            <form id="formsubmitNativeForm" action="https://formsubmit.co/7fa954d99890c6d14a09d7ef0a268b9d" method="POST" target="formsubmit_silent_iframe" style="display: none;">
+              <input type="hidden" name="_captcha" value="false">
+              <input type="hidden" name="_template" value="table">
+              <input type="hidden" name="_subject" id="fsNativeSubject" value="[SideMarks Suggestion]">
+              <input type="hidden" name="Objet" id="fsCustomSubject" value="">
+              <input type="hidden" name="Message" id="fsMessage" value="">
+              <input type="hidden" name="Email_Contact" id="fsEmail" value="">
+              <input type="hidden" name="Version_Extension" value="5.2.0">
+              <input type="hidden" name="Navigateur" id="fsUserAgent" value="">
+            </form>
+
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <input type="text" id="feedbackSubjectInput" placeholder="Objet (ex: Nouveau widget, option de tri...)" style="padding: 8px 12px; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px;">
+              <textarea id="feedbackMessageInput" placeholder="Décrivez votre idée ou votre suggestion..." rows="2" style="padding: 8px 12px; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px; resize: vertical;"></textarea>
+              <input type="email" id="feedbackEmailInput" placeholder="Votre email (optionnel, si vous souhaitez une réponse)" style="padding: 7px 12px; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 12px;">
+              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <button type="button" id="sendFeedbackBtn" class="btn btn-primary" style="padding: 7px 16px; font-size: 12.5px;">✉️ Envoyer ma suggestion</button>
+                <div id="feedbackStatusMsg"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Carte 2 : Dons Stripe & Avis Chrome Store -->
+          <div class="support-subcard">
+            <h3 style="font-size: 14.5px; color: #fff; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+              <span>☕</span> Soutenir le projet via Stripe
+            </h3>
+            <p style="font-size: 12.5px; color: #8b949e; margin-bottom: 12px; line-height: 1.4;">
+              Votre soutien permet de financer les serveurs météo, le temps de développement et de garder l'application 100% libre et gratuite.
+            </p>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <a href="https://buy.stripe.com/eVq14o0bE3Yx3uN4f11gs01" target="_blank" id="stripeDonationBtn" class="btn-stripe-support">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.97 15.548.5 12.52.5 5.867.5 1.5 3.992 1.5 9.479c0 5.094 3.737 7.025 7.643 8.483 2.502.946 3.355 1.621 3.355 2.585 0 .964-.89 1.464-2.274 1.464-2.19 0-4.99-.997-6.852-2.035l-.893 5.568C4.307 26.35 7.42 27 10.741 27c6.88 0 11.41-3.238 11.41-8.995 0-4.832-3.228-6.905-8.175-8.855z"/></svg>
+                <span>Soutenir le créateur via Stripe (Montant libre)</span>
+              </a>
+              <!-- Configuration directe du lien Stripe personnel -->
+              <div style="display: flex; gap: 6px; align-items: center; margin-top: 2px;">
+                <input type="url" id="stripeLinkInput" value="https://buy.stripe.com/eVq14o0bE3Yx3uN4f11gs01" placeholder="Votre lien Stripe (ex: https://buy.stripe.com/...)" style="flex: 1; padding: 6px 10px; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 11.5px;">
+                <button type="button" id="saveStripeLinkBtn" class="btn-xs" style="background: #1f4d80; color: #fff; padding: 6px 12px; border-radius: 6px; border: 1px solid #3b82f6; cursor: pointer; font-size: 11.5px; white-space: nowrap;">Enregistrer</button>
+              </div>
+
+
+              <a href="https://chromewebstore.google.com/" target="_blank" class="btn-store-support">
+                <span>⭐ Laisser 5 étoiles sur le Chrome Web Store</span>
+              </a>
+
+              <span style="font-size: 11px; color: #64748b; text-align: center;">Paiement 100% sécurisé crypté SSL via Stripe (CB, Apple Pay, Google Pay).</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section Gestion des Raccourcis Rapides (Pilules de la page d'accueil) -->
+      <section class="card full-width" id="pillsSection" data-section="pillsSection" data-title="Gestion des Raccourcis" data-keywords="raccourcis liens favoris pastilles ruban taille compact standard grand aligner ajouter supprimer">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+          Gestion des Raccourcis de la page d'accueil
+        </h2>
+        <p class="section-desc" style="color: #8b949e; font-size: 13px; margin-bottom: 16px;">
+          Gérez, ajoutez, renommez ou supprimez les raccourcis affichés en haut de votre page de nouvel onglet avec recherche instantanée.
+        </p>
+
+        <!-- Formulaire d'ajout rapide -->
+        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <h3 style="font-size: 14px; margin-bottom: 12px; color: #fff;">Ajouter un nouveau raccourci :</h3>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <input type="text" id="optionsNewPillTitle" placeholder="Nom (ex: YouTube, GitHub...)" style="flex: 1; min-width: 150px; padding: 9px 12px; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px;">
+            <input type="text" id="optionsNewPillUrl" placeholder="Adresse URL (ex: https://youtube.com)" style="flex: 1.5; min-width: 200px; padding: 9px 12px; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px;">
+            <input type="text" id="optionsNewPillCategory" list="optionsCategoriesDatalist" placeholder="Catégorie (optionnel)" style="flex: 1; min-width: 130px; padding: 9px 12px; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px;">
+            <datalist id="optionsCategoriesDatalist"></datalist>
+            <button type="button" id="optionsAddPillBtn" class="btn btn-primary" style="padding: 9px 18px;">+ Ajouter</button>
+          </div>
+        </div>
+
+        <!-- Réglage de la taille des raccourcis -->
+        <div class="field" style="margin-bottom: 16px;">
+          <label style="font-size: 13.5px; font-weight: 600; color: #fff; display: block; margin-bottom: 8px;">📏 Taille d'affichage des pastilles :</label>
+          <div style="display: flex; gap: 10px; max-width: 480px;">
+            <label style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 13px; color: #cbd5e1; user-select: none;">
+              <input type="radio" name="optionsPillsSize" value="compact">
+              <span>Compact (fin)</span>
+            </label>
+            <label style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 13px; color: #cbd5e1; user-select: none;">
+              <input type="radio" name="optionsPillsSize" value="standard" checked>
+              <span>Standard</span>
+            </label>
+            <label style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 13px; color: #cbd5e1; user-select: none;">
+              <input type="radio" name="optionsPillsSize" value="large">
+              <span>Grand (2K / 4K)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Recherche et Liste des raccourcis -->
+        <div class="field">
+          <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap;">
+            <span style="font-size: 13px; color: #fff; font-weight: 500;">Aligner automatiquement (mode libre) :</span>
+            <button type="button" id="optionsAlignLeftBtn" class="btn btn-secondary btn-xs" style="padding: 5px 10px;">⬅️ Gauche</button>
+            <button type="button" id="optionsAlignRightBtn" class="btn btn-secondary btn-xs" style="padding: 5px 10px;">➡️ Droite</button>
+            <button type="button" id="optionsAlignTopBtn" class="btn btn-secondary btn-xs" style="padding: 5px 10px;">⬆️ Haut (Ruban)</button>
+            <button type="button" id="optionsAlignBottomBtn" class="btn btn-secondary btn-xs" style="padding: 5px 10px;">⬇️ Bas</button>
+            <button type="button" id="optionsGroupByCategoryBtn" class="btn btn-secondary btn-xs" style="padding: 5px 10px; border-color: rgba(59, 130, 246, 0.4);">🗂️ Par catégorie</button>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <label style="font-size: 14px; font-weight: 600; color: #fff;">Vos raccourcis (<span id="optionsPillsCount">0</span>) :</label>
+            <button type="button" id="optionsResetPillsBtn" class="btn-xs" style="background: rgba(255, 255, 255, 0.1); color: #8b949e; cursor: pointer; padding: 5px 12px; border-radius: 4px; border: none;">Réinitialiser par défaut</button>
+          </div>
+          
+          <input type="text" id="optionsPillFilterInput" placeholder="🔍 Rechercher rapidement un raccourci par son nom ou son adresse URL..." style="width: 100%; padding: 10px 14px; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; color: #fff; margin-bottom: 12px; font-size: 13px; outline: none;">
+          
+          <div id="optionsPillsList" class="options-pills-list" style="max-height: 380px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: #0d1117;">
+            <!-- Rempli dynamiquement -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Section Module de Gestion des Catégories -->
+      <section class="card full-width" id="categoriesSection" data-section="categoriesSection" data-title="Gestion des Catégories" data-keywords="catégories dossier organiser renommer créer trier supprimer raccourcis">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+          Gestion des Catégories de Raccourcis
+        </h2>
+        <p class="section-desc" style="color: #8b949e; font-size: 13px; margin-bottom: 16px;">
+          Gérez, renommez et organisez les catégories de vos raccourcis. Renommer une catégorie met à jour instantanément tous les raccourcis associés.
+        </p>
+
+        <!-- Formulaire création catégorie -->
+        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <h3 style="font-size: 14px; margin-bottom: 12px; color: #fff;">Créer une nouvelle catégorie :</h3>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <input type="text" id="optionsNewCategoryInput" placeholder="Nom de la nouvelle catégorie (ex: Travail, Shopping, Veille IA...)" style="flex: 2; min-width: 220px; padding: 9px 12px; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px;">
+            <button type="button" id="optionsAddCategoryBtn" class="btn btn-primary" style="padding: 9px 18px;">+ Créer la catégorie</button>
+          </div>
+        </div>
+
+        <!-- Liste des catégories existantes -->
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <label style="font-size: 14px; font-weight: 600; color: #fff;">Catégories actives (<span id="optionsCategoriesCount">0</span>) :</label>
+            <span style="font-size: 12px; color: #8b949e;">Cliquez sur ✏️ pour renommer ou 🗑️ pour supprimer</span>
+          </div>
+          <div id="optionsCategoriesList" class="options-categories-grid">
+            <!-- Rempli dynamiquement -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Section Fond d'écran & Personnalisation -->
+      <section class="card full-width" id="wallpaperSection" data-section="wallpaperSection" data-title="Fond d'écran & Arrière-plan" data-keywords="fond écran arrière-plan wallpaper image photo flou voile contraste personnalisé dégradé aurora ocean mesh neon cover contain repeat">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+          Fond d'écran & Arrière-plan
+        </h2>
+
+        <div class="wallpaper-layout">
+          <div class="wallpaper-controls">
+            <div class="field">
+              <label for="wallpaperType">Style d'arrière-plan :</label>
+              <select id="wallpaperType">
+                <option value="none">Couleur unie moderne</option>
+                <option value="custom">Image personnalisée (votre propre photo/image)</option>
+                <option value="preset-aurora">Dégradé Aurora (Bleu nuit & Profond)</option>
+                <option value="preset-ocean">Dégradé Océan Profond</option>
+                <option value="preset-mesh">Dégradé Mesh Futuriste</option>
+                <option value="preset-neon">Dégradé Nuit Bleue</option>
+              </select>
+            </div>
+
+            <!-- Image personnalisée upload / URL -->
+            <div id="customImageControls" class="custom-image-controls hidden">
+              <div class="field">
+                <label>Importer une image depuis votre ordinateur :</label>
+                <div class="file-upload-row">
+                  <input type="file" id="wallpaperFileInput" accept="image/*" class="file-input-hidden">
+                  <button type="button" id="browseWallpaperBtn" class="btn btn-secondary">Choisir un fichier...</button>
+                  <button type="button" id="removeWallpaperBtn" class="btn btn-danger hidden">Supprimer l'image</button>
+                </div>
+                <p class="field-hint">Formats acceptés : JPG, PNG, WEBP, SVG.</p>
+              </div>
+
+              <div class="field">
+                <label for="wallpaperUrlInput">Ou saisir l'adresse URL d'une image :</label>
+                <div class="url-input-row">
+                  <input type="text" id="wallpaperUrlInput" placeholder="https://exemple.com/fond.jpg">
+                  <button type="button" id="applyUrlBtn" class="btn btn-secondary">Appliquer</button>
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="wallpaperSize">Ajustement de l'image :</label>
+                <select id="wallpaperSize">
+                  <option value="cover">Couvrir toute la barre (Cover)</option>
+                  <option value="contain">Ajuster (Contain)</option>
+                  <option value="repeat">Répéter (Pattern / Motif)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Sliders pour l'image -->
+            <div class="field-row">
+              <div class="field">
+                <label for="wallpaperBlur">Flou du fond (<span id="wallpaperBlurVal">7</span>px) :</label>
+                <input type="range" id="wallpaperBlur" min="0" max="25" value="7" step="1">
+              </div>
+
+              <div class="field">
+                <label for="wallpaperOverlay">Voile de contraste (<span id="wallpaperOverlayVal">85</span>%) :</label>
+                <input type="range" id="wallpaperOverlay" min="0.3" max="0.95" value="0.85" step="0.05">
+                <p class="field-hint">Assombrit le fond pour garder vos favoris lisibles.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Aperçu en direct -->
+          <div class="wallpaper-preview-wrap">
+            <span class="preview-label">Aperçu en direct :</span>
+            <div class="wallpaper-preview" id="wallpaperPreview">
+              <div class="preview-overlay" id="previewOverlay"></div>
+              <div class="preview-content">
+                <div class="preview-item">
+                  <span class="preview-dot"></span>
+                  <span>Dossier Favoris</span>
+                </div>
+                <div class="preview-item indent">
+                  <span class="preview-icon">⭐</span>
+                  <span>Exemple de favori</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      
+      <!-- Section Moteurs de Recherche & IA -->
+      <section class="card full-width" id="searchEnginesSection" data-section="searchEnginesSection" data-title="Moteurs de recherche & IA" data-keywords="moteurs recherche ia chatgpt gemini google perplexity claude duckduckgo bing youtube wikipedia deepseek ecosia qwant brave amazon reddit github">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          Moteurs de recherche & IA
+        </h2>
+        <p class="section-desc" style="color: #8b949e; font-size: 13px; margin-bottom: 16px;">
+          Personnalisez les moteurs de recherche et assistants IA disponibles sur la page d'accueil. Choisissez le moteur actif par défaut et cochez ceux qui doivent apparaître dans le sélecteur rapide de l'accueil.
+        </p>
+
+        <!-- Sélecteur du moteur par défaut -->
+        <div class="field" style="max-width: 480px; margin-bottom: 20px;">
+          <label for="optionsDefaultSearchEngine" style="font-weight: 600; color: #fff; font-size: 14px;">🎯 Moteur de recherche par défaut :</label>
+          <select id="optionsDefaultSearchEngine" style="width: 100%; padding: 10px 12px; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13.5px; cursor: pointer;">
+            <!-- Rempli dynamiquement avec tous les moteurs configurés -->
+          </select>
+          <p class="field-hint">Ce moteur sera actif automatiquement à l'ouverture de chaque nouvel onglet.</p>
+        </div>
+
+        <!-- Formulaire d'ajout d'un moteur personnalisé -->
+        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+          <h3 style="font-size: 14px; margin-bottom: 8px; color: #fff; display: flex; align-items: center; gap: 8px;">
+            <span>➕ Ajouter un moteur de recherche personnalisé</span>
+          </h3>
+          <p style="font-size: 12px; color: #8b949e; margin-bottom: 12px;">
+            Astuce : utilisez <code>%s</code> dans l'adresse URL là où doit s'insérer la requête (ex: <code>https://search.brave.com/search?q=%s</code>).
+          </p>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <input type="text" id="optionsNewEngineName" placeholder="Nom (ex: Brave Search, DeepSeek...)" style="flex: 1.2; min-width: 160px; padding: 9px 12px; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px;">
+            <input type="text" id="optionsNewEngineUrl" placeholder="URL avec %s (ex: https://search.brave.com/search?q=%s)" style="flex: 2.2; min-width: 240px; padding: 9px 12px; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px;">
+            <input type="text" id="optionsNewEngineIcon" placeholder="Icône / Emoji (ex: 🦁 ou 🔍)" style="flex: 0.6; min-width: 100px; padding: 9px 12px; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px; text-align: center;">
+            <button type="button" id="optionsAddEngineBtn" class="btn btn-primary" style="padding: 9px 18px;">+ Ajouter</button>
+          </div>
+
+          <!-- Préréglages en 1 clic -->
+          <div style="margin-top: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span style="font-size: 12px; color: #8b949e; font-weight: 500;">Préréglages populaires (1 clic) :</span>
+            <button type="button" class="btn-preset-engine" data-name="DeepSeek" data-url="https://chat.deepseek.com/?q=%s" data-icon="🐋">+ DeepSeek 🐋</button>
+            <button type="button" class="btn-preset-engine" data-name="Ecosia" data-url="https://www.ecosia.org/search?q=%s" data-icon="🌱">+ Ecosia 🌱</button>
+            <button type="button" class="btn-preset-engine" data-name="Qwant" data-url="https://www.qwant.com/?q=%s" data-icon="🟣">+ Qwant 🟣</button>
+            <button type="button" class="btn-preset-engine" data-name="Brave" data-url="https://search.brave.com/search?q=%s" data-icon="🦁">+ Brave 🦁</button>
+            <button type="button" class="btn-preset-engine" data-name="Amazon" data-url="https://www.amazon.fr/s?k=%s" data-icon="📦">+ Amazon 📦</button>
+            <button type="button" class="btn-preset-engine" data-name="GitHub" data-url="https://github.com/search?q=%s" data-icon="🐙">+ GitHub 🐙</button>
+            <button type="button" class="btn-preset-engine" data-name="Reddit" data-url="https://www.reddit.com/search/?q=%s" data-icon="🔴">+ Reddit 🔴</button>
+          </div>
+        </div>
+
+        <!-- Liste des moteurs avec case à cocher pour sélectionnable à l'accueil et suppression -->
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 style="font-size: 14px; color: #fff; margin: 0;">Moteurs configurés :</h3>
+            <span style="font-size: 12px; color: #8b949e;">Cochez pour afficher dans le menu déroulant de l'accueil</span>
+          </div>
+          <div class="search-engines-list" id="optionsSearchEnginesList">
+            <!-- Liste générée par JS -->
+          </div>
+        </div>
+      </section>
+
+
+      <!-- Section Comportement -->
+      <section class="card" id="behaviorSection" data-section="behaviorSection" data-title="Comportement des clics" data-keywords="comportement clics nouvel onglet sessions sauvegarde automatique mémoriser dossiers fermés">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>
+          Comportement des clics
+        </h2>
+
+
+
+        <div class="field">
+          <label for="linkAction">Lors d'un clic gauche sur un favori :</label>
+          <select id="linkAction">
+            <option value="newtab">Ouvrir dans un nouvel onglet (au premier plan)</option>
+            <option value="background">Ouvrir dans un nouvel onglet (en arrière-plan)</option>
+            <option value="current">Ouvrir dans l'onglet actif</option>
+          </select>
+          <p class="field-hint">Note : un clic molette ouvre toujours le favori en arrière-plan.</p>
+        </div>
+
+        <div class="field">
+          <label for="newTabPosition">Position du nouvel onglet :</label>
+          <select id="newTabPosition">
+            <option value="afterCurrent">Juste après l'onglet actif (Recommandé)</option>
+            <option value="end">À la toute fin de la barre d'onglets</option>
+          </select>
+        </div>
+
+        <div class="field-checkbox">
+          <input type="checkbox" id="rememberFoldState">
+          <label for="rememberFoldState">Mémoriser les dossiers ouverts et fermés</label>
+        </div>
+
+        <div class="field-checkbox">
+          <input type="checkbox" id="autoSaveTabsCheckbox" checked>
+          <label for="autoSaveTabsCheckbox">Sauvegarder automatiquement les sessions d'onglets (toutes les 30 min & à la fermeture)</label>
+        </div>
+      </section>
+
+      <!-- Section Apparence & Thèmes -->
+      <section class="card full-width" id="appearanceSection" data-section="appearanceSection" data-title="Apparence & Thèmes" data-keywords="apparence thèmes couleur accentuation texte taille police espacement lignes flou cyberpunk matrix tokyo oled champagne turquoise rubis">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path></svg>
+          Apparence & Thèmes
+        </h2>
+        <p class="section-desc" style="color: #8b949e; font-size: 13px; margin-bottom: 16px;">
+          Choisissez parmi nos 10 thèmes prédéfinis prêts à l'emploi avec réglages optimisés, ou personnalisez chaque couleur et curseur manuellement selon vos goûts.
+        </p>
+
+        <!-- 10 Thèmes Prédéfinis -->
+        <div style="margin-bottom: 22px;">
+          <h3 style="font-size: 14px; margin-bottom: 12px; color: #fff; display: flex; align-items: center; gap: 8px;">
+            <span>🎨 10 Thèmes Prédéfinis (1 clic) :</span>
+          </h3>
+          <div class="themes-preset-grid" id="themesPresetGrid">
+            <!-- Rempli dynamiquement avec les 10 thèmes -->
+          </div>
+        </div>
+
+        <div style="border-top: 1px solid var(--border); padding-top: 20px;">
+          <h3 style="font-size: 14px; margin-bottom: 14px; color: #fff;">⚙️ Personnalisation manuelle des réglages :</h3>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="colorScheme">Couleur d'accentuation :</label>
+              <div class="color-picker-wrap">
+                <input type="color" id="colorScheme" value="#1f4d80">
+                <span id="colorSchemeHex" class="hex-badge">#1f4d80</span>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="textColor">Couleur du texte :</label>
+              <div class="color-picker-wrap">
+                <input type="color" id="textColor" value="#c8c8c8">
+                <span id="textColorHex" class="hex-badge">#c8c8c8</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="fontSize">Taille du texte (<span id="fontSizeVal">14</span>px) :</label>
+              <input type="range" id="fontSize" min="11" max="18" value="14" step="1">
+            </div>
+
+            <div class="field">
+              <label for="lineHeight">Espacement des lignes (<span id="lineHeightVal">36</span>px) :</label>
+              <input type="range" id="lineHeight" min="28" max="48" value="36" step="2">
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="backgroundBlur">Flou d'arrière-plan (<span id="blurVal">7</span>px) :</label>
+              <input type="range" id="backgroundBlur" min="0" max="25" value="7" step="1">
+            </div>
+
+            <div class="field">
+              <label for="backgroundTransparency">Opacité du fond / voile (<span id="transparencyVal">85</span>%) :</label>
+              <input type="range" id="backgroundTransparency" min="0.3" max="1.0" value="0.85" step="0.05">
+            </div>
+          </div>
+
+          <div class="field-checkbox">
+            <input type="checkbox" id="showFavicons" checked>
+            <label for="showFavicons">Afficher les icônes de sites (Favicons)</label>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section Widgets Interactifs de l'écran d'accueil -->
+      <section class="card" id="widgetsSection" data-section="widgetsSection" data-title="Widgets de l'écran d'accueil" data-keywords="widgets horloge météo post-it bloc-notes minuteur pomodoro récents ville open-meteo géolocalisation">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+          Widgets de l'écran d'accueil
+        </h2>
+        <p class="section-desc" style="color: #8b949e; font-size: 13px; margin-bottom: 14px;">
+          Activez ou désactivez les widgets flottants. En mode édition (crayon), vous pouvez les glisser-déposer librement partout sur l'écran.
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px;">
+          <div class="field-checkbox">
+            <input type="checkbox" id="optionsClockEnabled" checked>
+            <label for="optionsClockEnabled">⏰ <strong>Horloge & Date élégante</strong> (Heure, date en français & message)</label>
+          </div>
+
+          <div class="field-checkbox">
+            <input type="checkbox" id="optionsWeatherEnabled">
+            <label for="optionsWeatherEnabled">🌤️ <strong>Widget Météo</strong> (en direct, géolocalisation ou ville)</label>
+          </div>
+
+          <div class="field-checkbox">
+            <input type="checkbox" id="optionsNotesEnabled">
+            <label for="optionsNotesEnabled">📝 <strong>Bloc-notes rapide / Post-it</strong> (sauvegarde instantanée)</label>
+          </div>
+
+          <div class="field-checkbox">
+            <input type="checkbox" id="optionsPomodoroEnabled">
+            <label for="optionsPomodoroEnabled">⏱️ <strong>Minuteur Focus (Pomodoro 25 min)</strong> (avec signal doux)</label>
+          </div>
+
+          <div class="field-checkbox">
+            <input type="checkbox" id="optionsRecentEnabled">
+            <label for="optionsRecentEnabled">⭐ <strong>Raccourcis dynamiques</strong> (Sites les plus visités & Favoris récents)</label>
+          </div>
+        </div>
+
+        <div id="optionsWeatherConfig" style="display: none; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);">
+          <div style="font-size: 12px; font-weight: 600; color: #93c5fd; margin-bottom: 8px;">Options Météo :</div>
+          <div style="display: flex; gap: 16px; margin-bottom: 14px; font-size: 13px;">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="radio" name="optionsWeatherMode" value="geo" id="optionsWeatherModeGeo" checked>
+              📍 Géolocalisation automatique
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input type="radio" name="optionsWeatherMode" value="city" id="optionsWeatherModeCity">
+              🏙️ Ville manuelle
+            </label>
+          </div>
+
+          <div id="optionsWeatherCityGroup" style="display: none; margin-bottom: 14px;">
+            <label for="optionsWeatherCity" style="font-size: 12px; color: #8b949e; display: block; margin-bottom: 5px;">Nom de la ville :</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="optionsWeatherCity" placeholder="ex: Paris, Lyon, Marseille..." style="flex: 1; padding: 8px 12px; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; color: #fff;">
+              <button type="button" id="optionsWeatherSaveCityBtn" class="btn btn-secondary btn-xs" style="padding: 8px 14px;">Valider</button>
+            </div>
+          </div>
+
+          <button type="button" id="optionsWeatherResetPosBtn" class="btn btn-secondary btn-xs">📍 Réinitialiser la position de la météo</button>
+        </div>
+      </section>
+
+      <!-- Section Sauvegarde & Synchronisation (Google Drive & Local) -->
+      <section class="card full-width" id="cloudSyncSection" data-section="cloudSyncSection" data-title="Sauvegarde & Cloud Google Drive" data-keywords="cloud sauvegarde synchronisation google drive importer exporter json fichier backup">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>
+          Sauvegarde & Synchronisation Cloud (Google Drive)
+        </h2>
+
+        <div class="sync-grid">
+          <!-- Carte Google Drive -->
+          <div class="sync-card">
+            <div class="sync-header">
+              <div class="sync-status">
+                <span id="driveStatusDot" class="status-dot"></span>
+                <div>
+                  <div class="sync-title">Google Drive (Automatique)</div>
+                  <div id="driveStatusText" class="sync-desc">Non connecté</div>
+                </div>
+              </div>
+              <button id="connectDriveBtn" class="btn btn-secondary">Connecter Drive</button>
+            </div>
+
+            <div class="field-checkbox" style="margin-top: 15px;">
+              <input type="checkbox" id="autoSyncDrive">
+              <label for="autoSyncDrive">Sauvegarder automatiquement sur Google Drive à chaque modification</label>
+            </div>
+
+            <div class="btn-row" style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+              <button id="saveDriveBtn" class="btn btn-primary" disabled>
+                ☁️ Sauvegarder sur Drive
+              </button>
+              <button id="restoreDriveBtn" class="btn btn-secondary" disabled>
+                📥 Restaurer depuis Drive
+              </button>
+            </div>
+            <p id="driveLastSyncInfo" class="field-hint" style="margin-top: 8px;">Dernière synchronisation : Aucune</p>
+          </div>
+
+          <!-- Carte Sauvegarde Locale & Sync Chrome -->
+          <div class="sync-card">
+            <div class="sync-title">Export & Import local (Fichier .JSON)</div>
+            <p class="sync-desc" style="margin-bottom: 12px;">
+              Téléchargez une copie complète de tous vos raccourcis, styles et fonds d'écran sur votre ordinateur ou transférez-les sur un autre poste.
+            </p>
+            <div class="btn-row" style="display: flex; gap: 10px; flex-wrap: wrap;">
+              <button id="exportLocalBtn" class="btn btn-secondary">💾 Télécharger la sauvegarde</button>
+              <button id="importLocalTriggerBtn" class="btn btn-secondary">📂 Restaurer un fichier</button>
+              <input type="file" id="importLocalInput" accept=".json" style="display: none;">
+            </div>
+            <p class="field-hint" style="margin-top: 12px;">
+              ✨ <strong>Synchronisation Chrome native :</strong> Vos réglages et raccourcis sont synchronisés silencieusement entre tous vos navigateurs Chrome via votre compte Google (<code>chrome.storage.sync</code>).
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section Raccourcis clavier & Astuces -->
+      <section class="card full-width" id="aboutSection" data-section="aboutSection" data-title="Raccourcis clavier & Utilisation" data-keywords="aide raccourcis clavier utilisation astuces réinitialiser défaut touzio apps">
+        <h2>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"></rect><line x1="6" y1="8" x2="6" y2="8"></line><line x1="10" y1="8" x2="10" y2="8"></line><line x1="14" y1="8" x2="14" y2="8"></line><line x1="18" y1="8" x2="18" y2="8"></line><line x1="6" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="18" y2="12"></line><line x1="8" y1="16" x2="16" y2="16"></line></svg>
+          Raccourcis clavier & Utilisation
+        </h2>
+
+        <div class="shortcuts-list">
+          <div class="shortcut-item">
+            <span class="shortcut-label">Ouvrir / fermer la barre latérale :</span>
+            <div class="shortcut-keys">
+              <kbd>Alt</kbd> + <kbd>B</kbd>
+            </div>
+            <a href="chrome://extensions/shortcuts" target="_blank" class="shortcut-link">Personnaliser dans Chrome ↗</a>
+          </div>
+
+          <div class="shortcut-item">
+            <span class="shortcut-label">Rechercher instantanément :</span>
+            <div class="shortcut-keys">
+              <kbd>/</kbd> ou <kbd>Ctrl</kbd> + <kbd>F</kbd>
+            </div>
+          </div>
+
+          <div class="shortcut-item">
+            <span class="shortcut-label">Effacer la recherche / Fermer la modale :</span>
+            <div class="shortcut-keys">
+              <kbd>Échap</kbd>
+            </div>
+          </div>
+
+          <div class="shortcut-item">
+            <span class="shortcut-label">Ouvrir en arrière-plan :</span>
+            <div class="shortcut-keys">
+              <kbd>Ctrl</kbd> + <kbd>Clic</kbd> ou <kbd>Clic molette</kbd>
+            </div>
+          </div>
+
+          <div class="shortcut-item">
+            <span class="shortcut-label">Ouvrir dans une nouvelle fenêtre :</span>
+            <div class="shortcut-keys">
+              <kbd>Maj</kbd> + <kbd>Clic</kbd>
+            </div>
+          </div>
+        </div>
+
+        <div class="actions-footer">
+          <button id="resetDefaultsBtn" class="btn btn-secondary">Rétablir les paramètres par défaut</button>
+        </div>
+      </section>
+
+      <!-- Section Fonctionnalités Expérimentales (Lab) -->
+      <section class="card full-width" id="experimentalSection" data-section="experimentalSection" data-title="Fonctionnalités Expérimentales (Lab)" data-keywords="expérimental laboratoire bécher windows raccourcis dossiers applications logiciels programme local bridge compagnon github exe">
+        <h2>
+          <span style="font-size: 20px; line-height: 1;">🧪</span>
+          Laboratoire &amp; Fonctions Expérimentales
+          <span class="badge" style="background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); font-size: 11px; padding: 2px 8px; border-radius: 12px; margin-left: 8px;">BETA / LAB</span>
+        </h2>
+        <p class="section-desc" style="color: #8b949e; font-size: 13px; margin-bottom: 16px;">
+          Explorez des fonctionnalités avancées en cours d'expérimentation. Ces options sont désactivées par défaut et peuvent nécessiter un composant système compagnon.
+        </p>
+
+        <!-- Interrupteur Principal -->
+        <div class="field-checkbox" style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.25); border-radius: 8px; padding: 14px 16px; margin-bottom: 20px;">
+          <input type="checkbox" id="enableLocalShortcuts">
+          <label for="enableLocalShortcuts" style="font-weight: 600; font-size: 14px; color: #f1f5f9;">
+            Activer les raccourcis système Windows (Dossiers locaux &amp; Applications .exe)
+          </label>
+          <p class="field-hint" style="margin-left: 26px; margin-top: 4px; color: #94a3b8;">
+            Permet d'ajouter des raccourcis ouvrant directement vos dossiers dans l'Explorateur Windows (ex: <code>C:\Documents</code>) ou lançant vos logiciels préférés.
+          </p>
+        </div>
+
+        <!-- Panneau de Configuration des Raccourcis Locaux (affiché uniquement si activé) -->
+        <div id="localShortcutsConfigPanel" class="hidden" style="display: flex; flex-direction: column; gap: 20px;">
+          
+          <!-- Carte Explicative Compagnon GitHub -->
+          <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 16px;">
+            <div style="display: flex; align-items: flex-start; gap: 12px;">
+              <span style="font-size: 24px;">🌉</span>
+              <div style="flex: 1;">
+                <h3 style="font-size: 14px; color: #fff; margin-bottom: 6px;">Compagnon Windows requis : SideMarks Bridge</h3>
+                <p style="font-size: 12.5px; color: #94a3b8; line-height: 1.5; margin-bottom: 12px;">
+                  Pour des raisons de sécurité, Google Chrome bloque l'accès direct aux fichiers de votre PC. Pour autoriser l'ouverture de dossiers ou logiciels en 1 clic, vous devez exécuter une seule fois le compagnon ultra-léger (~15 Ko) open-source disponible sur GitHub.
+                </p>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                  <a href="https://github.com/vincm70/SideMarks/tree/master/companion" target="_blank" class="btn btn-secondary btn-xs" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+                    Voir le compagnon sur GitHub ↗
+                  </a>
+                  <button type="button" id="testBridgeConnectionBtn" class="btn btn-secondary btn-xs" style="border-color: rgba(16, 185, 129, 0.4); color: #34d399;">
+                    ⚡ Tester la liaison Windows (Explorateur)
+                  </button>
+                  <span id="bridgeTestResult" style="font-size: 12px; color: #8b949e;"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Formulaire d'ajout rapide -->
+          <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
+            <h3 style="font-size: 14px; margin-bottom: 12px; color: #fff;">Ajouter un raccourci système :</h3>
+            
+            <!-- Raccourcis modèles suggérés en 1 clic -->
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap;">
+              <span style="font-size: 12px; color: #8b949e;">Exemples rapides :</span>
+              <button type="button" class="btn-xs quick-local-template" data-title="Mes Documents" data-path="Documents" data-icon="📁">📁 Documents</button>
+              <button type="button" class="btn-xs quick-local-template" data-title="Téléchargements" data-path="Downloads" data-icon="📥">📥 Téléchargements</button>
+              <button type="button" class="btn-xs quick-local-template" data-title="Bloc-notes" data-path="notepad.exe" data-icon="📝">📝 Bloc-notes</button>
+              <button type="button" class="btn-xs quick-local-template" data-title="Calculatrice" data-path="calc.exe" data-icon="🧮">🧮 Calculatrice</button>
+              <button type="button" class="btn-xs quick-local-template" data-title="Explorateur C:" data-path="C:\" data-icon="💻">💻 Disque C:</button>
+            </div>
+
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              <input type="text" id="newLocalShortcutTitle" placeholder="Nom (ex: Mes Projets, Photoshop...)" style="flex: 1; min-width: 150px; padding: 9px 12px; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px;">
+              <input type="text" id="newLocalShortcutPath" placeholder="Chemin ou commande (ex: D:\Mes Documents ou notepad.exe)" style="flex: 2; min-width: 240px; padding: 9px 12px; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px;">
+              <select id="newLocalShortcutIcon" style="width: 110px; padding: 9px 10px; background: #0d1117; border: 1px solid var(--border); border-radius: 6px; color: #fff; font-size: 13px;">
+                <option value="📁">📁 Dossier</option>
+                <option value="💻">💻 Programme</option>
+                <option value="📂">📂 Explorateur</option>
+                <option value="📥">📥 Téléchargements</option>
+                <option value="📝">📝 Note / Texte</option>
+                <option value="⚙️">⚙️ Outil</option>
+                <option value="🚀">🚀 Application</option>
+                <option value="🧮">🧮 Calcul</option>
+              </select>
+              <button type="button" id="addLocalShortcutBtn" class="btn btn-primary" style="padding: 9px 18px;">+ Ajouter</button>
+            </div>
+          </div>
+
+          <!-- Liste des raccourcis système enregistrés -->
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+              <label style="font-size: 14px; font-weight: 600; color: #fff;">Vos raccourcis système (<span id="localShortcutsCount">0</span>) :</label>
+              <span style="font-size: 12px; color: #8b949e;">Ces raccourcis apparaissent en bas de votre page d'accueil</span>
+            </div>
+            <div id="localShortcutsList" style="max-height: 280px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: #0d1117;">
+              <!-- Rempli dynamiquement -->
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <script src="i18n.js"></script>
+  <script src="driveSync.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

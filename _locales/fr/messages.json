@@ -1,0 +1,10 @@
+{
+  "appName": {
+    "message": "SideMarks – Barre latérale intelligente de favoris",
+    "description": "Nom de l'extension"
+  },
+  "appDesc": {
+    "message": "Accédez à vos favoris via un panneau latéral fluide, des raccourcis rapides et sauvegardez vos sessions d'onglets en un clic.",
+    "description": "Description courte de l'extension"
+  }
+}

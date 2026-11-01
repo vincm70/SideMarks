@@ -1,0 +1,10 @@
+{
+  "appName": {
+    "message": "SideMarks – Smart Bookmark Sidebar & Tab Manager",
+    "description": "Extension name"
+  },
+  "appDesc": {
+    "message": "Access your bookmarks smoothly with a native sidebar, fast shortcuts and automatic tab session backup in one click.",
+    "description": "Short description of the extension"
+  }
+}

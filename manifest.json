@@ -1,0 +1,70 @@
+{
+  "manifest_version": 3,
+  "default_locale": "fr",
+  "name": "__MSG_appName__",
+  "version": "5.2.0",
+  "author": "TOUZIO APPS",
+  "description": "__MSG_appDesc__",
+  "permissions": [
+    "bookmarks",
+    "storage",
+    "sidePanel",
+    "tabs",
+    "favicon",
+    "unlimitedStorage",
+    "identity",
+    "alarms",
+    "topSites",
+    "declarativeNetRequest"
+  ],
+  "host_permissions": [
+    "https://api.open-meteo.com/*",
+    "https://geocoding-api.open-meteo.com/*",
+    "https://formsubmit.co/*"
+  ],
+  "oauth2": {
+    "client_id": "VOTRE_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/drive.appdata",
+      "https://www.googleapis.com/auth/userinfo.email"
+    ]
+  },
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  },
+  "action": {
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    },
+    "default_title": "SideMarks (Alt+B)"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+B",
+        "windows": "Alt+B",
+        "mac": "Alt+B"
+      },
+      "description": "Ouvrir ou fermer la barre latérale des favoris"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  }
+}
