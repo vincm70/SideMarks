@@ -1003,6 +1003,7 @@ async function performGoogleDataSync(token, interactive = false) {
               const tData = await tRes.json();
               pageToken = tData.nextPageToken || "";
               (tData.items || []).forEach(t => {
+                if (t.deleted) return;
                 let priority = "NONE";
                 const pMatch = (t.notes || "").match(/(?:priorité|priority)[^P0-4]*(P[0-4])/i);
                 if (pMatch) priority = pMatch[1].toUpperCase();
@@ -1013,7 +1014,7 @@ async function performGoogleDataSync(token, interactive = false) {
                   title: t.title || "Tâche sans titre",
                   groupId: list.title || "Général",
                   rawGroupId: list.id,
-                  parent: t.parent || null,
+                  parent: t.parent ? String(t.parent).trim() : null,
                   position: t.position || "",
                   orderIndex: allTasks.length,
                   status: t.status === "completed" ? "done" : "todo",
@@ -2273,9 +2274,10 @@ function renderTasks() {
     const byId = new Map(tasksList.map(t => [t.id, t]));
     const childrenMap = new Map();
     tasksList.forEach(t => {
-      if (t.parent && byId.has(t.parent)) {
-        if (!childrenMap.has(t.parent)) childrenMap.set(t.parent, []);
-        childrenMap.get(t.parent).push(t);
+      const pId = t.parent ? String(t.parent).trim() : null;
+      if (pId) {
+        if (!childrenMap.has(pId)) childrenMap.set(pId, []);
+        childrenMap.get(pId).push(t);
       }
     });
 
@@ -2294,8 +2296,8 @@ function renderTasks() {
       return true;
     }
 
-    // Récupérer tâches racines à afficher
-    const rootTasks = tasksList.filter(t => !t.parent || !byId.has(t.parent));
+    // Récupérer uniquement les tâches racines (les sous-tâches avec un parent appartiennent STRICTEMENT à leur parent)
+    const rootTasks = tasksList.filter(t => !t.parent || !String(t.parent).trim());
     const matchingRoots = [];
 
     rootTasks.forEach(root => {
@@ -2306,18 +2308,14 @@ function renderTasks() {
         if (noteSubs.length > 0) children = noteSubs;
       }
 
-      // Trier les sous-tâches selon l'ordre strict de Google Tasks (position ou index de la liste)
+      // Trier les sous-tâches selon l'ordre séquentiel strict de Google Tasks (orderIndex ou index d'origine)
       children.sort((cA, cB) => {
+        const idxA = (typeof cA.orderIndex === "number") ? cA.orderIndex : (tasksList.indexOf(cA) >= 0 ? tasksList.indexOf(cA) : 999999);
+        const idxB = (typeof cB.orderIndex === "number") ? cB.orderIndex : (tasksList.indexOf(cB) >= 0 ? tasksList.indexOf(cB) : 999999);
+        if (idxA !== idxB) return idxA - idxB;
         if (cA.position && cB.position) {
           return cA.position.localeCompare(cB.position);
         }
-        const idxA = (typeof cA.orderIndex === "number") ? cA.orderIndex : 999999;
-        const idxB = (typeof cB.orderIndex === "number") ? cB.orderIndex : 999999;
-        if (idxA !== idxB) return idxA - idxB;
-
-        const rawA = tasksList.indexOf(cA);
-        const rawB = tasksList.indexOf(cB);
-        if (rawA !== -1 && rawB !== -1) return rawA - rawB;
         return 0;
       });
 
@@ -2333,21 +2331,11 @@ function renderTasks() {
       }
     });
 
-    // Ordre strict identique à Google Tasks (position lexicographique ou ordre d'origine de la liste)
+    // Ordre strict identique à Google Tasks (ordre séquentiel d'origine de la liste retournée par Google Tasks)
     matchingRoots.sort((a, b) => {
-      // 1. Si les deux tâches ont le champ position de l'API Google Tasks
-      if (a.task.position && b.task.position) {
-        return a.task.position.localeCompare(b.task.position);
-      }
-      // 2. Par ordre d'index d'origine Google Tasks
-      const idxA = (typeof a.task.orderIndex === "number") ? a.task.orderIndex : 999999;
-      const idxB = (typeof b.task.orderIndex === "number") ? b.task.orderIndex : 999999;
+      const idxA = (typeof a.task.orderIndex === "number") ? a.task.orderIndex : (tasksList.indexOf(a.task) >= 0 ? tasksList.indexOf(a.task) : 999999);
+      const idxB = (typeof b.task.orderIndex === "number") ? b.task.orderIndex : (tasksList.indexOf(b.task) >= 0 ? tasksList.indexOf(b.task) : 999999);
       if (idxA !== idxB) return idxA - idxB;
-
-      // 3. Ordre d'origine dans tasksList
-      const rawA = tasksList.indexOf(a.task);
-      const rawB = tasksList.indexOf(b.task);
-      if (rawA !== -1 && rawB !== -1) return rawA - rawB;
       return 0;
     });
 
@@ -2450,7 +2438,8 @@ function renderTasks() {
         groupId: parentTask.groupId || "Général",
         priority: parentTask.priority || "NONE",
         status: "todo",
-        due: ""
+        due: "",
+        orderIndex: tasksList.length
       });
       expandedSubtasksSet.add(parentTask.id);
       try { localStorage.setItem(EXPANDED_KEY, JSON.stringify([...expandedSubtasksSet])); } catch (_) {}
@@ -5824,6 +5813,12 @@ async function loadAllWidgetsSettings() {
         searchBarSettings = { ...DEFAULT_SEARCH_BAR_SETTINGS, ...(res.searchBarSettings || {}) };
         if (Array.isArray(res.tasksData) && res.tasksData.length > 0) {
           tasksList = res.tasksData;
+          // Normaliser parent et orderIndex pour garantir un ordre et une hiérarchie parfaits
+          tasksList.forEach((t, idx) => {
+            if (typeof t.orderIndex !== "number") t.orderIndex = idx;
+            if (t.parent) t.parent = String(t.parent).trim();
+            else t.parent = null;
+          });
           // Si aucune sous-tâche n'existe encore, enrichir t1 et t2 pour démo immédiate
           const hasAnyChild = tasksList.some(t => t.parent);
           if (!hasAnyChild) {
