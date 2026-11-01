@@ -4785,15 +4785,17 @@ function setupNotesWidget() {
       titleSpan.textContent = tab.title || "Note";
       tabEl.appendChild(titleSpan);
 
-      // Personnalisation visuelle de l'onglet si couleur définie
+      // Personnalisation visuelle de l'onglet si couleur définie (contraste élevé)
       if (tab.color && tab.color !== "transparent") {
         tabEl.style.borderTop = `3px solid ${tab.color}`;
         if (tab.id === activeNotesTabId) {
-          tabEl.style.boxShadow = `0 -2px 10px ${tab.color}55`;
+          tabEl.style.boxShadow = `0 -2px 10px ${tab.color}66`;
           tabEl.style.borderColor = tab.color;
-          tabEl.style.background = `linear-gradient(to bottom, ${tab.color}33, rgba(30, 41, 59, 0.95))`;
+          tabEl.style.background = `linear-gradient(to bottom, ${tab.color}44, rgba(30, 41, 59, 0.98))`;
+          tabEl.style.color = "#ffffff";
         } else {
-          tabEl.style.background = `linear-gradient(to bottom, ${tab.color}18, rgba(255, 255, 255, 0.05))`;
+          tabEl.style.background = `linear-gradient(to bottom, ${tab.color}25, rgba(30, 41, 59, 0.85))`;
+          tabEl.style.color = "#f1f5f9";
         }
       }
 
@@ -5054,6 +5056,45 @@ function setupNotesWidget() {
       }
       saveNotesData();
       showToast("Lien cliquable inséré");
+    });
+  }
+
+  const saveTxtBtn = document.getElementById("saveNotesTxtBtn");
+  if (saveTxtBtn) {
+    saveTxtBtn.addEventListener("click", () => {
+      saveCurrentEditorToTab();
+      const curTab = notesTabs.find(t => t.id === activeNotesTabId) || notesTabs[0];
+      const rawHtml = curTab ? (curTab.content || "") : (editor.innerHTML || "");
+
+      // Conversion soignée du HTML en texte brut (conservation des sauts de ligne)
+      let text = "";
+      if (rawHtml) {
+        const temp = document.createElement("div");
+        temp.innerHTML = rawHtml;
+        temp.querySelectorAll("br").forEach(br => br.replaceWith("\n"));
+        temp.querySelectorAll("div, p, li").forEach(el => el.prepend("\n"));
+        text = temp.textContent || "";
+      }
+      if (!text.trim()) {
+        text = editor.innerText || "";
+      }
+
+      const safeTitle = (curTab && curTab.title ? curTab.title : "Note")
+        .replace(/[\\/:*?"<>|]/g, "_")
+        .trim() || "Note";
+
+      const filename = `${safeTitle}.txt`;
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showToast(`💾 Note téléchargée : ${filename}`);
     });
   }
 
