@@ -2288,6 +2288,8 @@ function setupTasksWidget() {
     chrome.storage.local.set({ tasksData: tasksList, tasksSettings });
   }
 
+  let draggedGroup = null;
+
   function renderGroupTabs() {
     if (!groupsBar) return;
     const groupsSet = new Set(["all", "P0"]);
@@ -2296,22 +2298,50 @@ function setupTasksWidget() {
       if (t.groupId && t.groupId !== "P0") groupsSet.add(t.groupId);
     });
 
-    const PREFERRED_ORDER = ["all", "P0", "Mes tâches", "Code", "Lenna", "Léo", "Daphnee", "DVRC", "P1", "P2", "Famille", "Perso"];
-    const sortedGroups = Array.from(groupsSet).sort((a, b) => {
-      let idxA = PREFERRED_ORDER.indexOf(a);
-      let idxB = PREFERRED_ORDER.indexOf(b);
-      if (idxA === -1) idxA = 99;
-      if (idxB === -1) idxB = 99;
-      return idxA - idxB;
+    // 1. Ordre personnalisé stocké ou ordre préférentiel par défaut
+    const savedOrder = Array.isArray(tasksSettings.groupOrder) ? [...tasksSettings.groupOrder] : [];
+    const DEFAULT_PREF = ["all", "P0", "Mes tâches", "Code", "Lenna", "Léo", "Daphnee", "DVRC", "P1", "P2", "Famille", "Perso"];
+
+    const allGroups = Array.from(groupsSet);
+    allGroups.sort((a, b) => {
+      // Position dans l'ordre personnalisé sauvegardé par l'utilisateur
+      let idxA = savedOrder.indexOf(a);
+      let idxB = savedOrder.indexOf(b);
+
+      if (idxA === -1) {
+        const defA = DEFAULT_PREF.indexOf(a);
+        idxA = defA >= 0 ? 100 + defA : 500;
+      }
+      if (idxB === -1) {
+        const defB = DEFAULT_PREF.indexOf(b);
+        idxB = defB >= 0 ? 100 + defB : 500;
+      }
+      if (idxA !== idxB) return idxA - idxB;
+      return a.localeCompare(b);
     });
 
+    // Synchroniser l'ordre dans tasksSettings
+    tasksSettings.groupOrder = allGroups;
+
+    // Mode Wrap (multi-lignes) pour visualiser tous les groupes d'un coup
+    const isWrap = Boolean(tasksSettings.groupsWrapMode);
+    groupsBar.classList.toggle("wrap-mode", isWrap);
+    const wrapBtn = document.getElementById("tasksGroupsWrapToggle");
+    if (wrapBtn) {
+      wrapBtn.textContent = isWrap ? "⊟" : "⊞";
+      wrapBtn.title = isWrap ? "Replier en bandeau horizontal défilable" : "Déplier tous les groupes sur plusieurs lignes";
+      wrapBtn.classList.toggle("active", isWrap);
+    }
+
     groupsBar.innerHTML = "";
-    sortedGroups.forEach(g => {
+    allGroups.forEach(g => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "task-group-tab" + (activeGroup === g ? " active" : "") + (g === "P0" ? " p0-tab" : "");
       btn.dataset.group = g;
       btn.textContent = g === "all" ? "Toutes" : (g === "P0" ? "⚡ P0" : g);
+      btn.title = (g === "all" ? "Toutes" : g) + " (Glisser pour réorganiser)";
+      btn.draggable = true;
 
       btn.addEventListener("click", () => {
         groupsBar.querySelectorAll(".task-group-tab").forEach(t => t.classList.remove("active"));
@@ -2320,14 +2350,108 @@ function setupTasksWidget() {
         tasksSettings.filterGroup = activeGroup;
         chrome.storage.local.set({ tasksSettings });
         renderTasks();
+        btn.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+      });
+
+      // Glisser-Déposer (Drag and drop) pour réorganiser l'ordre des groupes
+      btn.addEventListener("dragstart", (e) => {
+        draggedGroup = g;
+        btn.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", g);
+      });
+
+      btn.addEventListener("dragend", () => {
+        draggedGroup = null;
+        btn.classList.remove("dragging");
+        groupsBar.querySelectorAll(".task-group-tab").forEach(t => {
+          t.classList.remove("drag-over-left", "drag-over-right");
+        });
+      });
+
+      btn.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        if (!draggedGroup || draggedGroup === g) return;
+        const rect = btn.getBoundingClientRect();
+        const isLeft = e.clientX < (rect.left + rect.width / 2);
+        if (isLeft) {
+          btn.classList.add("drag-over-left");
+          btn.classList.remove("drag-over-right");
+        } else {
+          btn.classList.add("drag-over-right");
+          btn.classList.remove("drag-over-left");
+        }
+      });
+
+      btn.addEventListener("dragleave", () => {
+        btn.classList.remove("drag-over-left", "drag-over-right");
+      });
+
+      btn.addEventListener("drop", (e) => {
+        e.preventDefault();
+        btn.classList.remove("drag-over-left", "drag-over-right");
+        if (!draggedGroup || draggedGroup === g) return;
+
+        const rect = btn.getBoundingClientRect();
+        const dropBefore = e.clientX < (rect.left + rect.width / 2);
+
+        const currentOrder = [...tasksSettings.groupOrder];
+        const fromIdx = currentOrder.indexOf(draggedGroup);
+        if (fromIdx >= 0) currentOrder.splice(fromIdx, 1);
+
+        let toIdx = currentOrder.indexOf(g);
+        if (!dropBefore) toIdx += 1;
+        currentOrder.splice(toIdx, 0, draggedGroup);
+
+        tasksSettings.groupOrder = currentOrder;
+        chrome.storage.local.set({ tasksSettings });
+        renderGroupTabs();
       });
 
       groupsBar.appendChild(btn);
     });
 
+    // 2. Scroll horizontal fluide à la molette sur le bandeau
+    if (!groupsBar._wheelAttached) {
+      groupsBar.addEventListener("wheel", (e) => {
+        if (!tasksSettings.groupsWrapMode && e.deltaY !== 0) {
+          e.preventDefault();
+          groupsBar.scrollLeft += (e.deltaY * 0.85);
+        }
+      }, { passive: false });
+      groupsBar._wheelAttached = true;
+    }
+
+    // 3. Boutons de navigation gauche / droite ◀ et ▶
+    const scrollLeftBtn = document.getElementById("tasksGroupsScrollLeft");
+    const scrollRightBtn = document.getElementById("tasksGroupsScrollRight");
+    if (scrollLeftBtn && !scrollLeftBtn._clickAttached) {
+      scrollLeftBtn.addEventListener("click", () => {
+        groupsBar.scrollBy({ left: -140, behavior: "smooth" });
+      });
+      scrollLeftBtn._clickAttached = true;
+    }
+    if (scrollRightBtn && !scrollRightBtn._clickAttached) {
+      scrollRightBtn.addEventListener("click", () => {
+        groupsBar.scrollBy({ left: 140, behavior: "smooth" });
+      });
+      scrollRightBtn._clickAttached = true;
+    }
+
+    // 4. Bouton de bascule Vue Dépliée / Vue Compacte ⊞
+    if (wrapBtn && !wrapBtn._clickAttached) {
+      wrapBtn.addEventListener("click", () => {
+        tasksSettings.groupsWrapMode = !tasksSettings.groupsWrapMode;
+        chrome.storage.local.set({ tasksSettings });
+        renderGroupTabs();
+      });
+      wrapBtn._clickAttached = true;
+    }
+
     if (newGroupSelect) {
       newGroupSelect.innerHTML = "";
-      sortedGroups.filter(g => g !== "all" && g !== "P0").forEach(g => {
+      allGroups.filter(g => g !== "all" && g !== "P0").forEach(g => {
         const opt = document.createElement("option");
         opt.value = g;
         opt.textContent = g;

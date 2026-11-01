@@ -3531,15 +3531,105 @@ html, body {
   50% { transform: scale(1.05); opacity: 0.85; }
 }
 
+.tasks-groups-container {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  position: relative;
+  width: 100%;
+}
+
 .tasks-groups-bar {
   display: flex;
+  flex: 1;
   gap: 4px;
   overflow-x: auto;
-  padding-bottom: 3px;
-  scrollbar-width: none;
+  overflow-y: hidden;
+  padding: 2px 2px 5px 2px;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
 }
+
 .tasks-groups-bar::-webkit-scrollbar {
-  display: none;
+  height: 4px;
+}
+.tasks-groups-bar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.tasks-groups-bar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 4px;
+}
+.tasks-groups-bar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.45);
+}
+
+/* Mode Déplié (Wrap Multi-Lignes) pour visualiser tous les groupes d'un coup */
+.tasks-groups-bar.wrap-mode {
+  flex-wrap: wrap;
+  max-height: 140px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.tasks-groups-nav-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: #94a3b8;
+  font-size: 9px;
+  width: 18px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+.tasks-groups-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.tasks-groups-wrap-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: #94a3b8;
+  font-size: 11px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+.tasks-groups-wrap-btn:hover, .tasks-groups-wrap-btn.active {
+  background: rgba(37, 99, 235, 0.4);
+  border-color: #3b82f6;
+  color: #fff;
+}
+
+/* Styles Glisser-Déposer des onglets de groupes */
+.task-group-tab[draggable="true"] {
+  cursor: grab;
+  user-select: none;
+}
+.task-group-tab.dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+.task-group-tab.drag-over-left {
+  border-left: 3px solid #38bdf8 !important;
+}
+.task-group-tab.drag-over-right {
+  border-right: 3px solid #38bdf8 !important;
 }
 
 .task-group-tab {

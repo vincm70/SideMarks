@@ -349,14 +349,19 @@
             </div>
           </div>
 
-          <!-- Barre de groupes / catégories de tâches (scroll horizontal style AgendaBIP) -->
-          <div class="tasks-groups-bar" id="tasksGroupsBar">
-            <button type="button" class="task-group-tab active" data-group="all">Toutes</button>
-            <button type="button" class="task-group-tab p0-tab" data-group="P0">⚡ P0</button>
-            <button type="button" class="task-group-tab" data-group="Code">Code</button>
-            <button type="button" class="task-group-tab" data-group="DVRC">DVRC</button>
-            <button type="button" class="task-group-tab" data-group="Famille">Famille</button>
-            <button type="button" class="task-group-tab" data-group="Perso">Perso</button>
+          <!-- Barre de groupes / catégories de tâches (scroll horizontal, drag & drop, mode déplier) -->
+          <div class="tasks-groups-container">
+            <button type="button" id="tasksGroupsScrollLeft" class="tasks-groups-nav-btn" title="Défiler vers la gauche (ou molette)">◀</button>
+            <div class="tasks-groups-bar" id="tasksGroupsBar">
+              <button type="button" class="task-group-tab active" data-group="all">Toutes</button>
+              <button type="button" class="task-group-tab p0-tab" data-group="P0">⚡ P0</button>
+              <button type="button" class="task-group-tab" data-group="Code">Code</button>
+              <button type="button" class="task-group-tab" data-group="DVRC">DVRC</button>
+              <button type="button" class="task-group-tab" data-group="Famille">Famille</button>
+              <button type="button" class="task-group-tab" data-group="Perso">Perso</button>
+            </div>
+            <button type="button" id="tasksGroupsScrollRight" class="tasks-groups-nav-btn" title="Défiler vers la droite (ou molette)">▶</button>
+            <button type="button" id="tasksGroupsWrapToggle" class="tasks-groups-wrap-btn" title="Déplier tous les groupes sur plusieurs lignes">⊞</button>
           </div>
 
           <!-- Barre d'état et recherche rapide -->
