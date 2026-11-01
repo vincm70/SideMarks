@@ -2189,7 +2189,7 @@ function setupTasksWidget() {
         opt.textContent = g;
         newGroupSelect.appendChild(opt);
       });
-      if (newGroupSelect.options.length === 0) {
+      if (!newGroupSelect.children || newGroupSelect.children.length === 0) {
         newGroupSelect.innerHTML = '<option value="Général">Général</option>';
       }
     }
@@ -5598,6 +5598,90 @@ function updateWidgetDesktopBadges() {
       openWidgetDesktopsPicker(config);
     };
   });
+}
+
+function updateAllWidgetsVisibility() {
+  if (typeof applySearchBarPosition === "function") applySearchBarPosition();
+
+  if (clockWidget) {
+    const show = shouldShowWidgetOnCurrentPage(clockSettings);
+    clockWidget.classList.toggle("hidden", !show);
+    clockWidget.style.display = show ? "" : "none";
+    clockWidget.style.left = `${clockSettings.posX}%`;
+    clockWidget.style.top = `${clockSettings.posY}%`;
+    if (clockSettings.width) applyWidgetDimensions(clockWidget, clockSettings.width, clockSettings.height);
+  }
+  if (clockEnabledCheckbox) clockEnabledCheckbox.checked = clockSettings.enabled;
+
+  if (weatherWidget) {
+    const show = shouldShowWidgetOnCurrentPage(weatherSettings);
+    weatherWidget.classList.toggle("hidden", !show);
+    weatherWidget.style.display = show ? "" : "none";
+    weatherWidget.style.left = `${weatherSettings.posX}%`;
+    weatherWidget.style.top = `${weatherSettings.posY}%`;
+    if (weatherSettings.width) applyWidgetDimensions(weatherWidget, weatherSettings.width, weatherSettings.height);
+  }
+  if (weatherEnabledCheckbox) weatherEnabledCheckbox.checked = weatherSettings.enabled;
+
+  if (notesWidget) {
+    const show = shouldShowWidgetOnCurrentPage(notesSettings);
+    notesWidget.classList.toggle("hidden", !show);
+    notesWidget.style.display = show ? "" : "none";
+    notesWidget.style.left = `${notesSettings.posX}%`;
+    notesWidget.style.top = `${notesSettings.posY}%`;
+    if (notesSettings.width) applyWidgetDimensions(notesWidget, notesSettings.width, notesSettings.height);
+  }
+  if (notesEnabledCheckbox) notesEnabledCheckbox.checked = notesSettings.enabled;
+
+  if (pomodoroWidget) {
+    const show = shouldShowWidgetOnCurrentPage(pomodoroSettings);
+    pomodoroWidget.classList.toggle("hidden", !show);
+    pomodoroWidget.style.display = show ? "" : "none";
+    pomodoroWidget.style.left = `${pomodoroSettings.posX}%`;
+    pomodoroWidget.style.top = `${pomodoroSettings.posY}%`;
+    if (pomodoroSettings.width) applyWidgetDimensions(pomodoroWidget, pomodoroSettings.width, pomodoroSettings.height);
+  }
+  if (pomodoroEnabledCheckbox) pomodoroEnabledCheckbox.checked = pomodoroSettings.enabled;
+
+  if (recentWidget) {
+    const show = shouldShowWidgetOnCurrentPage(recentSettings);
+    recentWidget.classList.toggle("hidden", !show);
+    recentWidget.style.display = show ? "" : "none";
+    recentWidget.style.left = `${recentSettings.posX}%`;
+    recentWidget.style.top = `${recentSettings.posY}%`;
+    if (recentSettings.width) applyWidgetDimensions(recentWidget, recentSettings.width, recentSettings.height);
+  }
+  if (recentEnabledCheckbox) recentEnabledCheckbox.checked = recentSettings.enabled;
+
+  if (calculatorWidget) {
+    const show = shouldShowWidgetOnCurrentPage(calculatorSettings);
+    calculatorWidget.classList.toggle("hidden", !show);
+    calculatorWidget.style.display = show ? "" : "none";
+    calculatorWidget.style.left = `${calculatorSettings.posX}%`;
+    calculatorWidget.style.top = `${calculatorSettings.posY}%`;
+    if (calculatorSettings.width) applyWidgetDimensions(calculatorWidget, calculatorSettings.width, calculatorSettings.height);
+  }
+
+  if (agendaWidget) {
+    const show = shouldShowWidgetOnCurrentPage(agendaSettings);
+    agendaWidget.classList.toggle("hidden", !show);
+    agendaWidget.style.display = show ? "" : "none";
+    agendaWidget.style.left = `${agendaSettings.posX}%`;
+    agendaWidget.style.top = `${agendaSettings.posY}%`;
+    if (agendaSettings.width) applyWidgetDimensions(agendaWidget, agendaSettings.width, agendaSettings.height);
+  }
+
+  if (tasksWidget) {
+    const show = shouldShowWidgetOnCurrentPage(tasksSettings);
+    tasksWidget.classList.toggle("hidden", !show);
+    tasksWidget.style.display = show ? "" : "none";
+    tasksWidget.style.left = `${tasksSettings.posX}%`;
+    tasksWidget.style.top = `${tasksSettings.posY}%`;
+    if (tasksSettings.width) applyWidgetDimensions(tasksWidget, tasksSettings.width, tasksSettings.height);
+  }
+
+  if (typeof updateWidgetDesktopBadges === "function") updateWidgetDesktopBadges();
+  if (typeof clampAllWidgetsWithinViewport === "function") clampAllWidgetsWithinViewport();
 }
 
 function setupWidgetControls() {
