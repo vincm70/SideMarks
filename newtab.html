@@ -578,6 +578,20 @@
 
             <input type="text" name="q" id="googleSearchInput" placeholder="Rechercher sur Google ou saisir l'URL" autocomplete="off" autofocus spellcheck="false">
             <div class="search-actions-right">
+              <!-- Bouton Applications Google (Gaufre 9 points) -->
+              <button type="button" id="googleAppsBtn" class="search-icon-btn google-apps-waffle-btn" title="Applications & Outils Google (Gaufre)">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                  <circle cx="5" cy="5" r="2.2"></circle>
+                  <circle cx="12" cy="5" r="2.2"></circle>
+                  <circle cx="19" cy="5" r="2.2"></circle>
+                  <circle cx="5" cy="12" r="2.2"></circle>
+                  <circle cx="12" cy="12" r="2.2"></circle>
+                  <circle cx="19" cy="12" r="2.2"></circle>
+                  <circle cx="5" cy="19" r="2.2"></circle>
+                  <circle cx="12" cy="19" r="2.2"></circle>
+                  <circle cx="19" cy="19" r="2.2"></circle>
+                </svg>
+              </button>
               <button type="button" id="voiceSearchBtn" class="search-icon-btn" title="Recherche vocale">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
@@ -592,6 +606,87 @@
                   <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                 </svg>
               </button>
+            </div>
+          </div>
+
+          <!-- Panneau Pop-up des Applications Google (Gaufre) -->
+          <div id="googleAppsDropdown" class="google-apps-dropdown hidden">
+            <div class="google-apps-header">
+              <span class="google-apps-title">Outils & Services Google</span>
+              <a href="https://about.google/products/" target="_blank" rel="noopener noreferrer" class="google-apps-more-link" title="Tous les produits Google">Tous les produits ↗</a>
+            </div>
+            <div class="google-apps-grid">
+              <a href="https://mail.google.com" target="_blank" rel="noopener noreferrer" class="google-app-item" title="Gmail">
+                <span class="app-icon"><svg viewBox="0 0 24 24" width="28" height="28"><path fill="#EA4335" d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.272H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L12 9.5l8.073-6.007C21.69 2.28 24 3.434 24 5.457z"/></svg></span>
+                <span class="app-label">Gmail</span>
+              </a>
+              <a href="https://calendar.google.com" target="_blank" rel="noopener noreferrer" class="google-app-item" title="Google Agenda">
+                <span class="app-icon"><svg viewBox="0 0 24 24" width="28" height="28"><rect width="24" height="24" rx="4" fill="#1a73e8"/><rect x="3" y="7" width="18" height="14" rx="2" fill="#fff"/><text x="12" y="18" font-size="10" font-weight="bold" fill="#1a73e8" text-anchor="middle">31</text><circle cx="7" cy="4" r="1" fill="#fff"/><circle cx="17" cy="4" r="1" fill="#fff"/></svg></span>
+                <span class="app-label">Agenda</span>
+              </a>
+              <a href="https://drive.google.com" target="_blank" rel="noopener noreferrer" class="google-app-item" title="Google Drive">
+                <span class="app-icon"><svg viewBox="0 0 24 24" width="28" height="28"><path fill="#FFBA00" d="M8.05 4h7.9l6.5 11.27h-7.9z"/><path fill="#0066DA" d="M14.55 15.27l-3.95 6.73-6.5-11.27 3.95-6.73z"/><path fill="#00AC47" d="M1.5 15.27h13.05l-3.95 6.73H5.45z"/></svg></span>
+                <span class="app-label">Drive</span>
+              </a>
+              <a href="https://tasks.google.com" target="_blank" rel="noopener noreferrer" class="google-app-item" title="Google Tasks">
+                <span class="app-icon"><svg viewBox="0 0 24 24" width="28" height="28"><circle cx="12" cy="12" r="11" fill="#1a73e8"/><path fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M7 12.5l3.5 3.5 7-7"/></svg></span>
+                <span class="app-label">Tasks</span>
+              </a>
+              <a href="https://keep.google.com" target="_blank" rel="noopener noreferrer" class="google-app-item" title="Google Keep">
+                <span class="app-icon"><svg viewBox="0 0 24 24" width="28" height="28"><rect width="24" height="24" rx="4" fill="#fbbc04"/><path fill="#fff" d="M12 4a5 5 0 0 0-5 5c0 1.9 1 3.5 2.5 4.3v2.2c0 .3.2.5.5.5h4c.3 0 .5-.2.5-.5v-2.2c1.5-.8 2.5-2.4 2.5-4.3a5 5 0 0 0-5-5zm-1.5 13h3v1h-3zm0 2h3v.5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5z"/></svg></span>
+                <span class="app-label">Keep</span>
+              </a>
+              <a href="https://docs.google.com" target="_blank" rel="noopener noreferrer" class="google-app-item" title="Google Docs">
+                <span class="app-icon"><svg viewBox="0 0 24 24" width="28" height="28"><path fill="#4285F4" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><path fill="#fff" d="M8 12h8v1.5H8zm0 3h8v1.5H8zm0-6h4v1.5H8z"/><path fill="#A1C2FA" d="M14 2v6h6z"/></svg></span>
+                <span class="app-label">Docs</span>
+              </a>
+              <a href="https://sheets.google.com" target="_blank" rel="noopener noreferrer" class="google-app-item" title="Google Sheets">
+                <span class="app-icon"><svg viewBox="0 0 24 24" width="28" height="28"><path fill="#0F9D58" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><path fill="#fff" d="M8 11h8v8H8zm2 2v1.5h4V13zm0 3v1.5h4V16z"/><path fill="#87CEAC" d="M14 2v6h6z"/></svg></span>
+                <span class="app-label">Sheets</span>
+              </a>
+              <a href="https://slides.google.com" target="_blank" rel="noopener noreferrer" class="google-app-item" title="Google Slides">
+                <span class="app-icon"><svg viewBox="0 0 24 24" width="28" height="28"><path fill="#F4B400" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><rect x="7" y="11" width="10" height="7" rx="1" fill="#fff"/><path fill="#FDE293" d="M14 2v6h6z"/></svg></span>
+                <span class="app-label">Slides</span>
+              </a>
+              <a href="https://contacts.google.com" target="_blank" rel="noopener noreferrer" class="google-app-item" title="Google Contacts">
+                <span class="app-icon"><svg viewBox="0 0 24 24" width="28" height="28"><circle cx="12" cy="12" r="11" fill="#1a73e8"/><circle cx="12" cy="8" r="3.5" fill="#fff"/><path fill="#fff" d="M6 18c0-3 3-5 6-5s6 2 6 5z"/></svg></span>
+                <span class="app-label">Contacts</span>
+              </a>
+              <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer" class="google-app-item" title="Google Maps">
+                <span class="app-icon"><svg viewBox="0 0 24 24" width="28" height="28"><rect width="24" height="24" rx="4" fill="#34A853"/><path fill="#EA4335" d="M12 3a6 6 0 0 0-6 6c0 4.5 6 12 6 12s6-7.5 6-12a6 6 0 0 0-6-6z"/><circle cx="12" cy="9" r="2.5" fill="#fff"/></svg></span>
+                <span class="app-label">Maps</span>
+              </a>
+              <a href="https://translate.google.com" target="_blank" rel="noopener noreferrer" class="google-app-item" title="Google Traduction">
+                <span class="app-icon"><svg viewBox="0 0 24 24" width="28" height="28"><rect width="24" height="24" rx="4" fill="#1a73e8"/><text x="8" y="15" font-size="9" font-weight="bold" fill="#fff">G</text><text x="14" y="17" font-size="9" font-weight="bold" fill="#fff">文</text></svg></span>
+                <span class="app-label">Traduction</span>
+              </a>
+              <a href="https://meet.google.com" target="_blank" rel="noopener noreferrer" class="google-app-item" title="Google Meet">
+                <span class="app-icon"><svg viewBox="0 0 24 24" width="28" height="28"><rect width="24" height="24" rx="4" fill="#00832d"/><path fill="#2684fc" d="M4 8h10v8H4z"/><path fill="#ea4335" d="M14 10l5-3v10l-5-3z"/></svg></span>
+                <span class="app-label">Meet</span>
+              </a>
+              <a href="https://photos.google.com" target="_blank" rel="noopener noreferrer" class="google-app-item" title="Google Photos">
+                <span class="app-icon"><svg viewBox="0 0 24 24" width="28" height="28"><circle cx="12" cy="7" r="4" fill="#EA4335"/><circle cx="17" cy="12" r="4" fill="#FBBC05"/><circle cx="12" cy="17" r="4" fill="#34A853"/><circle cx="7" cy="12" r="4" fill="#4285F4"/></svg></span>
+                <span class="app-label">Photos</span>
+              </a>
+              <a href="https://www.youtube.com" target="_blank" rel="noopener noreferrer" class="google-app-item" title="YouTube">
+                <span class="app-icon"><svg viewBox="0 0 24 24" width="28" height="28"><rect width="24" height="24" rx="4" fill="#ff0000"/><path fill="#fff" d="M10 7.5v9l7-4.5z"/></svg></span>
+                <span class="app-label">YouTube</span>
+              </a>
+              <a href="https://gemini.google.com" target="_blank" rel="noopener noreferrer" class="google-app-item" title="Google Gemini">
+                <span class="app-icon"><svg viewBox="0 0 24 24" width="28" height="28"><rect width="24" height="24" rx="4" fill="#111827"/><path fill="#4E82EE" d="M11.04 19.32Q11.6 21.6 12 24q.4-2.4.96-4.68.6-2.28 1.6-4.08 1-1.84 2.4-3.2 1.4-1.4 3.2-2.4 1.8-1 4.08-1.6-2.28-.6-4.08-1.6-1.84-1-3.2-2.4-1.4-1.4-2.4-3.2-.96-1.8-1.6-4.08-.4 2.28-.96 4.08-1 1.8-2.4 3.2-1.36 1.4-3.2 2.4-1.84 1-4.12 1.6 2.28.6 4.12 1.6 1.84 1 3.2 2.4 1.4 1.36 2.4 3.2 1 1.8 1.6 4.08z"/></svg></span>
+                <span class="app-label">Gemini</span>
+              </a>
+            </div>
+            <!-- Raccourcis Création Rapide -->
+            <div class="google-apps-quick-actions">
+              <span class="quick-actions-title">⚡ Création rapide :</span>
+              <div class="quick-actions-chips">
+                <a href="https://docs.new" target="_blank" rel="noopener noreferrer" class="quick-chip" title="Nouveau document Google Docs">＋ Doc</a>
+                <a href="https://sheets.new" target="_blank" rel="noopener noreferrer" class="quick-chip" title="Nouvelle feuille de calcul Google Sheets">＋ Sheet</a>
+                <a href="https://slides.new" target="_blank" rel="noopener noreferrer" class="quick-chip" title="Nouvelle présentation Google Slides">＋ Slide</a>
+                <a href="https://mail.google.com/mail/?view=cm&fs=1" target="_blank" rel="noopener noreferrer" class="quick-chip" title="Rédiger un email Gmail">＋ Email</a>
+                <a href="https://keep.new" target="_blank" rel="noopener noreferrer" class="quick-chip" title="Nouvelle note Keep">＋ Note</a>
+              </div>
             </div>
           </div>
           <div class="search-drag-handle widget-drag-handle" id="searchDragHandle" title="Glisser pour déplacer la barre de recherche | Double-clic pour recentrer au milieu">✥ Déplacer la recherche</div>
@@ -670,6 +765,9 @@
           <button id="showOpenTabsBtn" class="tab-toggle-btn" title="Afficher vos onglets ouverts">
             <span id="openTabsCount" class="sidebar-count">Onglets (...)</span>
           </button>
+          <button id="showGoogleToolsTabBtn" class="tab-toggle-btn" title="Outils & Applications Google">
+            <span class="sidebar-count">Google</span>
+          </button>
         </div>
 
         <div class="header-action-icons">
@@ -726,6 +824,109 @@
             <span id="savedSessionsCount" class="badge">0</span>
           </div>
           <div id="savedSessionsList" class="saved-sessions-list"></div>
+        </div>
+      </div>
+
+      <!-- Vue 3 : Panneau des Outils Google (Google Workspace & Apps) -->
+      <div class="sidebar-tree-container hidden" id="googleToolsContainer">
+        <div class="google-sidebar-header">
+          <span style="font-size: 13px; font-weight: 700; color: #fff;">Outils Google</span>
+          <a href="https://myaccount.google.com" target="_blank" rel="noopener noreferrer" class="google-account-link" title="Gérer votre compte Google">Compte ↗</a>
+        </div>
+
+        <div class="google-sidebar-section">
+          <div class="google-sidebar-section-title">⚡ Actions Rapides</div>
+          <div class="google-quick-grid">
+            <a href="https://docs.new" target="_blank" rel="noopener noreferrer" class="google-quick-btn" title="Nouveau Google Docs">
+              <span class="quick-icon">📄</span><span>+ Doc</span>
+            </a>
+            <a href="https://sheets.new" target="_blank" rel="noopener noreferrer" class="google-quick-btn" title="Nouveau Google Sheets">
+              <span class="quick-icon">📊</span><span>+ Sheet</span>
+            </a>
+            <a href="https://slides.new" target="_blank" rel="noopener noreferrer" class="google-quick-btn" title="Nouveau Google Slides">
+              <span class="quick-icon">📽️</span><span>+ Slide</span>
+            </a>
+            <a href="https://mail.google.com/mail/?view=cm&fs=1" target="_blank" rel="noopener noreferrer" class="google-quick-btn" title="Rédiger un email">
+              <span class="quick-icon">✉️</span><span>+ Email</span>
+            </a>
+            <a href="https://keep.new" target="_blank" rel="noopener noreferrer" class="google-quick-btn" title="Nouvelle note Keep">
+              <span class="quick-icon">📝</span><span>+ Note</span>
+            </a>
+            <a href="https://calendar.google.com/calendar/r/eventedit" target="_blank" rel="noopener noreferrer" class="google-quick-btn" title="Nouvel événement">
+              <span class="quick-icon">📅</span><span>+ RDV</span>
+            </a>
+          </div>
+        </div>
+
+        <div class="google-sidebar-section">
+          <div class="google-sidebar-section-title">📱 Services & Bureautique</div>
+          <div class="google-sidebar-list">
+            <a href="https://mail.google.com" target="_blank" rel="noopener noreferrer" class="google-sidebar-item">
+              <span class="item-icon"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="#EA4335" d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.272H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L12 9.5l8.073-6.007C21.69 2.28 24 3.434 24 5.457z"/></svg></span>
+              <span class="item-name">Gmail</span>
+              <span class="item-desc">Boîte de réception & messages</span>
+            </a>
+            <a href="https://calendar.google.com" target="_blank" rel="noopener noreferrer" class="google-sidebar-item">
+              <span class="item-icon"><svg viewBox="0 0 24 24" width="20" height="20"><rect width="24" height="24" rx="4" fill="#1a73e8"/><rect x="3" y="7" width="18" height="14" rx="2" fill="#fff"/><text x="12" y="18" font-size="10" font-weight="bold" fill="#1a73e8" text-anchor="middle">31</text></svg></span>
+              <span class="item-name">Google Agenda</span>
+              <span class="item-desc">Plannings, rendez-vous & alertes</span>
+            </a>
+            <a href="https://drive.google.com" target="_blank" rel="noopener noreferrer" class="google-sidebar-item">
+              <span class="item-icon"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="#FFBA00" d="M8.05 4h7.9l6.5 11.27h-7.9z"/><path fill="#0066DA" d="M14.55 15.27l-3.95 6.73-6.5-11.27 3.95-6.73z"/><path fill="#00AC47" d="M1.5 15.27h13.05l-3.95 6.73H5.45z"/></svg></span>
+              <span class="item-name">Google Drive</span>
+              <span class="item-desc">Fichiers, partages & stockage cloud</span>
+            </a>
+            <a href="https://tasks.google.com" target="_blank" rel="noopener noreferrer" class="google-sidebar-item">
+              <span class="item-icon"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="11" fill="#1a73e8"/><path fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M7 12.5l3.5 3.5 7-7"/></svg></span>
+              <span class="item-name">Google Tasks</span>
+              <span class="item-desc">Tâches, priorités & listes à faire</span>
+            </a>
+            <a href="https://keep.google.com" target="_blank" rel="noopener noreferrer" class="google-sidebar-item">
+              <span class="item-icon"><svg viewBox="0 0 24 24" width="20" height="20"><rect width="24" height="24" rx="4" fill="#fbbc04"/><path fill="#fff" d="M12 4a5 5 0 0 0-5 5c0 1.9 1 3.5 2.5 4.3v2.2c0 .3.2.5.5.5h4c.3 0 .5-.2.5-.5v-2.2c1.5-.8 2.5-2.4 2.5-4.3a5 5 0 0 0-5-5zm-1.5 13h3v1h-3zm0 2h3v.5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1-.5-.5z"/></svg></span>
+              <span class="item-name">Google Keep</span>
+              <span class="item-desc">Prise de notes & mémos synchronisés</span>
+            </a>
+            <a href="https://docs.google.com" target="_blank" rel="noopener noreferrer" class="google-sidebar-item">
+              <span class="item-icon"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="#4285F4" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><path fill="#fff" d="M8 12h8v1.5H8zm0 3h8v1.5H8zm0-6h4v1.5H8z"/></svg></span>
+              <span class="item-name">Google Docs</span>
+              <span class="item-desc">Traitement de texte & documents</span>
+            </a>
+            <a href="https://sheets.google.com" target="_blank" rel="noopener noreferrer" class="google-sidebar-item">
+              <span class="item-icon"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="#0F9D58" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><path fill="#fff" d="M8 11h8v8H8zm2 2v1.5h4V13zm0 3v1.5h4V16z"/></svg></span>
+              <span class="item-name">Google Sheets</span>
+              <span class="item-desc">Tableurs & calculs</span>
+            </a>
+            <a href="https://slides.google.com" target="_blank" rel="noopener noreferrer" class="google-sidebar-item">
+              <span class="item-icon"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="#F4B400" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><rect x="7" y="11" width="10" height="7" rx="1" fill="#fff"/></svg></span>
+              <span class="item-name">Google Slides</span>
+              <span class="item-desc">Présentations & diaporamas</span>
+            </a>
+            <a href="https://gemini.google.com" target="_blank" rel="noopener noreferrer" class="google-sidebar-item">
+              <span class="item-icon"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="#4E82EE" d="M11.04 19.32Q11.6 21.6 12 24q.4-2.4.96-4.68.6-2.28 1.6-4.08 1-1.84 2.4-3.2 1.4-1.4 3.2-2.4 1.8-1 4.08-1.6-2.28-.6-4.08-1.6-1.84-1-3.2-2.4-1.4-1.4-2.4-3.2-.96-1.8-1.6-4.08-.4 2.28-.96 4.08-1 1.8-2.4 3.2-1.36 1.4-3.2 2.4-1.84 1-4.12 1.6 2.28.6 4.12 1.6 1.84 1 3.2 2.4 1.4 1.36 2.4 3.2 1 1.8 1.6 4.08z"/></svg></span>
+              <span class="item-name">Google Gemini</span>
+              <span class="item-desc">Intelligence Artificielle Google</span>
+            </a>
+            <a href="https://photos.google.com" target="_blank" rel="noopener noreferrer" class="google-sidebar-item">
+              <span class="item-icon"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="7" r="4" fill="#EA4335"/><circle cx="17" cy="12" r="4" fill="#FBBC05"/><circle cx="12" cy="17" r="4" fill="#34A853"/><circle cx="7" cy="12" r="4" fill="#4285F4"/></svg></span>
+              <span class="item-name">Google Photos</span>
+              <span class="item-desc">Galerie, sauvegardes & albums</span>
+            </a>
+            <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer" class="google-sidebar-item">
+              <span class="item-icon"><svg viewBox="0 0 24 24" width="20" height="20"><rect width="24" height="24" rx="4" fill="#34A853"/><path fill="#EA4335" d="M12 3a6 6 0 0 0-6 6c0 4.5 6 12 6 12s6-7.5 6-12a6 6 0 0 0-6-6z"/><circle cx="12" cy="9" r="2.5" fill="#fff"/></svg></span>
+              <span class="item-name">Google Maps</span>
+              <span class="item-desc">Cartes, itinéraires & trafic</span>
+            </a>
+            <a href="https://translate.google.com" target="_blank" rel="noopener noreferrer" class="google-sidebar-item">
+              <span class="item-icon"><svg viewBox="0 0 24 24" width="20" height="20"><rect width="24" height="24" rx="4" fill="#1a73e8"/><text x="8" y="15" font-size="9" font-weight="bold" fill="#fff">G</text><text x="14" y="17" font-size="9" font-weight="bold" fill="#fff">文</text></svg></span>
+              <span class="item-name">Google Traduction</span>
+              <span class="item-desc">Traducteur multilingue</span>
+            </a>
+            <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" class="google-sidebar-item">
+              <span class="item-icon"><svg viewBox="0 0 24 24" width="20" height="20"><rect width="24" height="24" rx="4" fill="#ff0000"/><path fill="#fff" d="M10 7.5v9l7-4.5z"/></svg></span>
+              <span class="item-name">YouTube</span>
+              <span class="item-desc">Vidéos, musiques & abonnements</span>
+            </a>
+          </div>
         </div>
       </div>
     </aside>
@@ -1076,17 +1277,43 @@
           </div>
           <button type="button" id="taskConversationCloseBtn" class="close-btn">&times;</button>
         </div>
-        <div class="task-conversation-body" style="padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;">
-          <h3 id="taskConversationItemTitle" class="task-conversation-item-title" style="margin: 0; font-size: 13.5px; color: #f8fafc; word-break: break-word;"></h3>
-          <div id="taskConversationHistory" class="task-conversation-history" style="max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px;"></div>
-          <form id="taskConversationForm" class="task-conversation-form" style="border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 10px; display: flex; flex-direction: column; gap: 6px;">
-            <label style="font-size: 11px; color: #94a3b8; font-weight: 600; display: block;">Ajouter un commentaire de suivi :</label>
-            <textarea id="taskConversationInput" class="form-textarea" rows="3" style="width: 100%; font-size: 12px; resize: vertical;" placeholder="Votre commentaire de suivi horodaté..." required></textarea>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span id="taskConversationStatus" style="font-size: 10.5px; color: #94a3b8;"></span>
-              <button type="submit" id="taskConversationSubmitBtn" class="btn btn-primary" style="padding: 6px 14px; font-weight: 600; font-size: 11.5px;">💬 Ajouter au suivi</button>
+        <div class="task-conversation-body" id="taskConversationBody">
+          <!-- Overlay de glisser-déposer de fichiers -->
+          <div id="taskConversationDropZone" class="chat-drop-overlay hidden">
+            <span style="font-size: 36px;">📁</span>
+            <span style="font-size: 14px; font-weight: 600; color: #60a5fa;">Déposez votre fichier ici pour le joindre</span>
+            <span style="font-size: 11px; color: #94a3b8;">Format AgendaBIP (Google Drive) jusqu'à 20 Mo</span>
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+            <h3 id="taskConversationItemTitle" class="task-conversation-item-title" style="margin: 0; font-size: 13.5px; font-weight: 600; color: #f8fafc; word-break: break-word;"></h3>
+            <span id="taskConversationCountBadge" style="font-size: 11px; color: #94a3b8; background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 12px; white-space: nowrap;"></span>
+          </div>
+
+          <!-- Zone de messages chat avec dates & horaires -->
+          <div id="taskConversationHistory" class="task-conversation-history"></div>
+
+          <!-- Brouillon de pièces jointes en attente d'envoi -->
+          <div id="taskConversationDraftAttachments" class="chat-draft-attachments"></div>
+
+          <form id="taskConversationForm" class="task-conversation-form" style="border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 8px; display: flex; flex-direction: column; gap: 8px;">
+            <!-- Barre d'outils pièces jointes et liens -->
+            <div class="chat-toolbar">
+              <button type="button" id="taskConversationAttachFileBtn" class="chat-tool-btn" title="Joindre un fichier (Glisser-déposer supporté)">📎 Joindre un fichier</button>
+              <button type="button" id="taskConversationAttachLinkBtn" class="chat-tool-btn" title="Ajouter un lien web">🔗 Ajouter un lien</button>
+              <input type="file" id="taskConversationFileInput" multiple style="display: none;">
+              <span style="margin-left: auto; font-size: 10px; color: #64748b;">💡 Glisser-déposer un fichier possible</span>
             </div>
-            <p style="font-size: 9.5px; color: #64748b; margin: 2px 0 0 0;">Horodaté et synchronisé avec Google Tasks / Agenda, visible dans AgendaBIP Android et Windows.</p>
+
+            <div class="chat-input-row">
+              <textarea id="taskConversationInput" class="chat-textarea" rows="2" placeholder="Écrire un message de suivi... (Entrée pour envoyer, Maj+Entrée pour saut de ligne)" required></textarea>
+              <button type="submit" id="taskConversationSubmitBtn" class="chat-send-btn" title="Envoyer le message">➤</button>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span id="taskConversationStatus" style="font-size: 11px; color: #94a3b8;"></span>
+              <span style="font-size: 9.5px; color: #64748b;">Horodaté AgendaBIP · Google Tasks & Agenda</span>
+            </div>
           </form>
         </div>
       </div>

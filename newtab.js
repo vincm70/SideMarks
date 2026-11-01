@@ -769,6 +769,8 @@ const CALENDAR_COLOR_PALETTE = {
   "Agenda_Privé_TZT": "#3b82f6",
   "REVEIL-RAPPEL TZT": "#10b981",
   "Autres TZT": "#eab308",
+  "HORLOGE-RAPPEL-TZT": "#6366f1",
+  "Anniversaires": "#10b981",
   "Vincent touzot (Partage)": "#a855f7",
   "Emilie amor 150": "#ec4899",
   "emilie amor (mimie)": "#f43f5e",
@@ -1021,24 +1023,9 @@ function setupCalculatorWidget() {
 // 🔄 SYNCHRONISATION OFFICIELLE GOOGLE CALENDAR & TASKS (COMPTE DU PROFIL CONNECTÉ)
 // ========================================================
 
-// Purge de sécurité stricte : élimine tout résidu de calendrier tiers (TZT)
+// Tous les calendriers du compte Google connecté (y compris Agenda_Privé_TZT, Autres TZT, etc.) sont autorisés et conservés
 function purgeForeignCalendars() {
-  if (Array.isArray(googleCalendarsList)) {
-    googleCalendarsList = googleCalendarsList.filter(c => !c.name || (!c.name.includes("TZT") && !c.name.includes("Agenda_Privé")));
-    chrome.storage.local.set({ googleCalendarsList });
-  }
-  if (Array.isArray(googleEventsList)) {
-    googleEventsList = googleEventsList.filter(e => !e.calendarTitle || (!e.calendarTitle.includes("TZT") && !e.calendarTitle.includes("Agenda_Privé")));
-    chrome.storage.local.set({ googleEventsList });
-  }
-  if (agendaSettings && Array.isArray(agendaSettings.enabledCalendars)) {
-    agendaSettings.enabledCalendars = agendaSettings.enabledCalendars.filter(n => !n.includes("TZT") && !n.includes("Agenda_Privé"));
-    chrome.storage.local.set({ agendaSettings });
-  }
-  if (agendaSettings && agendaSettings.agendas) {
-    delete agendaSettings.agendas.rdvtzt;
-    chrome.storage.local.set({ agendaSettings });
-  }
+  // Aucun filtrage restrictif : tous les agendas personnels ou partagés sont acceptés
 }
 
 function openGoogleAuthModal() {
@@ -4801,12 +4788,141 @@ function renderTasks() {
 let currentConversationTarget = null;
 let currentConversationIsEvent = false;
 
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+let conversationDraftAttachments = [];
+
+function formatChatDateTime(entry) {
+  let dateObj = null;
+  if (entry.at && Number.isFinite(entry.at)) {
+    dateObj = new Date(entry.at);
+  } else if (entry.date) {
+    const m = String(entry.date).match(/(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})(?:\s*(?:à|at|-)?\s*(\d{1,2}):(\d{2}))?/i);
+    if (m) {
+      const day = parseInt(m[1], 10);
+      const month = parseInt(m[2], 10) - 1;
+      const year = parseInt(m[3], 10) < 100 ? 2000 + parseInt(m[3], 10) : parseInt(m[3], 10);
+      const hours = m[4] !== undefined ? parseInt(m[4], 10) : 0;
+      const minutes = m[5] !== undefined ? parseInt(m[5], 10) : 0;
+      dateObj = new Date(year, month, day, hours, minutes);
+    } else {
+      const parsed = Date.parse(entry.date);
+      if (!isNaN(parsed)) dateObj = new Date(parsed);
+    }
+  }
+
+  const now = new Date();
+  if (dateObj && !isNaN(dateObj.getTime())) {
+    const isToday = dateObj.getFullYear() === now.getFullYear() &&
+                    dateObj.getMonth() === now.getMonth() &&
+                    dateObj.getDate() === now.getDate();
+    
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const isYesterday = dateObj.getFullYear() === yesterday.getFullYear() &&
+                        dateObj.getMonth() === yesterday.getMonth() &&
+                        dateObj.getDate() === yesterday.getDate();
+
+    const timeStr = dateObj.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+    let dayStr = "";
+    if (isToday) {
+      dayStr = "Aujourd'hui";
+    } else if (isYesterday) {
+      dayStr = "Hier";
+    } else {
+      dayStr = dateObj.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: dateObj.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
+    }
+    const fullDateKey = `${dateObj.getFullYear()}-${dateObj.getMonth()}-${dateObj.getDate()}`;
+    return { dayStr, timeStr, fullDateKey, rawDate: dateObj };
+  }
+
+  const rawStr = String(entry.date || "Date inconnue");
+  return { dayStr: rawStr, timeStr: "", fullDateKey: rawStr, rawDate: null };
+}
+
+function renderConversationDraftAttachments() {
+  const container = document.getElementById("taskConversationDraftAttachments");
+  if (!container) return;
+  container.innerHTML = "";
+  conversationDraftAttachments.forEach((att, idx) => {
+    const chip = document.createElement("span");
+    chip.className = "chat-draft-chip";
+    chip.innerHTML = `<span>📎 ${escapeHtml(att.name)}</span>`;
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "chip-remove-btn";
+    removeBtn.title = "Retirer cette pièce jointe";
+    removeBtn.textContent = "✕";
+    removeBtn.addEventListener("click", () => {
+      conversationDraftAttachments.splice(idx, 1);
+      renderConversationDraftAttachments();
+    });
+    chip.appendChild(removeBtn);
+    container.appendChild(chip);
+  });
+}
+
+async function uploadFollowupFileToDrive(file) {
+  if (!file) return null;
+  if (file.size > 20 * 1024 * 1024) {
+    showToast("Fichier supérieur à 20 Mo (limite Google/AgendaBIP)");
+    return null;
+  }
+  const statusEl = document.getElementById("taskConversationStatus");
+  if (statusEl) statusEl.textContent = `Téléversement vers Google Drive : ${file.name}...`;
+
+  try {
+    const token = await getFreshGoogleToken(false);
+    if (token) {
+      const metadata = { name: file.name, mimeType: file.type || "application/octet-stream" };
+      const form = new FormData();
+      form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+      form.append("file", file);
+
+      const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form
+      });
+
+      if (res.ok) {
+        const d = await res.json();
+        const driveUrl = d.webViewLink || (`https://drive.google.com/file/d/${d.id}/view`);
+        if (statusEl) statusEl.textContent = `📎 « ${file.name} » prêt dans Google Drive !`;
+        return { name: file.name, url: driveUrl };
+      }
+    }
+  } catch (err) {
+    console.warn("Erreur upload Google Drive pour conversation:", err);
+  }
+
+  // Fallback local si non connecté à Google Drive
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (statusEl) statusEl.textContent = `📎 « ${file.name} » joint localement.`;
+      resolve({ name: file.name, url: reader.result });
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
 function openTaskConversationModal(item, isEvent = false) {
   initTaskConversation();
   const modal = document.getElementById("taskConversationModal");
   if (!modal) return;
   currentConversationTarget = item;
   currentConversationIsEvent = isEvent;
+  conversationDraftAttachments = [];
+  renderConversationDraftAttachments();
 
   const typeBadge = document.getElementById("taskConversationTypeBadge");
   if (typeBadge) typeBadge.textContent = isEvent ? "Événement Google Agenda" : "Tâche Google Tasks";
@@ -4833,41 +4949,108 @@ function renderTaskConversationHistory() {
   const notes = currentConversationTarget.notes || currentConversationTarget.description || "";
   const conv = parseAgendaBipConversation(notes);
 
+  const countBadge = document.getElementById("taskConversationCountBadge");
+  if (countBadge) {
+    countBadge.textContent = conv.entries.length > 0 ? `${conv.entries.length} message(s)` : "Aucun message";
+  }
+
   if (conv.entries.length === 0) {
-    historyContainer.innerHTML = `<div style="text-align: center; color: #64748b; font-size: 11px; padding: 18px 0; font-style: italic;">
-      Aucun commentaire de suivi pour le moment. Écrivez ci-dessous pour ajouter un message horodaté.
+    historyContainer.innerHTML = `<div style="text-align: center; color: #94a3b8; font-size: 11.5px; padding: 28px 12px; font-style: italic; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+      <span style="font-size: 28px;">💬</span>
+      <span>Aucun message dans cette conversation pour le moment.</span>
+      <span style="font-size: 10.5px; color: #64748b;">Écrivez ci-dessous ou glissez-déposez des fichiers pour ajouter un suivi horodaté.</span>
     </div>`;
     return;
   }
 
+  let lastDateKey = null;
+
   conv.entries.forEach(entry => {
-    const art = document.createElement("article");
-    art.className = "task-conversation-entry";
+    const dt = formatChatDateTime(entry);
 
-    const timeEl = document.createElement("time");
-    timeEl.textContent = `📅 ${entry.date}`;
-
-    const p = document.createElement("p");
-    let text = entry.comment || "";
-    let offset = 0;
-    for (const match of text.matchAll(/https?:\/\/[^\s<>"']+/g)) {
-      p.appendChild(document.createTextNode(text.slice(offset, match.index)));
-      const link = document.createElement("a");
-      link.textContent = match[0];
-      link.href = match[0];
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      p.appendChild(link);
-      offset = match.index + match[0].length;
+    // Séparateur de date (Aujourd'hui, Hier, 12 octobre 2026)
+    if (dt.fullDateKey !== lastDateKey) {
+      lastDateKey = dt.fullDateKey;
+      const dateDivider = document.createElement("div");
+      dateDivider.className = "chat-date-divider";
+      dateDivider.innerHTML = `<span>${escapeHtml(dt.dayStr)}</span>`;
+      historyContainer.appendChild(dateDivider);
     }
-    p.appendChild(document.createTextNode(text.slice(offset)));
 
-    art.appendChild(timeEl);
-    art.appendChild(p);
-    historyContainer.appendChild(art);
+    // Ligne de message
+    const row = document.createElement("div");
+    row.className = "chat-message-row";
+
+    const isAndroid = entry.id && (entry.id.includes("android") || entry.id.length === 36);
+    const authorName = isAndroid ? "Android" : "Vous (PC)";
+    const authorIcon = isAndroid ? "📱" : "💻";
+
+    const avatar = document.createElement("div");
+    avatar.className = "chat-message-avatar";
+    avatar.title = authorName;
+    avatar.textContent = authorIcon;
+    row.appendChild(avatar);
+
+    const bubble = document.createElement("div");
+    bubble.className = "chat-bubble";
+
+    const header = document.createElement("div");
+    header.className = "chat-bubble-header";
+    header.innerHTML = `
+      <span class="chat-bubble-author">${authorIcon} ${escapeHtml(authorName)}</span>
+      <span class="chat-bubble-time" title="${escapeHtml(entry.date || "")}">🕒 ${escapeHtml(dt.timeStr || entry.date || "")}</span>
+    `;
+    bubble.appendChild(header);
+
+    const content = document.createElement("div");
+    content.className = "chat-bubble-content";
+
+    // Parsing du texte, des liens et des pièces jointes "📎 Nom : URL"
+    let rawText = entry.comment || "";
+    const lines = rawText.split("\n");
+    lines.forEach((line, lineIdx) => {
+      const pjMatch = line.match(/^(?:📎|\[Pièce jointe\]|Pièce jointe\s*:)\s*([^\r\n:]+)\s*:\s*(https?:\/\/[^\s\r\n]+)/i);
+      if (pjMatch) {
+        const attName = pjMatch[1].trim();
+        const attUrl = pjMatch[2].trim();
+        const attCard = document.createElement("a");
+        attCard.className = "chat-attachment-card";
+        attCard.href = attUrl;
+        attCard.target = "_blank";
+        attCard.rel = "noopener noreferrer";
+        attCard.innerHTML = `
+          <span class="chat-att-icon">📎</span>
+          <span class="chat-att-name" title="${escapeHtml(attName)}">${escapeHtml(attName)}</span>
+          <span class="chat-att-link-btn">Ouvrir ↗</span>
+        `;
+        content.appendChild(attCard);
+      } else {
+        const pLine = document.createElement("div");
+        let offset = 0;
+        for (const match of line.matchAll(/https?:\/\/[^\s<>"']+/g)) {
+          pLine.appendChild(document.createTextNode(line.slice(offset, match.index)));
+          const link = document.createElement("a");
+          link.textContent = match[0];
+          link.href = match[0];
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          pLine.appendChild(link);
+          offset = match.index + match[0].length;
+        }
+        pLine.appendChild(document.createTextNode(line.slice(offset)));
+        if (!line.trim() && lineIdx > 0) pLine.innerHTML = "&nbsp;";
+        content.appendChild(pLine);
+      }
+    });
+
+    bubble.appendChild(content);
+    row.appendChild(bubble);
+    historyContainer.appendChild(row);
   });
 
-  historyContainer.scrollTop = historyContainer.scrollHeight;
+  setTimeout(() => {
+    historyContainer.scrollTop = historyContainer.scrollHeight;
+  }, 20);
 }
 
 // Initialisation sécurisée des écouteurs de la modale de conversation
@@ -4875,12 +5058,98 @@ function initTaskConversation() {
   const convModal = document.getElementById("taskConversationModal");
   const convCloseBtn = document.getElementById("taskConversationCloseBtn");
   const convForm = document.getElementById("taskConversationForm");
+  const dropZone = document.getElementById("taskConversationDropZone");
+  const attachFileBtn = document.getElementById("taskConversationAttachFileBtn");
+  const fileInput = document.getElementById("taskConversationFileInput");
+  const attachLinkBtn = document.getElementById("taskConversationAttachLinkBtn");
+  const inputEl = document.getElementById("taskConversationInput");
 
   if (convCloseBtn && !convCloseBtn.dataset.bound) {
     convCloseBtn.dataset.bound = "1";
     convCloseBtn.addEventListener("click", () => {
       if (convModal) convModal.classList.add("hidden");
       currentConversationTarget = null;
+      conversationDraftAttachments = [];
+    });
+  }
+
+  // Glisser-déposer sur la fenêtre de conversation
+  if (convModal && !convModal.dataset.dragBound) {
+    convModal.dataset.dragBound = "1";
+    let dragCounter = 0;
+    convModal.addEventListener("dragenter", (e) => {
+      e.preventDefault();
+      dragCounter++;
+      if (dropZone) dropZone.classList.remove("hidden");
+    });
+    convModal.addEventListener("dragleave", (e) => {
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter <= 0) {
+        dragCounter = 0;
+        if (dropZone) dropZone.classList.add("hidden");
+      }
+    });
+    convModal.addEventListener("dragover", (e) => {
+      e.preventDefault();
+    });
+    convModal.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      dragCounter = 0;
+      if (dropZone) dropZone.classList.add("hidden");
+      const files = Array.from(e.dataTransfer?.files || []);
+      for (const f of files) {
+        const att = await uploadFollowupFileToDrive(f);
+        if (att) {
+          conversationDraftAttachments.push(att);
+          renderConversationDraftAttachments();
+        }
+      }
+    });
+  }
+
+  // Bouton Joindre un fichier
+  if (attachFileBtn && fileInput && !attachFileBtn.dataset.bound) {
+    attachFileBtn.dataset.bound = "1";
+    attachFileBtn.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", async () => {
+      const files = Array.from(fileInput.files || []);
+      for (const f of files) {
+        const att = await uploadFollowupFileToDrive(f);
+        if (att) {
+          conversationDraftAttachments.push(att);
+          renderConversationDraftAttachments();
+        }
+      }
+      fileInput.value = "";
+    });
+  }
+
+  // Bouton Ajouter un lien
+  if (attachLinkBtn && !attachLinkBtn.dataset.bound) {
+    attachLinkBtn.dataset.bound = "1";
+    attachLinkBtn.addEventListener("click", () => {
+      const url = prompt("Adresse URL du lien à joindre au suivi (ex: https://...) :");
+      if (!url || !url.trim()) return;
+      const cleanUrl = url.trim();
+      if (!/^https?:\/\//i.test(cleanUrl)) {
+        alert("L'adresse doit commencer par http:// ou https://");
+        return;
+      }
+      const name = prompt("Nom ou libellé du lien :", "Lien") || "Lien";
+      conversationDraftAttachments.push({ name: name.trim(), url: cleanUrl });
+      renderConversationDraftAttachments();
+    });
+  }
+
+  // Touche Entrée pour envoyer (Maj+Entrée pour saut de ligne)
+  if (inputEl && !inputEl.dataset.keyBound) {
+    inputEl.dataset.keyBound = "1";
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        if (convForm) convForm.requestSubmit();
+      }
     });
   }
 
@@ -4888,9 +5157,14 @@ function initTaskConversation() {
     convForm.dataset.bound = "1";
     convForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const input = document.getElementById("taskConversationInput");
       const statusEl = document.getElementById("taskConversationStatus");
-      const comment = input ? input.value.trim() : "";
+      let comment = inputEl ? inputEl.value.trim() : "";
+      
+      // Ajouter les pièces jointes attachées au commentaire selon le standard AgendaBIP
+      for (const file of conversationDraftAttachments) {
+        comment += (comment ? "\n" : "") + "📎 " + String(file.name).replace(/[\r\n]/g, " ") + " : " + file.url;
+      }
+
       if (!comment || !currentConversationTarget) return;
 
       if (statusEl) statusEl.textContent = "Enregistrement...";
@@ -4902,15 +5176,33 @@ function initTaskConversation() {
         currentConversationTarget.description = updatedNotes;
       }
 
+      // Si c'est une tâche, ajouter également les pièces jointes à task.attachments pour affichage direct
+      if (!currentConversationIsEvent && Array.isArray(conversationDraftAttachments) && conversationDraftAttachments.length > 0) {
+        if (!Array.isArray(currentConversationTarget.attachments)) currentConversationTarget.attachments = [];
+        conversationDraftAttachments.forEach(att => {
+          if (!currentConversationTarget.attachments.some(a => a.url === att.url)) {
+            currentConversationTarget.attachments.push({
+              id: "att_" + Date.now(),
+              name: att.name,
+              driveUrl: att.url,
+              url: att.url,
+              date: new Date().toISOString()
+            });
+          }
+        });
+      }
+
       if (currentConversationIsEvent) {
         chrome.storage.local.set({ googleEventsList });
       } else {
         chrome.storage.local.set({ tasksData: tasksList });
       }
 
+      conversationDraftAttachments = [];
+      renderConversationDraftAttachments();
       renderTaskConversationHistory();
-      if (input) input.value = "";
-      if (statusEl) statusEl.textContent = "✅ Commentaire ajouté ! Synchronisation en cours...";
+      if (inputEl) inputEl.value = "";
+      if (statusEl) statusEl.textContent = "✅ Message envoyé ! Synchronisation en cours...";
 
       try {
         const token = await getFreshGoogleToken(false);
@@ -9917,23 +10209,45 @@ function setupEvents() {
     }
   });
 
-  // Bascule [Favoris] / [Onglets]
-  showBookmarksTabBtn.addEventListener("click", () => {
-    currentSidebarTab = "bookmarks";
-    showBookmarksTabBtn.classList.add("active");
-    showOpenTabsBtn.classList.remove("active");
-    sidebarTree.classList.remove("hidden");
-    openTabsContainer.classList.add("hidden");
-  });
+  // Bascule [Favoris] / [Onglets] / [Google]
+  const showGoogleToolsTabBtn = document.getElementById("showGoogleToolsTabBtn");
+  const googleToolsContainer = document.getElementById("googleToolsContainer");
 
-  showOpenTabsBtn.addEventListener("click", () => {
-    currentSidebarTab = "tabs";
-    showOpenTabsBtn.classList.add("active");
-    showBookmarksTabBtn.classList.remove("active");
-    sidebarTree.classList.add("hidden");
-    openTabsContainer.classList.remove("hidden");
-    refreshOpenTabs();
-  });
+  function switchSidebarTab(tab) {
+    currentSidebarTab = tab;
+    if (showBookmarksTabBtn) showBookmarksTabBtn.classList.toggle("active", tab === "bookmarks");
+    if (showOpenTabsBtn) showOpenTabsBtn.classList.toggle("active", tab === "tabs");
+    if (showGoogleToolsTabBtn) showGoogleToolsTabBtn.classList.toggle("active", tab === "google");
+
+    if (sidebarTree) sidebarTree.classList.toggle("hidden", tab !== "bookmarks");
+    if (openTabsContainer) openTabsContainer.classList.toggle("hidden", tab !== "tabs");
+    if (googleToolsContainer) googleToolsContainer.classList.toggle("hidden", tab !== "google");
+
+    if (tab === "tabs") refreshOpenTabs();
+  }
+
+  if (showBookmarksTabBtn) showBookmarksTabBtn.addEventListener("click", () => switchSidebarTab("bookmarks"));
+  if (showOpenTabsBtn) showOpenTabsBtn.addEventListener("click", () => switchSidebarTab("tabs"));
+  if (showGoogleToolsTabBtn) showGoogleToolsTabBtn.addEventListener("click", () => switchSidebarTab("google"));
+
+  // Menu Gaufre Google (9 points) dans la barre de recherche
+  const googleAppsBtn = document.getElementById("googleAppsBtn");
+  const googleAppsDropdown = document.getElementById("googleAppsDropdown");
+  if (googleAppsBtn && googleAppsDropdown) {
+    googleAppsBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      googleAppsDropdown.classList.toggle("hidden");
+    });
+    document.addEventListener("click", (e) => {
+      if (!googleAppsDropdown.contains(e.target) && e.target !== googleAppsBtn && !googleAppsBtn.contains(e.target)) {
+        googleAppsDropdown.classList.add("hidden");
+      }
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") googleAppsDropdown.classList.add("hidden");
+    });
+  }
 
   // Sauvegarde session avec nom personnalisable
   saveSessionBtn.addEventListener("click", openSaveSessionModal);
@@ -10333,24 +10647,78 @@ function applyThemeSettings(s) {
 // ========================================================
 // RACCOURCIS SYSTÈME LOCAUX WINDOWS (v5.2 Lab)
 // ========================================================
+function promptAddLocalShortcut() {
+  const title = prompt("Nom du raccourci Windows (ex: Mes Projets, Photoshop, Documents) :");
+  if (!title || !title.trim()) return;
+  const path = prompt(`Chemin du dossier ou de l'application pour « ${title.trim()} » (ex: C:\\Mes Projets ou notepad.exe) :`);
+  if (!path || !path.trim()) return;
+  const isExe = path.trim().toLowerCase().endsWith(".exe");
+  addLocalShortcutDirectly(title.trim(), path.trim(), isExe ? "🚀" : "📁");
+}
+
 async function loadExperimentalLocalShortcuts() {
   const dock = document.getElementById("localShortcutsDock");
   const container = document.getElementById("dockItemsContainer");
   if (!dock || !container) return;
 
-  chrome.storage.sync.get("experimentalLocalShortcuts", (res) => {
-    const config = res.experimentalLocalShortcuts || { enabled: false, shortcuts: [] };
+  function handleConfig(config) {
     const enabled = !!config.enabled;
     const shortcuts = Array.isArray(config.shortcuts) ? config.shortcuts : [];
 
-    if (!enabled || shortcuts.length === 0) {
+    if (!enabled) {
       dock.classList.add("hidden");
       container.innerHTML = "";
       return;
     }
 
+    // Le dock est actif : il doit TOUJOURS être visible quand l'option est cochée
+    dock.classList.remove("hidden");
     container.innerHTML = "";
-    shortcuts.forEach((item) => {
+
+    if (shortcuts.length === 0) {
+      // Afficher l'état d'invitation avec suggestions en 1 clic
+      const hint = document.createElement("span");
+      hint.style.fontSize = "11px";
+      hint.style.color = "#cbd5e1";
+      hint.style.marginRight = "4px";
+      hint.textContent = "Dock actif · Exemples :";
+      container.appendChild(hint);
+
+      const presets = [
+        { title: "Documents", path: "C:\\Users\\Default\\Documents", icon: "📁" },
+        { title: "Téléchargements", path: "C:\\Users\\Default\\Downloads", icon: "📥" },
+        { title: "Disque C:", path: "C:\\", icon: "💻" },
+        { title: "Bloc-notes", path: "notepad.exe", icon: "📝" }
+      ];
+
+      presets.forEach(p => {
+        const pBtn = document.createElement("button");
+        pBtn.type = "button";
+        pBtn.className = "dock-item";
+        pBtn.style.background = "rgba(168, 85, 247, 0.15)";
+        pBtn.style.border = "1px solid rgba(168, 85, 247, 0.35)";
+        pBtn.title = `Cliquer pour ajouter ${p.title} à votre dock`;
+        pBtn.innerHTML = `<span class="dock-item-icon">${p.icon}</span><span>+ ${p.title}</span>`;
+        pBtn.addEventListener("click", () => {
+          addLocalShortcutDirectly(p.title, p.path, p.icon);
+        });
+        container.appendChild(pBtn);
+      });
+
+      const addBtn = document.createElement("button");
+      addBtn.type = "button";
+      addBtn.className = "dock-item";
+      addBtn.style.background = "rgba(59, 130, 246, 0.25)";
+      addBtn.style.border = "1px solid rgba(96, 165, 250, 0.5)";
+      addBtn.title = "Ajouter un dossier ou un logiciel (.exe)";
+      addBtn.innerHTML = `<span>➕ Ajouter...</span>`;
+      addBtn.addEventListener("click", promptAddLocalShortcut);
+      container.appendChild(addBtn);
+      return;
+    }
+
+    // Afficher les raccourcis configurés par l'utilisateur
+    shortcuts.forEach((item, idx) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "dock-item";
@@ -10374,7 +10742,27 @@ async function loadExperimentalLocalShortcuts() {
       container.appendChild(btn);
     });
 
-    dock.classList.remove("hidden");
+    // Bouton "+" pour ajouter d'autres raccourcis
+    const addMoreBtn = document.createElement("button");
+    addMoreBtn.type = "button";
+    addMoreBtn.className = "dock-item";
+    addMoreBtn.style.background = "rgba(255, 255, 255, 0.08)";
+    addMoreBtn.title = "Ajouter un nouveau raccourci Windows";
+    addMoreBtn.innerHTML = `<span class="dock-item-icon">➕</span>`;
+    addMoreBtn.addEventListener("click", promptAddLocalShortcut);
+    container.appendChild(addMoreBtn);
+  }
+
+  // Vérifier sync puis fallback local
+  chrome.storage.sync.get("experimentalLocalShortcuts", (res) => {
+    if (res && res.experimentalLocalShortcuts) {
+      handleConfig(res.experimentalLocalShortcuts);
+    } else {
+      chrome.storage.local.get("experimentalLocalShortcuts", (localRes) => {
+        const config = localRes?.experimentalLocalShortcuts || { enabled: false, shortcuts: [] };
+        handleConfig(config);
+      });
+    }
   });
 }
 
