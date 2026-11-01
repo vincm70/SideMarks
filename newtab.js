@@ -504,6 +504,23 @@ const DEFAULT_TASKS_SETTINGS = {
 };
 
 let tasksSettings = { ...DEFAULT_TASKS_SETTINGS };
+let googleEventsList = [];
+let googleCalendarsList = [];
+
+// Palette de couleurs pour les calendriers connus
+const CALENDAR_COLOR_PALETTE = {
+  "Agenda_Privé_TZT": "#3b82f6",
+  "REVEIL-RAPPEL TZT": "#10b981",
+  "Autres TZT": "#eab308",
+  "Vincent touzot (Partage)": "#a855f7",
+  "Emilie amor 150": "#ec4899",
+  "emilie amor (mimie)": "#f43f5e",
+  "ÉVÉNEMENT RECURRENTS (AMR)": "#f97316",
+  "Vincent Touzot (Old)": "#8b5cf6",
+  "Phases de la Lune": "#06b6d4",
+  "Numéros de semaine": "#64748b",
+  "Weather for Voisins-le-Bretonneux": "#38bdf8"
+};
 let tasksList = [
   { id: "t1", title: "Vérifier la synchronisation Google Drive", groupId: "DVRC", priority: "P1", status: "todo", due: "", subtasks: [] },
   { id: "t2", title: "Appel urgent TZT", groupId: "Perso", priority: "P0", status: "todo", due: "", subtasks: [] },
@@ -737,6 +754,159 @@ function setupCalculatorWidget() {
 // ========================================================
 // 📅 WIDGET AGENDA / CALENDRIER (STYLE AGENDA BIP & GOOGLE CALENDAR)
 // ========================================================
+
+// ========================================================
+// 🔄 SYNCHRONISATION EN DIRECT GOOGLE CALENDAR & GOOGLE TASKS
+// ========================================================
+async function syncGoogleCalendarAndTasks(silent = false) {
+  try {
+    const resp = await fetch("http://127.0.0.1:8766/api/state", { cache: "no-store" });
+    if (!resp.ok) throw new Error("Réponse serveur : " + resp.status);
+    const data = await resp.json();
+
+    let newEventsCount = 0;
+    let newTasksCount = 0;
+
+    // 1. Calendriers & Événements Google
+    if (Array.isArray(data.events)) {
+      googleEventsList = data.events.map(ev => {
+        const start = ev.start || {};
+        let dateStr = "";
+        let timeStr = "Journée";
+        if (start.dateTime) {
+          dateStr = start.dateTime.slice(0, 10);
+          timeStr = start.dateTime.slice(11, 16);
+        } else if (start.date) {
+          dateStr = start.date;
+          timeStr = "Journée";
+        }
+        return {
+          id: ev.id,
+          calendarId: ev.calendarId,
+          calendarTitle: ev.calendarTitle || "Agenda",
+          title: ev.title || "Sans titre",
+          notes: ev.notes || "",
+          htmlLink: ev.htmlLink || "",
+          dateStr,
+          timeStr,
+          isAllDay: timeStr === "Journée"
+        };
+      });
+      chrome.storage.local.set({ googleEventsList });
+      newEventsCount = googleEventsList.length;
+    }
+
+    if (Array.isArray(data.calendars)) {
+      googleCalendarsList = data.calendars;
+      chrome.storage.local.set({ googleCalendarsList });
+    }
+
+    // 2. Google Tasks
+    if (Array.isArray(data.tasks)) {
+      const groupsMap = {};
+      if (Array.isArray(data.groups)) {
+        data.groups.forEach(g => { groupsMap[g.id] = g.title; });
+      }
+
+      tasksList = data.tasks.map(t => {
+        let priority = "NONE";
+        const groupTitle = groupsMap[t.groupId] || "Général";
+        const pMatch = (t.notes || "").match(/(?:priorité|priority)[^P0-4]*(P[0-4])/i);
+        if (pMatch) {
+          priority = pMatch[1].toUpperCase();
+        } else if (groupTitle.toUpperCase() === "P0") {
+          priority = "P0";
+        } else if (groupTitle.toUpperCase() === "P1") {
+          priority = "P1";
+        } else if (groupTitle.toUpperCase() === "P2") {
+          priority = "P2";
+        }
+
+        const isDone = t.status === "completed" || t.status === "done";
+
+        return {
+          id: t.id,
+          title: t.title || "Tâche sans titre",
+          priority,
+          groupId: groupTitle,
+          status: isDone ? "done" : "todo",
+          due: t.due ? t.due.slice(0, 10) : "",
+          notes: t.notes || "",
+          subtasks: []
+        };
+      });
+
+      chrome.storage.local.set({ tasksData: tasksList });
+      newTasksCount = tasksList.length;
+    }
+
+    // Si aucun calendrier n'est coché dans agendaSettings, cocher par défaut les principaux
+    if (!agendaSettings.enabledCalendars || agendaSettings.enabledCalendars.length === 0) {
+      const allFoundCals = getDiscoveredCalendars();
+      agendaSettings.enabledCalendars = allFoundCals.map(c => c.name);
+      chrome.storage.local.set({ agendaSettings });
+    }
+
+    // Re-rendre immédiatement les deux widgets
+    if (typeof refreshAgendaDisplay === "function") refreshAgendaDisplay();
+    if (typeof refreshTasksDisplay === "function") refreshTasksDisplay();
+
+    if (!silent) {
+      showToast(`Google synchronisé : ${newEventsCount} événements, ${newTasksCount} tâches !`);
+    }
+  } catch (err) {
+    console.warn("Synchronisation locale Google indisponible :", err);
+    if (!silent) {
+      showToast("Serveur local Google non détecté (port 8766)");
+    }
+  }
+}
+
+// Récupère tous les calendriers découverts (Google + locaux)
+function getDiscoveredCalendars() {
+  const cals = new Map();
+
+  // Calendriers issus de googleEventsList
+  googleEventsList.forEach(e => {
+    if (e.calendarTitle && !cals.has(e.calendarTitle)) {
+      cals.set(e.calendarTitle, {
+        id: e.calendarId || e.calendarTitle,
+        name: e.calendarTitle,
+        color: CALENDAR_COLOR_PALETTE[e.calendarTitle] || "#3b82f6"
+      });
+    }
+  });
+
+  // Calendriers prédéfinis TZT s'il en manque
+  const PRESETS = [
+    { name: "Agenda_Privé_TZT", color: "#3b82f6" },
+    { name: "REVEIL-RAPPEL TZT", color: "#10b981" },
+    { name: "Autres TZT", color: "#eab308" },
+    { name: "Vincent touzot (Partage)", color: "#a855f7" },
+    { name: "Emilie amor 150", color: "#ec4899" },
+    { name: "emilie amor (mimie)", color: "#f43f5e" },
+    { name: "ÉVÉNEMENT RECURRENTS (AMR)", color: "#f97316" },
+    { name: "Phases de la Lune", color: "#06b6d4" },
+    { name: "Numéros de semaine", color: "#64748b" },
+    { name: "Weather for Voisins-le-Bretonneux", color: "#38bdf8" }
+  ];
+
+  PRESETS.forEach(p => {
+    if (!cals.has(p.name)) {
+      cals.set(p.name, { id: p.name, name: p.name, color: p.color });
+    }
+  });
+
+  return Array.from(cals.values());
+}
+
+// Variables pour callbacks d'actualisation globale
+let refreshAgendaDisplay = null;
+let refreshTasksDisplay = null;
+
+// ========================================================
+// 📅 WIDGET AGENDA / CALENDRIER (AVEC CHECKBOXES MULTI-CALENDRIERS)
+// ========================================================
 function setupAgendaWidget() {
   const widget = document.getElementById("agendaWidget");
   if (!widget) return;
@@ -744,10 +914,10 @@ function setupAgendaWidget() {
   const activeBadge = document.getElementById("agendaActiveBadge");
   const settingsBtn = document.getElementById("agendaSettingsBtn");
   const settingsPanel = document.getElementById("agendaSettingsPanel");
-  const agendaSelect = document.getElementById("agendaSelect");
-  const customNameRow = document.getElementById("agendaCustomNameRow");
-  const customNameInput = document.getElementById("agendaCustomNameInput");
-  const syncUrlInput = document.getElementById("agendaSyncUrlInput");
+  const calendarsListEl = document.getElementById("agendaCalendarsList");
+  const checkAllBtn = document.getElementById("agendaCheckAllBtn");
+  const uncheckAllBtn = document.getElementById("agendaUncheckAllBtn");
+  const syncNowBtn = document.getElementById("agendaSyncNowBtn");
   const saveSettingsBtn = document.getElementById("agendaSaveSettingsBtn");
   const closeSettingsBtn = document.getElementById("agendaCloseSettingsBtn");
 
@@ -770,19 +940,6 @@ function setupAgendaWidget() {
     "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
   ];
 
-  // Profils et Calendriers réels AgendaBIP
-  const AGENDA_PRESETS = {
-    prive_tzt: { name: "Agenda_Privé_TZT", badgeColor: "#3b82f6" },
-    reveil_tzt: { name: "REVEIL-RAPPEL TZT", badgeColor: "#10b981" },
-    autres_tzt: { name: "Autres TZT", badgeColor: "#eab308" },
-    partage_tzt: { name: "Vincent touzot (Partage)", badgeColor: "#a855f7" },
-    famille_amr: { name: "Emilie amor 150", badgeColor: "#ec4899" },
-    lune: { name: "Phases de la Lune", badgeColor: "#64748b" },
-    all: { name: "Tous les agendas", badgeColor: "#38bdf8" },
-    default: { name: "Principal", badgeColor: "#3b82f6" },
-    custom: { name: "Personnalisé", badgeColor: "#06b6d4" }
-  };
-
   function toDateKey(d) {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -790,52 +947,142 @@ function setupAgendaWidget() {
     return `${y}-${m}-${day}`;
   }
 
-  function getActiveAgendaKey() {
-    return agendaSettings.activeAgenda || "prive_tzt";
+  // Renvoie la liste des calendriers actuellement cochés
+  function getEnabledCalendars() {
+    if (!Array.isArray(agendaSettings.enabledCalendars)) {
+      const all = getDiscoveredCalendars();
+      agendaSettings.enabledCalendars = all.map(c => c.name);
+    }
+    return agendaSettings.enabledCalendars;
   }
 
-  function getActiveEvents() {
-    if (!agendaSettings.agendas) agendaSettings.agendas = { ...DEFAULT_AGENDA_SETTINGS.agendas };
-    const key = getActiveAgendaKey();
-    if (key === "all") {
-      // Combiner tous les événements de tous les agendas
-      const combined = {};
-      Object.keys(agendaSettings.agendas).forEach(k => {
-        const ag = agendaSettings.agendas[k];
-        if (ag && ag.events) {
-          Object.keys(ag.events).forEach(dateK => {
-            if (!combined[dateK]) combined[dateK] = [];
-            ag.events[dateK].forEach(ev => {
-              combined[dateK].push({ ...ev, calName: ag.name || k });
+  // Renvoie tous les événements du jour pour les calendriers cochés
+  function getFilteredEventsForDate(dateStr) {
+    const enabled = getEnabledCalendars();
+    const results = [];
+
+    // 1. Événements Google synchronisés
+    googleEventsList.forEach(ev => {
+      if (ev.dateStr === dateStr && enabled.includes(ev.calendarTitle)) {
+        results.push(ev);
+      }
+    });
+
+    // 2. Événements locaux
+    if (agendaSettings.agendas) {
+      Object.keys(agendaSettings.agendas).forEach(agKey => {
+        const ag = agendaSettings.agendas[agKey];
+        if (ag && ag.events && ag.events[dateStr] && enabled.includes(ag.name || agKey)) {
+          ag.events[dateStr].forEach(ev => {
+            results.push({
+              id: ev.id,
+              calendarTitle: ag.name || agKey,
+              title: ev.title,
+              timeStr: ev.time || "Journée",
+              dateStr: dateStr,
+              isLocal: true,
+              rawEv: ev,
+              agKey: agKey
             });
           });
         }
       });
-      return combined;
     }
 
-    if (!agendaSettings.agendas[key]) {
-      const preset = AGENDA_PRESETS[key];
-      agendaSettings.agendas[key] = { name: preset ? preset.name : "Agenda", events: {} };
+    return results;
+  }
+
+  // Renvoie un Set de toutes les dates contenant au moins un événement dans les calendriers cochés
+  function getActiveEventDatesSet() {
+    const enabled = getEnabledCalendars();
+    const dates = new Set();
+
+    googleEventsList.forEach(ev => {
+      if (ev.dateStr && enabled.includes(ev.calendarTitle)) {
+        dates.add(ev.dateStr);
+      }
+    });
+
+    if (agendaSettings.agendas) {
+      Object.keys(agendaSettings.agendas).forEach(agKey => {
+        const ag = agendaSettings.agendas[agKey];
+        if (ag && ag.events && enabled.includes(ag.name || agKey)) {
+          Object.keys(ag.events).forEach(dKey => {
+            if (ag.events[dKey].length > 0) dates.add(dKey);
+          });
+        }
+      });
     }
-    if (!agendaSettings.agendas[key].events) {
-      agendaSettings.agendas[key].events = {};
-    }
-    return agendaSettings.agendas[key].events;
+
+    return dates;
   }
 
   function updateBadge() {
     if (!activeBadge) return;
-    const key = getActiveAgendaKey();
-    if (key === "custom" && agendaSettings.customName) {
-      activeBadge.textContent = agendaSettings.customName;
-    } else if (AGENDA_PRESETS[key]) {
-      activeBadge.textContent = AGENDA_PRESETS[key].name;
+    const enabled = getEnabledCalendars();
+    if (enabled.length === 0) {
+      activeBadge.textContent = "Aucun";
+      activeBadge.style.borderColor = "#ef4444";
+      activeBadge.style.color = "#fca5a5";
+    } else if (enabled.length === 1) {
+      activeBadge.textContent = enabled[0].slice(0, 14);
+      activeBadge.style.borderColor = "";
+      activeBadge.style.color = "";
     } else {
-      activeBadge.textContent = "Agenda";
+      activeBadge.textContent = `${enabled.length} calendriers`;
+      activeBadge.style.borderColor = "";
+      activeBadge.style.color = "";
     }
   }
 
+  // Rendu des cases à cocher dans le panneau de configuration (Roue ⚙️)
+  function renderCalendarsCheckboxes() {
+    if (!calendarsListEl) return;
+    const allCals = getDiscoveredCalendars();
+    const enabled = getEnabledCalendars();
+
+    calendarsListEl.innerHTML = "";
+
+    allCals.forEach(cal => {
+      const row = document.createElement("label");
+      row.className = "agenda-cal-checkbox-row";
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.value = cal.name;
+      cb.checked = enabled.includes(cal.name);
+
+      cb.addEventListener("change", () => {
+        if (cb.checked) {
+          if (!agendaSettings.enabledCalendars.includes(cal.name)) {
+            agendaSettings.enabledCalendars.push(cal.name);
+          }
+        } else {
+          agendaSettings.enabledCalendars = agendaSettings.enabledCalendars.filter(n => n !== cal.name);
+        }
+        chrome.storage.local.set({ agendaSettings });
+        updateBadge();
+        renderCalendar();
+        renderEvents();
+      });
+
+      const dot = document.createElement("span");
+      dot.className = "agenda-cal-dot";
+      dot.style.background = cal.color || "#3b82f6";
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "agenda-cal-name";
+      nameSpan.textContent = cal.name;
+      nameSpan.title = cal.name;
+
+      row.appendChild(cb);
+      row.appendChild(dot);
+      row.appendChild(nameSpan);
+      calendarsListEl.appendChild(row);
+    });
+  }
+
+  // Rendu de la grille mensuelle avec indicateurs
   function renderCalendar() {
     if (!daysContainer || !monthTitle) return;
 
@@ -851,7 +1098,7 @@ function setupAgendaWidget() {
 
     const todayKey = toDateKey(new Date());
     const selectedKey = toDateKey(selectedDate);
-    const events = getActiveEvents();
+    const activeDates = getActiveEventDatesSet();
 
     for (let i = firstDayIndex - 1; i >= 0; i--) {
       const dayNum = daysInPrevMonth - i;
@@ -862,7 +1109,7 @@ function setupAgendaWidget() {
       cell.className = "agenda-day other-month";
       cell.textContent = dayNum;
       if (cellKey === selectedKey) cell.classList.add("selected");
-      if (events[cellKey] && events[cellKey].length > 0) {
+      if (activeDates.has(cellKey)) {
         const dot = document.createElement("span");
         dot.className = "agenda-day-dot";
         cell.appendChild(dot);
@@ -887,7 +1134,7 @@ function setupAgendaWidget() {
       if (cellKey === todayKey) cell.classList.add("today");
       if (cellKey === selectedKey) cell.classList.add("selected");
 
-      if (events[cellKey] && events[cellKey].length > 0) {
+      if (activeDates.has(cellKey)) {
         const dot = document.createElement("span");
         dot.className = "agenda-day-dot";
         cell.appendChild(dot);
@@ -911,7 +1158,7 @@ function setupAgendaWidget() {
       cell.className = "agenda-day other-month";
       cell.textContent = dayNum;
       if (cellKey === selectedKey) cell.classList.add("selected");
-      if (events[cellKey] && events[cellKey].length > 0) {
+      if (activeDates.has(cellKey)) {
         const dot = document.createElement("span");
         dot.className = "agenda-day-dot";
         cell.appendChild(dot);
@@ -926,12 +1173,11 @@ function setupAgendaWidget() {
     }
   }
 
-  // Rendu des événements selon les règles visuelles d'AgendaBIP
+  // Rendu de la liste des événements du jour
   function renderEvents() {
     if (!eventsList) return;
     const selKey = toDateKey(selectedDate);
-    const events = getActiveEvents();
-    const dayEvents = events[selKey] || [];
+    const dayEvents = getFilteredEventsForDate(selKey);
 
     const options = { weekday: "short", day: "numeric", month: "short" };
     if (selectedDayText) {
@@ -943,12 +1189,23 @@ function setupAgendaWidget() {
 
     eventsList.innerHTML = "";
 
+    const enabled = getEnabledCalendars();
+    if (enabled.length === 0) {
+      eventsList.innerHTML = '<div class="agenda-empty-events" style="color: #fca5a5;">Aucun calendrier coché. Ouvrez ⚙️ pour cocher vos calendriers.</div>';
+      return;
+    }
+
     if (dayEvents.length === 0) {
       eventsList.innerHTML = '<div class="agenda-empty-events">Aucun rendez-vous pour ce jour</div>';
       return;
     }
 
-    const sorted = [...dayEvents].sort((a, b) => (a.time || "00:00").localeCompare(b.time || "00:00"));
+    // Tri chronologique
+    const sorted = [...dayEvents].sort((a, b) => {
+      const tA = a.timeStr === "Journée" ? "00:00" : a.timeStr;
+      const tB = b.timeStr === "Journée" ? "00:00" : b.timeStr;
+      return tA.localeCompare(tB);
+    });
 
     const now = new Date();
     const isToday = selKey === toDateKey(now);
@@ -960,13 +1217,16 @@ function setupAgendaWidget() {
       const item = document.createElement("div");
       item.className = "agenda-event-item";
 
-      // Règle AgendaBIP : griser légèrement si l'heure est passée aujourd'hui
-      const isPast = isToday && ev.time && ev.time < currentTimeStr;
+      const calColor = CALENDAR_COLOR_PALETTE[ev.calendarTitle] || "#3b82f6";
+      item.style.borderLeftColor = calColor;
+
+      const isPast = isToday && ev.timeStr !== "Journée" && ev.timeStr < currentTimeStr;
       if (isPast) item.classList.add("past");
 
       const timeSpan = document.createElement("span");
       timeSpan.className = "agenda-event-time";
-      timeSpan.textContent = ev.time || "Journée";
+      timeSpan.textContent = ev.timeStr;
+      timeSpan.style.color = calColor;
 
       const detailsBox = document.createElement("div");
       detailsBox.className = "agenda-event-details";
@@ -974,20 +1234,26 @@ function setupAgendaWidget() {
       const titleSpan = document.createElement("span");
       titleSpan.className = "agenda-event-title";
       titleSpan.textContent = ev.title;
-      titleSpan.title = `${ev.title} (${ev.time || "Journée entière"})`;
+      titleSpan.title = `${ev.title} (${ev.timeStr}) — ${ev.calendarTitle}`;
+
+      // Si lien Google Agenda
+      if (ev.htmlLink) {
+        titleSpan.style.cursor = "pointer";
+        titleSpan.addEventListener("click", () => window.open(ev.htmlLink, "_blank"));
+      }
 
       const calTag = document.createElement("span");
       calTag.className = "agenda-event-cal-tag";
-      calTag.textContent = ev.calName || activeBadge.textContent;
+      calTag.innerHTML = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${calColor};margin-right:3px;"></span>${ev.calendarTitle}`;
 
       detailsBox.appendChild(titleSpan);
       detailsBox.appendChild(calTag);
 
-      // Actions rapides AgendaBIP : Reporter (+15m, +1h, Demain) et Supprimer
+      // Actions
       const actionsBox = document.createElement("div");
       actionsBox.className = "agenda-event-actions";
 
-      // Bouton Reporter
+      // Reporter
       const postponeBtn = document.createElement("button");
       postponeBtn.type = "button";
       postponeBtn.className = "agenda-event-btn-action";
@@ -995,57 +1261,54 @@ function setupAgendaWidget() {
       postponeBtn.title = "Reporter : Clic = +15min | Shift+Clic = Demain même heure";
       postponeBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (e.shiftKey) {
-          // Reporter à demain même heure
-          const tomorrow = new Date(selectedDate);
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          const tomKey = toDateKey(tomorrow);
-          dayEvents.splice(idx, 1);
-          if (dayEvents.length === 0) delete events[selKey];
-          if (!events[tomKey]) events[tomKey] = [];
-          events[tomKey].push({ ...ev });
-          chrome.storage.local.set({ agendaSettings });
-          renderCalendar();
-          renderEvents();
-          showToast(`« ${ev.title} » reporté à demain !`);
-          return;
-        }
-
-        // Décaler de +15 min
-        let [h, m] = (ev.time || "09:00").split(":").map(Number);
-        m += 15;
-        if (m >= 60) {
-          h = (h + 1) % 24;
-          m -= 60;
-        }
-        ev.time = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-        chrome.storage.local.set({ agendaSettings });
-        renderEvents();
-        showToast(`« ${ev.title} » décalé à ${ev.time}`);
-      });
-
-      // Bouton Supprimer
-      const delBtn = document.createElement("button");
-      delBtn.type = "button";
-      delBtn.className = "agenda-event-btn-action del";
-      delBtn.textContent = "✕";
-      delBtn.title = "Supprimer ce rendez-vous";
-      delBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        dayEvents.splice(idx, 1);
-        if (dayEvents.length === 0) {
-          delete events[selKey];
+        if (ev.isLocal && ev.rawEv && ev.agKey) {
+          if (e.shiftKey) {
+            const tomorrow = new Date(selectedDate);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const tomKey = toDateKey(tomorrow);
+            const list = agendaSettings.agendas[ev.agKey].events[selKey] || [];
+            const localIdx = list.findIndex(x => x.id === ev.id);
+            if (localIdx !== -1) list.splice(localIdx, 1);
+            if (!agendaSettings.agendas[ev.agKey].events[tomKey]) agendaSettings.agendas[ev.agKey].events[tomKey] = [];
+            agendaSettings.agendas[ev.agKey].events[tomKey].push(ev.rawEv);
+            chrome.storage.local.set({ agendaSettings });
+            renderCalendar();
+            renderEvents();
+            showToast(`« ${ev.title} » reporté à demain !`);
+          } else {
+            let [h, m] = (ev.rawEv.time || "09:00").split(":").map(Number);
+            m += 15;
+            if (m >= 60) { h = (h + 1) % 24; m -= 60; }
+            ev.rawEv.time = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+            chrome.storage.local.set({ agendaSettings });
+            renderEvents();
+            showToast(`« ${ev.title} » décalé à ${ev.rawEv.time}`);
+          }
         } else {
-          events[selKey] = dayEvents;
+          showToast("Événement Google : utilisez le lien pour le modifier dans Google Calendar");
         }
-        chrome.storage.local.set({ agendaSettings });
-        renderCalendar();
-        renderEvents();
-        showToast("Rendez-vous supprimé");
       });
 
       actionsBox.appendChild(postponeBtn);
-      actionsBox.appendChild(delBtn);
+
+      if (ev.isLocal) {
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "agenda-event-btn-action del";
+        delBtn.textContent = "✕";
+        delBtn.title = "Supprimer ce rendez-vous";
+        delBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const list = agendaSettings.agendas[ev.agKey].events[selKey] || [];
+          const localIdx = list.findIndex(x => x.id === ev.id);
+          if (localIdx !== -1) list.splice(localIdx, 1);
+          chrome.storage.local.set({ agendaSettings });
+          renderCalendar();
+          renderEvents();
+          showToast("Rendez-vous supprimé");
+        });
+        actionsBox.appendChild(delBtn);
+      }
 
       item.appendChild(timeSpan);
       item.appendChild(detailsBox);
@@ -1054,20 +1317,19 @@ function setupAgendaWidget() {
     });
   }
 
+  // Navigation mois
   if (prevMonthBtn) {
     prevMonthBtn.addEventListener("click", () => {
       viewDate.setMonth(viewDate.getMonth() - 1);
       renderCalendar();
     });
   }
-
   if (nextMonthBtn) {
     nextMonthBtn.addEventListener("click", () => {
       viewDate.setMonth(viewDate.getMonth() + 1);
       renderCalendar();
     });
   }
-
   if (todayBtn) {
     todayBtn.addEventListener("click", () => {
       viewDate = new Date();
@@ -1077,12 +1339,13 @@ function setupAgendaWidget() {
     });
   }
 
+  // Ajout de rendez-vous manuel
   if (addEventBtn) {
     addEventBtn.addEventListener("click", () => {
       const selKey = toDateKey(selectedDate);
       const defaultTime = "09:00";
       const input = prompt(
-        `Ajouter un rendez-vous pour le ${selectedDate.toLocaleDateString("fr-FR")}\nFormat : [Heure] Titre (ex: 14:30 Réunion DVRC)`,
+        `Ajouter un rendez-vous pour le ${selectedDate.toLocaleDateString("fr-FR")}\nFormat : [Heure] Titre (ex: 14:30 Réunion)`,
         `${defaultTime} `
       );
       if (!input || !input.trim()) return;
@@ -1097,10 +1360,12 @@ function setupAgendaWidget() {
         title = match[2] || "Rendez-vous";
       }
 
-      const events = getActiveEvents();
-      if (!events[selKey]) events[selKey] = [];
-      events[selKey].push({ id: Date.now().toString(), time, title });
+      if (!agendaSettings.agendas) agendaSettings.agendas = {};
+      const agKey = "Agenda_Privé_TZT";
+      if (!agendaSettings.agendas[agKey]) agendaSettings.agendas[agKey] = { name: agKey, events: {} };
+      if (!agendaSettings.agendas[agKey].events[selKey]) agendaSettings.agendas[agKey].events[selKey] = [];
 
+      agendaSettings.agendas[agKey].events[selKey].push({ id: Date.now().toString(), time, title });
       chrome.storage.local.set({ agendaSettings });
       renderCalendar();
       renderEvents();
@@ -1108,16 +1373,12 @@ function setupAgendaWidget() {
     });
   }
 
+  // Panneau des paramètres (Roue ⚙️)
   if (settingsBtn && settingsPanel) {
     settingsBtn.addEventListener("click", () => {
       const isHidden = settingsPanel.classList.contains("hidden");
       if (isHidden) {
-        if (agendaSelect) agendaSelect.value = agendaSettings.activeAgenda || "prive_tzt";
-        if (customNameInput) customNameInput.value = agendaSettings.customName || "";
-        if (syncUrlInput) syncUrlInput.value = agendaSettings.syncUrl || "";
-        if (customNameRow) {
-          customNameRow.classList.toggle("hidden", agendaSelect.value !== "custom");
-        }
+        renderCalendarsCheckboxes();
         settingsPanel.classList.remove("hidden");
       } else {
         settingsPanel.classList.add("hidden");
@@ -1125,24 +1386,41 @@ function setupAgendaWidget() {
     });
   }
 
-  if (agendaSelect && customNameRow) {
-    agendaSelect.addEventListener("change", () => {
-      customNameRow.classList.toggle("hidden", agendaSelect.value !== "custom");
+  if (checkAllBtn) {
+    checkAllBtn.addEventListener("click", () => {
+      const allCals = getDiscoveredCalendars();
+      agendaSettings.enabledCalendars = allCals.map(c => c.name);
+      chrome.storage.local.set({ agendaSettings });
+      renderCalendarsCheckboxes();
+      updateBadge();
+      renderCalendar();
+      renderEvents();
+      showToast("Tous les calendriers sont cochés");
+    });
+  }
+
+  if (uncheckAllBtn) {
+    uncheckAllBtn.addEventListener("click", () => {
+      agendaSettings.enabledCalendars = [];
+      chrome.storage.local.set({ agendaSettings });
+      renderCalendarsCheckboxes();
+      updateBadge();
+      renderCalendar();
+      renderEvents();
+      showToast("Aucun calendrier coché");
+    });
+  }
+
+  if (syncNowBtn) {
+    syncNowBtn.addEventListener("click", () => {
+      syncGoogleCalendarAndTasks(false);
     });
   }
 
   if (saveSettingsBtn && settingsPanel) {
     saveSettingsBtn.addEventListener("click", () => {
-      agendaSettings.activeAgenda = agendaSelect ? agendaSelect.value : "prive_tzt";
-      agendaSettings.customName = customNameInput ? customNameInput.value.trim() : "";
-      agendaSettings.syncUrl = syncUrlInput ? syncUrlInput.value.trim() : "";
-
-      chrome.storage.local.set({ agendaSettings });
-      updateBadge();
-      renderCalendar();
-      renderEvents();
       settingsPanel.classList.add("hidden");
-      showToast(`Agenda actif : ${activeBadge.textContent}`);
+      showToast("Réglages appliqués");
     });
   }
 
@@ -1152,13 +1430,18 @@ function setupAgendaWidget() {
     });
   }
 
-  updateBadge();
-  renderCalendar();
-  renderEvents();
+  refreshAgendaDisplay = () => {
+    updateBadge();
+    renderCalendarsCheckboxes();
+    renderCalendar();
+    renderEvents();
+  };
+
+  refreshAgendaDisplay();
 }
 
 // ========================================================
-// ✅ WIDGET TÂCHES AVANCÉ (STYLE AGENDABIP, GROUPES & P0)
+// ✅ WIDGET TÂCHES AVANCÉ (AVEC GOOGLE TASKS & GROUPES DYNAMIQUES)
 // ========================================================
 function setupTasksWidget() {
   const widget = document.getElementById("tasksWidget");
@@ -1166,11 +1449,13 @@ function setupTasksWidget() {
 
   const totalBadge = document.getElementById("tasksTotalBadge");
   const p0AlertBadge = document.getElementById("tasksP0AlertBadge");
+  const syncBtn = document.getElementById("tasksSyncBtn");
   const addBtn = document.getElementById("tasksAddBtn");
   const filterToggleBtn = document.getElementById("tasksFilterToggleBtn");
   const filterStateText = document.getElementById("tasksFilterStateText");
   const searchInput = document.getElementById("tasksSearchInput");
   const listContainer = document.getElementById("tasksListContainer");
+  const groupsBar = document.getElementById("tasksGroupsBar");
 
   const addForm = document.getElementById("tasksAddForm");
   const newTitleInput = document.getElementById("newTaskTitleInput");
@@ -1180,8 +1465,6 @@ function setupTasksWidget() {
   const saveNewTaskBtn = document.getElementById("saveNewTaskBtn");
   const cancelNewTaskBtn = document.getElementById("cancelNewTaskBtn");
 
-  const groupTabs = widget.querySelectorAll(".task-group-tab");
-
   let activeGroup = tasksSettings.filterGroup || "all";
   let activeState = tasksSettings.filterState || "todo";
   let searchQuery = "";
@@ -1190,15 +1473,65 @@ function setupTasksWidget() {
 
   function saveTasks() {
     chrome.storage.local.set({ tasksData: tasksList, tasksSettings });
-    if (chrome.storage.sync) {
-      chrome.storage.sync.set({ tasksData: tasksList });
+  }
+
+  // Rendu dynamique de la barre des groupes de tâches
+  function renderGroupTabs() {
+    if (!groupsBar) return;
+    const groupsSet = new Set(["all", "P0"]);
+
+    tasksList.forEach(t => {
+      if (t.groupId && t.groupId !== "P0") groupsSet.add(t.groupId);
+    });
+
+    // Ordre de priorité des groupes courants
+    const PREFERRED_ORDER = ["all", "P0", "Mes tâches", "Code", "Lenna", "Léo", "Daphnee", "DVRC", "P1", "P2", "Famille", "Perso"];
+    const sortedGroups = Array.from(groupsSet).sort((a, b) => {
+      let idxA = PREFERRED_ORDER.indexOf(a);
+      let idxB = PREFERRED_ORDER.indexOf(b);
+      if (idxA === -1) idxA = 99;
+      if (idxB === -1) idxB = 99;
+      return idxA - idxB;
+    });
+
+    groupsBar.innerHTML = "";
+    sortedGroups.forEach(g => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "task-group-tab" + (activeGroup === g ? " active" : "") + (g === "P0" ? " p0-tab" : "");
+      btn.dataset.group = g;
+      btn.textContent = g === "all" ? "Toutes" : (g === "P0" ? "⚡ P0" : g);
+
+      btn.addEventListener("click", () => {
+        groupsBar.querySelectorAll(".task-group-tab").forEach(t => t.classList.remove("active"));
+        btn.classList.add("active");
+        activeGroup = g;
+        tasksSettings.filterGroup = activeGroup;
+        chrome.storage.local.set({ tasksSettings });
+        renderTasks();
+      });
+
+      groupsBar.appendChild(btn);
+    });
+
+    // Mettre à jour les options de newGroupSelect
+    if (newGroupSelect) {
+      newGroupSelect.innerHTML = "";
+      sortedGroups.filter(g => g !== "all" && g !== "P0").forEach(g => {
+        const opt = document.createElement("option");
+        opt.value = g;
+        opt.textContent = g;
+        newGroupSelect.appendChild(opt);
+      });
+      if (newGroupSelect.options.length === 0) {
+        newGroupSelect.innerHTML = '<option value="Général">Général</option>';
+      }
     }
   }
 
   function renderTasks() {
     if (!listContainer) return;
 
-    // Calculer les compteurs
     const todoTasks = tasksList.filter(t => t.status !== "done");
     const p0Tasks = todoTasks.filter(t => t.priority === "P0");
 
@@ -1212,28 +1545,25 @@ function setupTasksWidget() {
       filterStateText.textContent = activeState === "done" ? "Terminées" : "À faire";
     }
 
-    // Filtrer la liste
+    // Filtrer
     let filtered = tasksList.filter(t => {
-      // Filtre statut
       if (t.status !== activeState) return false;
 
-      // Filtre groupe
       if (activeGroup === "P0") {
         if (t.priority !== "P0") return false;
       } else if (activeGroup !== "all") {
         if ((t.groupId || "Général") !== activeGroup) return false;
       }
 
-      // Filtre recherche
       if (searchQuery) {
-        const fullText = `${t.title} ${t.groupId || ""} ${t.notes || ""}`.toLowerCase();
-        if (!fullText.includes(searchQuery)) return false;
+        const full = `${t.title} ${t.groupId || ""} ${t.notes || ""}`.toLowerCase();
+        if (!full.includes(searchQuery)) return false;
       }
 
       return true;
     });
 
-    // Tri AgendaBIP : Priorité (P0 > P1 > P2 > NONE), puis Échéance
+    // Tri AgendaBIP : P0 > P1 > P2 > NONE, puis Due date
     filtered.sort((a, b) => {
       const pA = PRIORITY_SCORES[a.priority || "NONE"] ?? 9;
       const pB = PRIORITY_SCORES[b.priority || "NONE"] ?? 9;
@@ -1247,7 +1577,7 @@ function setupTasksWidget() {
 
     if (filtered.length === 0) {
       listContainer.innerHTML = `<div style="text-align: center; color: #64748b; font-size: 11px; padding: 14px 0; font-style: italic;">
-        ${searchQuery ? "Aucune tâche trouvée pour « " + searchQuery + " »" : (activeState === "done" ? "Aucune tâche terminée." : "Aucune tâche en attente. Bravo !")}
+        ${searchQuery ? "Aucune tâche trouvée pour « " + searchQuery + " »" : (activeState === "done" ? "Aucune tâche terminée." : (tasksList.length === 0 ? "Aucune tâche Google synchronisée. Cliquez sur 🔄 pour charger vos Google Tasks !" : "Aucune tâche en attente dans ce groupe."))}
       </div>`;
       return;
     }
@@ -1261,7 +1591,6 @@ function setupTasksWidget() {
       const mainRow = document.createElement("div");
       mainRow.className = "task-row-main";
 
-      // Case à cocher ronde
       const checkBtn = document.createElement("button");
       checkBtn.type = "button";
       checkBtn.className = "task-check-btn";
@@ -1273,7 +1602,6 @@ function setupTasksWidget() {
         renderTasks();
       });
 
-      // Boîte de contenu
       const contentBox = document.createElement("div");
       contentBox.className = "task-content-box";
 
@@ -1285,7 +1613,6 @@ function setupTasksWidget() {
       const metaEl = document.createElement("div");
       metaEl.className = "task-meta";
 
-      // Badge de priorité
       if (task.priority === "P0") {
         const pBadge = document.createElement("span");
         pBadge.className = "task-priority-badge p0";
@@ -1298,12 +1625,10 @@ function setupTasksWidget() {
         metaEl.appendChild(pBadge);
       }
 
-      // Groupe
       const groupSpan = document.createElement("span");
       groupSpan.textContent = task.groupId || "Général";
       metaEl.appendChild(groupSpan);
 
-      // Échéance
       if (task.due) {
         const dueSpan = document.createElement("span");
         dueSpan.className = "task-due";
@@ -1322,27 +1647,9 @@ function setupTasksWidget() {
       contentBox.appendChild(titleEl);
       contentBox.appendChild(metaEl);
 
-      // Boutons d'actions
       const actionsBox = document.createElement("div");
       actionsBox.className = "task-actions";
 
-      // Bouton ajouter sous-tâche
-      const addSubBtn = document.createElement("button");
-      addSubBtn.type = "button";
-      addSubBtn.className = "agenda-event-btn-action";
-      addSubBtn.textContent = "+";
-      addSubBtn.title = "Ajouter une sous-tâche";
-      addSubBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const subTitle = prompt(`Ajouter une sous-tâche pour : « ${task.title} »`);
-        if (!subTitle || !subTitle.trim()) return;
-        if (!task.subtasks) task.subtasks = [];
-        task.subtasks.push({ id: Date.now().toString(), title: subTitle.trim(), done: false });
-        saveTasks();
-        renderTasks();
-      });
-
-      // Bouton supprimer tâche
       const delBtn = document.createElement("button");
       delBtn.type = "button";
       delBtn.className = "agenda-event-btn-action del";
@@ -1359,7 +1666,6 @@ function setupTasksWidget() {
         }
       });
 
-      actionsBox.appendChild(addSubBtn);
       actionsBox.appendChild(delBtn);
 
       mainRow.appendChild(checkBtn);
@@ -1367,64 +1673,27 @@ function setupTasksWidget() {
       mainRow.appendChild(actionsBox);
       row.appendChild(mainRow);
 
-      // Rendu des sous-tâches s'il y en a
-      if (task.subtasks && task.subtasks.length > 0) {
-        const subContainer = document.createElement("div");
-        subContainer.className = "task-subtasks-container";
-
-        task.subtasks.forEach((st, sIdx) => {
-          const stItem = document.createElement("div");
-          stItem.className = `subtask-item${st.done ? " done" : ""}`;
-
-          const stCheck = document.createElement("button");
-          stCheck.type = "button";
-          stCheck.className = "subtask-check-btn";
-          stCheck.textContent = "✓";
-          stCheck.addEventListener("click", (e) => {
-            e.stopPropagation();
-            st.done = !st.done;
-            saveTasks();
-            renderTasks();
-          });
-
-          const stTitle = document.createElement("span");
-          stTitle.textContent = st.title;
-
-          stItem.appendChild(stCheck);
-          stItem.appendChild(stTitle);
-          subContainer.appendChild(stItem);
-        });
-
-        row.appendChild(subContainer);
-      }
-
       listContainer.appendChild(row);
     });
   }
 
-  // Onglets de groupes
-  groupTabs.forEach((tab) => {
-    tab.addEventListener("click", () => {
-      groupTabs.forEach(t => t.classList.remove("active"));
-      tab.classList.add("active");
-      activeGroup = tab.dataset.group || "all";
-      tasksSettings.filterGroup = activeGroup;
-      chrome.storage.local.set({ tasksSettings });
-      renderTasks();
-    });
-  });
-
-  // Alerte P0 en haut : clic filtre directement sur P0
   if (p0AlertBadge) {
     p0AlertBadge.addEventListener("click", () => {
-      groupTabs.forEach(t => t.classList.toggle("active", t.dataset.group === "P0"));
+      if (groupsBar) {
+        groupsBar.querySelectorAll(".task-group-tab").forEach(t => t.classList.toggle("active", t.dataset.group === "P0"));
+      }
       activeGroup = "P0";
       tasksSettings.filterGroup = "P0";
       renderTasks();
     });
   }
 
-  // Bascule À faire / Terminées
+  if (syncBtn) {
+    syncBtn.addEventListener("click", () => {
+      syncGoogleCalendarAndTasks(false);
+    });
+  }
+
   if (filterToggleBtn) {
     filterToggleBtn.addEventListener("click", () => {
       activeState = activeState === "done" ? "todo" : "done";
@@ -1434,7 +1703,6 @@ function setupTasksWidget() {
     });
   }
 
-  // Recherche dynamique
   if (searchInput) {
     searchInput.addEventListener("input", () => {
       searchQuery = searchInput.value.trim().toLowerCase();
@@ -1442,14 +1710,11 @@ function setupTasksWidget() {
     });
   }
 
-  // Formulaire d'ajout rapide
   if (addBtn && addForm) {
     addBtn.addEventListener("click", () => {
       const isHidden = addForm.classList.contains("hidden");
       addForm.classList.toggle("hidden", !isHidden);
-      if (isHidden && newTitleInput) {
-        newTitleInput.focus();
-      }
+      if (isHidden && newTitleInput) newTitleInput.focus();
     });
   }
 
@@ -1463,10 +1728,9 @@ function setupTasksWidget() {
     saveNewTaskBtn.addEventListener("click", () => {
       const title = newTitleInput ? newTitleInput.value.trim() : "";
       if (!title) {
-        showToast("Veuillez saisir un titre de tâche");
+        showToast("Veuillez saisir un titre");
         return;
       }
-
       const priority = newPrioritySelect ? newPrioritySelect.value : "NONE";
       const groupId = newGroupSelect ? newGroupSelect.value : "Général";
       const due = newDueDateInput ? newDueDateInput.value : "";
@@ -1482,6 +1746,7 @@ function setupTasksWidget() {
       });
 
       saveTasks();
+      renderGroupTabs();
       renderTasks();
 
       if (newTitleInput) newTitleInput.value = "";
@@ -1491,8 +1756,14 @@ function setupTasksWidget() {
     });
   }
 
-  renderTasks();
+  refreshTasksDisplay = () => {
+    renderGroupTabs();
+    renderTasks();
+  };
+
+  refreshTasksDisplay();
 }
+
 
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -1519,6 +1790,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupCalculatorWidget();
   setupAgendaWidget();
   setupTasksWidget();
+  // Synchronisation silencieuse immédiate au démarrage si le serveur local est actif
+  syncGoogleCalendarAndTasks(true);
   setupAllWidgetsDrag();
   setupAllWidgetsResize();
   setupWeatherControls();
@@ -3854,7 +4127,7 @@ function displayRecentItems(container, items) {
 async function loadAllWidgetsSettings() {
   return new Promise((resolve) => {
     chrome.storage.local.get(
-      ["clockSettings", "notesSettings", "pomodoroSettings", "recentSettings", "calculatorSettings", "agendaSettings", "tasksSettings", "tasksData"],
+      ["clockSettings", "notesSettings", "pomodoroSettings", "recentSettings", "calculatorSettings", "agendaSettings", "tasksSettings", "tasksData", "googleEventsList", "googleCalendarsList"],
       (res) => {
         clockSettings = { ...DEFAULT_CLOCK_SETTINGS, ...(res.clockSettings || {}) };
         notesSettings = { ...DEFAULT_NOTES_SETTINGS, ...(res.notesSettings || {}) };
@@ -3865,6 +4138,8 @@ async function loadAllWidgetsSettings() {
         if (!agendaSettings.agendas) agendaSettings.agendas = { ...DEFAULT_AGENDA_SETTINGS.agendas };
         tasksSettings = { ...DEFAULT_TASKS_SETTINGS, ...(res.tasksSettings || {}) };
         if (Array.isArray(res.tasksData)) tasksList = res.tasksData;
+        if (Array.isArray(res.googleEventsList)) googleEventsList = res.googleEventsList;
+        if (Array.isArray(res.googleCalendarsList)) googleCalendarsList = res.googleCalendarsList;
 
         updateAllWidgetsVisibility();
         resolve();

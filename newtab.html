@@ -185,32 +185,28 @@
             </div>
           </div>
 
-          <!-- Panneau de configuration déroulant (Roue crantée) -->
+          <!-- Panneau de configuration déroulant (Roue crantée avec cases à cocher multi-calendriers) -->
           <div id="agendaSettingsPanel" class="agenda-settings-panel hidden">
-            <div class="agenda-settings-title">⚙️ Configuration de l'Agenda</div>
-            <div class="agenda-setting-row">
-              <label for="agendaSelect">Agenda actif :</label>
-              <select id="agendaSelect" class="agenda-select">
-                <option value="prive_tzt">🔵 Agenda_Privé_TZT</option>
-                <option value="reveil_tzt">🟢 REVEIL-RAPPEL TZT</option>
-                <option value="autres_tzt">🟡 Autres TZT</option>
-                <option value="partage_tzt">🟣 Vincent touzot (Partage)</option>
-                <option value="famille_amr">🌸 Emilie amor 150</option>
-                <option value="lune">🌙 Phases de la Lune & Éphéméride</option>
-                <option value="all">📅 Tous les agendas</option>
-                <option value="custom">➕ Agenda Personnalisé...</option>
-              </select>
+            <div class="agenda-settings-title" style="display: flex; justify-content: space-between; align-items: center;">
+              <span>⚙️ Calendriers à afficher</span>
+              <button type="button" id="agendaSyncNowBtn" class="btn-xs btn-xs-primary" style="padding: 2px 7px; font-weight: 600;" title="Synchroniser avec Google Agenda & Tasks">🔄 Actualiser Google</button>
             </div>
-            <div id="agendaCustomNameRow" class="agenda-setting-row hidden">
-              <label for="agendaCustomNameInput">Nom de l'agenda :</label>
-              <input type="text" id="agendaCustomNameInput" class="agenda-input" placeholder="Ex: Mairie, Médical, Association...">
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; margin: 4px 0;">
+              <span style="font-size: 10px; color: #94a3b8;">Cochez les calendriers à afficher :</span>
+              <div style="display: flex; gap: 4px;">
+                <button type="button" id="agendaCheckAllBtn" class="btn-xs" style="padding: 1px 5px; font-size: 9.5px;">Tous</button>
+                <button type="button" id="agendaUncheckAllBtn" class="btn-xs" style="padding: 1px 5px; font-size: 9.5px;">Aucun</button>
+              </div>
             </div>
-            <div class="agenda-setting-row">
-              <label for="agendaSyncUrlInput">Lien iCal / Google / Web :</label>
-              <input type="text" id="agendaSyncUrlInput" class="agenda-input" placeholder="URL Google Agenda, lien web ou iCal (.ics)">
+
+            <!-- Liste dynamique de cases à cocher de calendriers -->
+            <div id="agendaCalendarsList" class="agenda-calendars-checkbox-list">
+              <!-- Rempli dynamiquement -->
             </div>
+
             <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px;">
-              <button type="button" id="agendaSaveSettingsBtn" class="btn-xs btn-xs-primary">Enregistrer</button>
+              <button type="button" id="agendaSaveSettingsBtn" class="btn-xs btn-xs-primary">Appliquer</button>
               <button type="button" id="agendaCloseSettingsBtn" class="btn-xs">Fermer</button>
             </div>
           </div>
@@ -262,6 +258,7 @@
               <button type="button" id="tasksP0AlertBadge" class="tasks-p0-alert-badge hidden" title="Tâches P0 urgentes immédiates !">⚡ P0 : 0</button>
             </div>
             <div class="tasks-header-actions">
+              <button type="button" id="tasksSyncBtn" class="widget-header-btn" title="Synchroniser avec Google Tasks">🔄</button>
               <button type="button" id="tasksAddBtn" class="widget-header-btn" title="Ajouter une tâche (Titre, Priorité, Groupe, Échéance)">+</button>
               <button type="button" id="tasksFilterToggleBtn" class="widget-header-btn" title="Filtrer : À faire / Terminées">📋</button>
             </div>
