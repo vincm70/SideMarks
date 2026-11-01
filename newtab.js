@@ -4065,6 +4065,7 @@ async function loadWeatherSettings() {
 function saveWeatherSettings() {
   chrome.storage.local.set({ weatherSettings }, () => {
     updateWeatherUI();
+    if (typeof renderWidgetDesktopBadges === "function") renderWidgetDesktopBadges();
   });
 }
 
@@ -4077,7 +4078,6 @@ function updateWeatherUI() {
     return;
   }
 
-  weatherWidget.classList.remove("hidden");
   if (weatherConfigBlock) weatherConfigBlock.style.display = "block";
   if (weatherEnabledCheckbox) weatherEnabledCheckbox.checked = true;
 
@@ -4092,9 +4092,15 @@ function updateWeatherUI() {
   }
   if (weatherCityInput) weatherCityInput.value = weatherSettings.city || "";
 
-  // Positionnement en mode libre (%)
-  weatherWidget.style.left = `${weatherSettings.posX}%`;
-  weatherWidget.style.top = `${weatherSettings.posY}%`;
+  // Visibilité et géométrie INDÉPENDANTE PAR BUREAU (v5.6)
+  const show = shouldShowWidgetOnCurrentPage(weatherSettings);
+  weatherWidget.classList.toggle("hidden", !show);
+  weatherWidget.style.display = show ? "" : "none";
+
+  const geo = getWidgetGeometryForCurrentPage(weatherSettings);
+  weatherWidget.style.left = `${geo.posX}%`;
+  weatherWidget.style.top = `${geo.posY}%`;
+  if (geo.width) applyWidgetDimensions(weatherWidget, geo.width, geo.height);
 
   if (isLiveEditMode) {
     weatherWidget.classList.add("edit-active");
@@ -4448,7 +4454,8 @@ function setupWidgetDrag(widgetEl, getPos, savePos, title) {
   widgetEl.addEventListener("pointerdown", (e) => {
     if (!isLiveEditMode) return;
     if (e.button !== 0) return;
-    if (e.target.closest("button") || e.target.closest("input") || e.target.closest("textarea") || e.target.closest("a")) {
+    const isDragHandle = Boolean(e.target.closest(".widget-drag-handle") || e.target.closest(".weather-edit-handle"));
+    if (!isDragHandle && (e.target.closest("button") || e.target.closest("input") || e.target.closest("textarea") || e.target.closest("a"))) {
       return;
     }
 
@@ -6592,6 +6599,7 @@ function setupWeatherControls() {
     weatherResetPosBtn.addEventListener("click", () => {
       weatherSettings.posX = 78;
       weatherSettings.posY = 3.5;
+      saveWidgetGeometryForCurrentPage(weatherSettings, { posX: 78, posY: 3.5 });
       saveWeatherSettings();
       showToast("Position météo réinitialisée (en haut à droite)");
     });
