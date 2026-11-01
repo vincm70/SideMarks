@@ -191,10 +191,13 @@
             <div class="agenda-setting-row">
               <label for="agendaSelect">Agenda actif :</label>
               <select id="agendaSelect" class="agenda-select">
-                <option value="default">🔵 Agenda Principal</option>
-                <option value="rdvtzt">🟢 Rendez-vous RDVTZT</option>
-                <option value="famille">🟣 Famille & Scolaire</option>
-                <option value="pro">🟠 Professionnel</option>
+                <option value="prive_tzt">🔵 Agenda_Privé_TZT</option>
+                <option value="reveil_tzt">🟢 REVEIL-RAPPEL TZT</option>
+                <option value="autres_tzt">🟡 Autres TZT</option>
+                <option value="partage_tzt">🟣 Vincent touzot (Partage)</option>
+                <option value="famille_amr">🌸 Emilie amor 150</option>
+                <option value="lune">🌙 Phases de la Lune & Éphéméride</option>
+                <option value="all">📅 Tous les agendas</option>
                 <option value="custom">➕ Agenda Personnalisé...</option>
               </select>
             </div>
@@ -248,6 +251,74 @@
 
           <div class="widget-drag-handle" title="Glisser pour déplacer l'agenda">✥ Déplacer</div>
           <div class="widget-resize-handle" title="Glisser pour redimensionner l'agenda">⋱</div>
+        </div>
+
+        <!-- ✅ WIDGET TÂCHES AVANCÉ (STYLE AGENDABIP TASKS & P0) -->
+        <div id="tasksWidget" class="floating-widget tasks-widget hidden" title="Tâches & Priorités">
+          <div class="widget-header">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="widget-title">✅ Tâches</span>
+              <span id="tasksTotalBadge" class="tasks-count-badge">0</span>
+              <button type="button" id="tasksP0AlertBadge" class="tasks-p0-alert-badge hidden" title="Tâches P0 urgentes immédiates !">⚡ P0 : 0</button>
+            </div>
+            <div class="tasks-header-actions">
+              <button type="button" id="tasksAddBtn" class="widget-header-btn" title="Ajouter une tâche (Titre, Priorité, Groupe, Échéance)">+</button>
+              <button type="button" id="tasksFilterToggleBtn" class="widget-header-btn" title="Filtrer : À faire / Terminées">📋</button>
+            </div>
+          </div>
+
+          <!-- Barre de groupes / catégories de tâches (scroll horizontal style AgendaBIP) -->
+          <div class="tasks-groups-bar" id="tasksGroupsBar">
+            <button type="button" class="task-group-tab active" data-group="all">Toutes</button>
+            <button type="button" class="task-group-tab p0-tab" data-group="P0">⚡ P0</button>
+            <button type="button" class="task-group-tab" data-group="Code">Code</button>
+            <button type="button" class="task-group-tab" data-group="DVRC">DVRC</button>
+            <button type="button" class="task-group-tab" data-group="Famille">Famille</button>
+            <button type="button" class="task-group-tab" data-group="Perso">Perso</button>
+          </div>
+
+          <!-- Barre d'état et recherche rapide -->
+          <div class="tasks-subbar">
+            <span id="tasksFilterStateText" class="tasks-filter-state-text">À faire</span>
+            <input type="text" id="tasksSearchInput" class="tasks-search-input" placeholder="🔍 Filtrer les tâches...">
+          </div>
+
+          <!-- Liste des tâches avec sous-tâches -->
+          <div class="tasks-body">
+            <div id="tasksListContainer" class="tasks-list-container">
+              <!-- Rempli dynamiquement -->
+            </div>
+          </div>
+
+          <!-- Formulaire d'ajout rapide inline (déroulant) -->
+          <div id="tasksAddForm" class="tasks-add-form hidden">
+            <div style="display: flex; gap: 4px;">
+              <input type="text" id="newTaskTitleInput" class="tasks-input" placeholder="Titre de la tâche..." style="flex: 1;">
+              <select id="newTaskPrioritySelect" class="tasks-select" title="Priorité" style="width: 100px;">
+                <option value="NONE">Normal</option>
+                <option value="P0" style="color: #ef4444; font-weight: bold;">⚡ P0 (Urgent)</option>
+                <option value="P1" style="color: #f59e0b; font-weight: bold;">P1 (Important)</option>
+                <option value="P2" style="color: #3b82f6;">P2</option>
+              </select>
+            </div>
+            <div style="display: flex; gap: 4px; align-items: center; justify-content: space-between; margin-top: 5px;">
+              <select id="newTaskGroupSelect" class="tasks-select" style="flex: 1;">
+                <option value="Général">Général</option>
+                <option value="Code">Code</option>
+                <option value="DVRC">DVRC</option>
+                <option value="Famille">Famille</option>
+                <option value="Perso">Perso</option>
+              </select>
+              <input type="date" id="newTaskDueDateInput" class="tasks-date-input" title="Date d'échéance optionnelle">
+              <div style="display: flex; gap: 4px;">
+                <button type="button" id="saveNewTaskBtn" class="btn-xs btn-xs-primary">OK</button>
+                <button type="button" id="cancelNewTaskBtn" class="btn-xs">✕</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="widget-drag-handle" title="Glisser pour déplacer les tâches">✥ Déplacer</div>
+          <div class="widget-resize-handle" title="Glisser pour redimensionner les tâches">⋱</div>
         </div>
       </nav>
 

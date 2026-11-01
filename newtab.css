@@ -3008,3 +3008,425 @@ html, body {
   text-align: center;
   padding: 6px 0;
 }
+
+
+/* ==========================================================================
+   📅 RÈGLES D'AFFICHAGE AGENDABIP (ÉVÉNEMENTS & CALENDRIER)
+   ========================================================================== */
+.agenda-event-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-left: 3px solid #3b82f6;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 11px;
+  transition: all 0.15s ease;
+}
+
+.agenda-event-item:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-left-color: #60a5fa;
+}
+
+.agenda-event-item.past {
+  opacity: 0.55;
+  filter: grayscale(0.3);
+}
+
+.agenda-event-time {
+  font-weight: 700;
+  color: #93c5fd;
+  font-size: 10px;
+  background: rgba(59, 130, 246, 0.15);
+  padding: 2px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.agenda-event-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.agenda-event-title {
+  color: #f1f5f9;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agenda-event-cal-tag {
+  font-size: 9.5px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.agenda-event-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.agenda-event-btn-action {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+
+.agenda-event-btn-action:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.agenda-event-btn-action.del:hover {
+  background: rgba(239, 68, 68, 0.25);
+  color: #ef4444;
+}
+
+/* ==========================================================================
+   ✅ WIDGET TÂCHES AVANCÉ (STYLE AGENDABIP & PRIORITÉS P0)
+   ========================================================================== */
+.tasks-widget {
+  width: 290px;
+  min-width: 260px;
+  max-width: 440px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tasks-count-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(59, 130, 246, 0.25);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  border-radius: 10px;
+  padding: 1px 6px;
+}
+
+.tasks-p0-alert-badge {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border: 1px solid #f87171;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 10px;
+  cursor: pointer;
+  animation: pulseP0 2s infinite ease-in-out;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.6);
+}
+
+@keyframes pulseP0 {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.85; }
+}
+
+.tasks-groups-bar {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 3px;
+  scrollbar-width: none;
+}
+.tasks-groups-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.task-group-tab {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.task-group-tab:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.task-group-tab.active {
+  background: #2563eb;
+  border-color: #60a5fa;
+  color: #fff;
+  box-shadow: 0 0 8px rgba(37, 99, 235, 0.5);
+}
+
+.task-group-tab.p0-tab {
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.35);
+}
+.task-group-tab.p0-tab.active {
+  background: #dc2626;
+  border-color: #f87171;
+  color: #fff;
+  box-shadow: 0 0 8px rgba(220, 38, 38, 0.6);
+}
+
+.tasks-subbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tasks-filter-state-text {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.tasks-search-input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 10.5px;
+  padding: 3px 7px;
+  outline: none;
+}
+.tasks-search-input:focus {
+  border-color: #3b82f6;
+}
+
+.tasks-body {
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.tasks-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.task-row {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 3px solid #64748b;
+  border-radius: 6px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.task-row:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.task-row.priority-P0 {
+  border-left: 3px solid #ef4444;
+  background: rgba(239, 68, 68, 0.07);
+}
+
+.task-row.priority-P1 {
+  border-left: 3px solid #f59e0b;
+}
+
+.task-row.priority-P2 {
+  border-left: 3px solid #3b82f6;
+}
+
+.task-row.done {
+  opacity: 0.55;
+}
+
+.task-row-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-check-btn {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid #64748b;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+  color: transparent;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.task-check-btn:hover {
+  border-color: #3b82f6;
+}
+
+.task-row.done .task-check-btn {
+  background: #10b981;
+  border-color: #10b981;
+  color: #fff;
+}
+
+.task-content-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.task-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #f1f5f9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-row.done .task-title {
+  text-decoration: line-through;
+  color: #94a3b8;
+}
+
+.task-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9.5px;
+  color: #64748b;
+}
+
+.task-priority-badge {
+  font-size: 8.5px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.task-priority-badge.p0 {
+  background: rgba(239, 68, 68, 0.25);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.task-priority-badge.p1 {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+}
+
+.task-due.overdue {
+  color: #ef4444;
+  font-weight: 700;
+}
+
+.task-due.today {
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+.task-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.task-subtasks-container {
+  padding-left: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 4px;
+  margin-top: 2px;
+}
+
+.subtask-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #cbd5e1;
+}
+
+.subtask-check-btn {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid #64748b;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  line-height: 1;
+  color: transparent;
+}
+
+.subtask-item.done .subtask-check-btn {
+  background: #10b981;
+  border-color: #10b981;
+  color: #fff;
+}
+
+.subtask-item.done span {
+  text-decoration: line-through;
+  color: #64748b;
+}
+
+/* Formulaire d'ajout rapide inline */
+.tasks-add-form {
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.tasks-input, .tasks-select, .tasks-date-input {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 11px;
+  padding: 4px 6px;
+  outline: none;
+}
+
+.tasks-input:focus, .tasks-select:focus, .tasks-date-input:focus {
+  border-color: #3b82f6;
+}
+
+.tasks-select option {
+  background: #1e293b;
+  color: #fff;
+}
