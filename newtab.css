@@ -289,7 +289,7 @@ html, body {
 .floating-widget {
   position: absolute;
   z-index: 45;
-  background: rgba(15, 23, 42, 0.85);
+  background: rgba(15, 23, 42, 0.88);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -297,6 +297,11 @@ html, body {
   color: #fff;
   user-select: none;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+  max-width: calc(100vw - 20px) !important;
+  max-height: calc(100vh - 20px) !important;
+  box-sizing: border-box !important;
+  display: flex;
+  flex-direction: column;
   transition: left 0.3s cubic-bezier(0.16, 1, 0.3, 1), top 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
@@ -364,7 +369,8 @@ html, body {
   border-radius: 4px;
 }
 
-.floating-widget.edit-active .widget-resize-handle {
+.floating-widget.edit-active .widget-resize-handle,
+.floating-widget:hover .widget-resize-handle {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2821,29 +2827,34 @@ html, body {
 }
 
 /* Mode large si le widget agenda est agrandi en largeur (>= 520px) */
-.agenda-widget.agenda-wide .agenda-body {
-  display: grid;
-  grid-template-columns: 290px 1fr;
-  grid-template-rows: auto 1fr;
+.agenda-widget.agenda-wide #agendaMonthView {
+  display: grid !important;
+  grid-template-columns: 280px 1fr;
   gap: 12px;
   align-items: stretch;
 }
-.agenda-widget.agenda-wide .agenda-month-nav {
-  grid-column: 1;
-  grid-row: 1;
+.agenda-widget.agenda-wide #agendaMonthView.hidden {
+  display: none !important;
 }
-.agenda-widget.agenda-wide .agenda-calendar-grid {
+.agenda-widget.agenda-wide #agendaMonthView .agenda-calendar-grid {
   grid-column: 1;
-  grid-row: 2;
 }
-.agenda-widget.agenda-wide .agenda-events-section {
+.agenda-widget.agenda-wide #agendaMonthView .agenda-events-section {
   grid-column: 2;
-  grid-row: 1 / span 2;
   border-top: none;
   border-left: 1px solid rgba(255, 255, 255, 0.12);
   padding-top: 0;
   padding-left: 12px;
   height: 100%;
+}
+.agenda-widget.agenda-wide .agenda-planning-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+  align-items: start;
+}
+.agenda-widget.agenda-wide .agenda-planning-group-header {
+  grid-column: 1 / -1;
 }
 
 .agenda-month-nav {
@@ -3001,17 +3012,28 @@ html, body {
   align-items: center;
   justify-content: space-between;
   background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-left: 3px solid #3b82f6;
-  border-radius: 4px;
-  padding: 4px 6px;
+  border-radius: 6px;
+  padding: 5px 8px;
   font-size: 11px;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+.agenda-event-item:hover {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(96, 165, 250, 0.4);
+  transform: translateX(2px);
 }
 
 .agenda-event-time {
   font-weight: 700;
   color: #93c5fd;
-  margin-right: 6px;
   font-size: 10px;
+  background: rgba(255, 255, 255, 0.07);
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
 }
 
 .agenda-event-title {
@@ -3705,10 +3727,12 @@ html, body {
 .agenda-planning-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   flex: 1;
-  overflow-y: auto;
-  padding-right: 2px;
+  min-height: 0;
+  overflow-y: auto !important;
+  scrollbar-width: thin;
+  padding-right: 4px;
 }
 
 .agenda-planning-group-header {
@@ -3727,22 +3751,57 @@ html, body {
    ========================================================================== */
 .subtasks-fold {
   margin-top: 4px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  padding-top: 3px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 4px;
 }
 
 .subtasks-summary {
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 600;
   color: #94a3b8;
   cursor: pointer;
   user-select: none;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 0;
-  transition: color 0.15s ease;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  transition: all 0.15s ease;
   list-style: none;
+}
+.subtasks-summary:hover {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+}
+.subtasks-count-pill {
+  font-size: 9.5px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.25);
+  color: #93c5fd;
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  font-weight: 700;
+}
+.subtask-inline-add {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  padding-left: 14px;
+}
+.subtask-inline-input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  color: #fff;
+  font-size: 11px;
+  padding: 3px 6px;
+  outline: none;
+}
+.subtask-inline-input:focus {
+  border-color: #3b82f6;
 }
 .subtasks-summary::-webkit-details-marker {
   display: none;
@@ -3913,4 +3972,143 @@ html, body {
   border-radius: 14px;
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.8);
   padding: 16px 20px;
+}
+
+/* ==========================================================================
+   BADGE ET MODALE MULTI-BUREAUX POUR WIDGETS
+   ========================================================================== */
+.widget-desktop-badge {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #93c5fd;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.widget-desktop-badge:hover {
+  background: rgba(59, 130, 246, 0.25);
+  border-color: #60a5fa;
+  color: #ffffff;
+}
+
+.widget-desktops-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.15s ease-out;
+}
+.widget-desktops-modal.hidden {
+  display: none !important;
+}
+.widget-desktops-box {
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 16px;
+  width: 320px;
+  max-width: 90vw;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.widget-desktops-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.widget-desktops-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.widget-desktop-check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  font-size: 11.5px;
+  color: #e2e8f0;
+  user-select: none;
+  transition: all 0.12s ease;
+}
+.widget-desktop-check-row:hover {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(96, 165, 250, 0.3);
+}
+.widget-desktop-check-row input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: #3b82f6;
+  width: 14px;
+  height: 14px;
+}
+
+/* ==========================================================================
+   BARRE DE RECHERCHE DÉPLAÇABLE EN MODE ÉDITION
+   ========================================================================== */
+.center-search-section.free-positioned {
+  position: absolute !important;
+  margin: 0 !important;
+  width: auto !important;
+  max-width: calc(100vw - 40px) !important;
+  z-index: 44 !important;
+}
+
+.center-search-section.edit-active {
+  outline: 2px dashed #3b82f6;
+  outline-offset: 4px;
+  border-radius: 28px;
+  cursor: grab !important;
+  box-shadow: 0 0 16px rgba(59, 130, 246, 0.45);
+}
+
+.center-search-section.dragging-widget {
+  cursor: grabbing !important;
+  z-index: 10000 !important;
+  transform: scale(1.02);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7), 0 0 22px rgba(59, 130, 246, 0.8) !important;
+}
+
+.center-search-section.edit-active .search-drag-handle {
+  display: block;
+}
+
+.search-drag-handle {
+  display: none;
+  font-size: 10.5px;
+  background: rgba(59, 130, 246, 0.4);
+  border: 1px solid rgba(96, 165, 250, 0.6);
+  color: #93c5fd;
+  border-radius: 6px;
+  padding: 3px 8px;
+  margin-top: 6px;
+  text-align: center;
+  font-weight: 600;
+  cursor: grab;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+.search-drag-handle:hover {
+  background: rgba(59, 130, 246, 0.6);
+  color: #ffffff;
 }

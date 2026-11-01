@@ -180,6 +180,7 @@
               <span id="agendaActiveBadge" class="agenda-active-badge">Principal</span>
             </div>
             <div class="agenda-header-actions">
+              <button type="button" id="agendaFitSizeBtn" class="widget-header-btn" title="Ajuster la taille / Format compact pour petit écran">📐</button>
               <button type="button" id="agendaAddEventBtn" class="widget-header-btn" title="Ajouter un rendez-vous">+</button>
               <button type="button" id="agendaSettingsBtn" class="widget-header-btn agenda-gear-btn" title="Paramètres : Choisir l'agenda à afficher (Roue crantée)">⚙️</button>
             </div>
@@ -212,6 +213,9 @@
               <!-- Rempli dynamiquement -->
             </div>
 
+            <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+              <button type="button" id="agendaResetSizeBtn" class="btn-xs" style="width: 100%; padding: 5px; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(96, 165, 250, 0.4); border-radius: 6px; cursor: pointer; color: #93c5fd; font-weight: 600; font-size: 10px;" title="Rétablir une taille compacte et recentrer dans l'écran visible">📐 Réinitialiser taille & position compacte</button>
+            </div>
             <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px;">
               <button type="button" id="agendaSaveSettingsBtn" class="btn-xs btn-xs-primary">Appliquer</button>
               <button type="button" id="agendaCloseSettingsBtn" class="btn-xs">Fermer</button>
@@ -296,6 +300,7 @@
               <button type="button" id="tasksP0AlertBadge" class="tasks-p0-alert-badge hidden" title="Tâches P0 urgentes immédiates !">⚡ P0 : 0</button>
             </div>
             <div class="tasks-header-actions">
+              <button type="button" id="tasksFitSizeBtn" class="widget-header-btn" title="Ajuster la taille / Format compact pour petit écran">📐</button>
               <button type="button" id="tasksSyncBtn" class="widget-header-btn" title="Synchroniser avec Google Tasks">🔄</button>
               <button type="button" id="tasksAddBtn" class="widget-header-btn" title="Ajouter une tâche (Titre, Priorité, Groupe, Échéance)">+</button>
               <button type="button" id="tasksFilterToggleBtn" class="widget-header-btn" title="Filtrer : À faire / Terminées">📋</button>
@@ -358,7 +363,7 @@
       </nav>
 
       <!-- Centre : Recherche Multi-moteurs -->
-      <div class="center-search-section">
+      <div class="center-search-section" id="centerSearchSection">
         <form id="googleSearchForm" action="https://www.google.com/search" method="get">
           <div class="search-box-glass">
             <!-- Sélecteur de moteur de recherche (Google, DuckDuckGo, Bing, YouTube, Wikipédia) -->
@@ -427,6 +432,7 @@
               </button>
             </div>
           </div>
+          <div class="search-drag-handle widget-drag-handle" id="searchDragHandle" title="Glisser pour déplacer la barre de recherche | Double-clic pour recentrer au milieu">✥ Déplacer la recherche</div>
         </form>
       </div>
 
@@ -926,6 +932,26 @@
               Plus tard
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modale de selection Multi-Bureaux pour les widgets -->
+    <div id="widgetDesktopsModal" class="widget-desktops-modal hidden">
+      <div class="widget-desktops-box">
+        <div class="widget-desktops-title">
+          <span>🖥️</span>
+          <span id="widgetDesktopsModalTitle">Affichage sur les Bureaux</span>
+        </div>
+        <p style="font-size: 11px; color: #94a3b8; margin: 0;">
+          Cochez les bureaux sur lesquels vous souhaitez afficher ce widget :
+        </p>
+        <div class="widget-desktops-list" id="widgetDesktopsChecklist">
+          <!-- Rempli dynamiquement -->
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px;">
+          <button type="button" id="widgetDesktopsSaveBtn" class="btn-xs btn-xs-primary" style="padding: 5px 12px; font-weight: 600;">Appliquer</button>
+          <button type="button" id="widgetDesktopsCancelBtn" class="btn-xs" style="padding: 5px 10px;">Fermer</button>
         </div>
       </div>
     </div>

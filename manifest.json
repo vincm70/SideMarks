@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "default_locale": "fr",
   "name": "__MSG_appName__",
-  "version": "5.4.0",
+  "version": "5.5.0",
   "author": "TOUZIO APPS",
   "description": "__MSG_appDesc__",
   "permissions": [

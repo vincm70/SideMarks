@@ -489,6 +489,8 @@ const DEFAULT_AGENDA_SETTINGS = {
   }
 };
 
+const DEFAULT_SEARCH_BAR_SETTINGS = { posX: 50, posY: 40, freePos: false };
+let searchBarSettings = { ...DEFAULT_SEARCH_BAR_SETTINGS };
 let calculatorSettings = { ...DEFAULT_CALCULATOR_SETTINGS };
 let agendaSettings = { ...DEFAULT_AGENDA_SETTINGS };
 
@@ -508,6 +510,47 @@ let googleEventsList = [];
 let googleCalendarsList = [];
 
 // Palette de couleurs pour les calendriers connus
+// Parseur des métadonnées AgendaBIP pour Événements
+function parseAgendaBipEventMeta(desc) {
+  if (!desc || typeof desc !== "string") return {};
+  const meta = {};
+  const match = desc.match(/\[AgendaBIP_META_BEGIN\]([\s\S]*?)\[AgendaBIP_META_END\]/i);
+  if (match) {
+    const lines = match[1].split(/\r?\n/);
+    lines.forEach(line => {
+      const eqIdx = line.indexOf("=");
+      if (eqIdx > 0) {
+        const k = line.slice(0, eqIdx).trim().toUpperCase();
+        const v = line.slice(eqIdx + 1).trim();
+        meta[k] = v;
+      }
+    });
+  }
+  const hideMatch = desc.match(/\[AgendaBIP_HIDDEN:([0-9-]+)\]/i);
+  if (hideMatch) meta.hideForDay = hideMatch[1];
+  else if (meta.HIDE_FOR_DAY) meta.hideForDay = meta.HIDE_FOR_DAY;
+  if (meta.HIDDEN_UNTIL) meta.hiddenUntil = parseInt(meta.HIDDEN_UNTIL, 10) || 0;
+  return meta;
+}
+
+// Parseur des métadonnées AgendaBIP pour Tâches
+function parseAgendaBipTaskMeta(notes) {
+  if (!notes || typeof notes !== "string") return {};
+  const meta = {};
+  const abMatch = notes.match(/\[AB:v1\|(.*?)\]/);
+  if (abMatch) {
+    const parts = abMatch[1].split("|");
+    parts.forEach(p => {
+      const eqIdx = p.indexOf("=");
+      if (eqIdx > 0) {
+        meta[p.slice(0, eqIdx).trim()] = p.slice(eqIdx + 1).trim();
+      }
+    });
+  }
+  if (meta.hiddenUntil) meta.hiddenUntil = parseInt(meta.hiddenUntil, 10) || 0;
+  return meta;
+}
+
 const CALENDAR_COLOR_PALETTE = {
   "Agenda_Privé_TZT": "#3b82f6",
   "REVEIL-RAPPEL TZT": "#10b981",
@@ -523,7 +566,12 @@ const CALENDAR_COLOR_PALETTE = {
 };
 let tasksList = [
   { id: "t1", title: "Vérifier la synchronisation Google Drive", groupId: "DVRC", priority: "P1", status: "todo", due: "", subtasks: [] },
+  { id: "t1_s1", title: "Tester le glisser-déposer d'une pièce jointe (PDF/image)", parent: "t1", groupId: "DVRC", priority: "P1", status: "todo", due: "" },
+  { id: "t1_s2", title: "Synchroniser avec le compte Google Drive connecté", parent: "t1", groupId: "DVRC", priority: "P1", status: "done", due: "" },
+  { id: "t1_s3", title: "Vérifier l'accordéon pliable des sous-tâches", parent: "t1", groupId: "DVRC", priority: "P2", status: "todo", due: "" },
   { id: "t2", title: "Appel urgent TZT", groupId: "Perso", priority: "P0", status: "todo", due: "", subtasks: [] },
+  { id: "t2_s1", title: "Préparer le dossier technique et notes", parent: "t2", groupId: "Perso", priority: "P0", status: "todo", due: "" },
+  { id: "t2_s2", title: "Envoyer le compte-rendu d'appel", parent: "t2", groupId: "Perso", priority: "P1", status: "todo", due: "" },
   { id: "t3", title: "Organisation des raccourcis du bureau", groupId: "Code", priority: "P2", status: "done", due: "", subtasks: [] }
 ];
 
@@ -1713,7 +1761,23 @@ function setupAgendaWidget() {
         planningListEl.appendChild(row);
       });
 
+      // Déduplication intelligente et masquage selon métadonnées AgendaBIP
+      const seenEvents = new Set();
+      const uniqueEvents = [];
       items.events.forEach(ev => {
+        const meta = parseAgendaBipEventMeta(ev.notes);
+        // Ne pas afficher si masqué pour ce jour ou jusqu'à une heure future
+        if (meta.hideForDay === dKey) return;
+        if (meta.hiddenUntil && Date.now() < meta.hiddenUntil) return;
+
+        const evKey = `${(ev.title || "").trim().toLowerCase()}_${ev.timeStr}`;
+        if (!seenEvents.has(evKey)) {
+          seenEvents.add(evKey);
+          uniqueEvents.push(ev);
+        }
+      });
+
+      uniqueEvents.forEach(ev => {
         const row = document.createElement("div");
         row.className = "agenda-event-item";
         const calColor = CALENDAR_COLOR_PALETTE[ev.calendarTitle] || "#3b82f6";
@@ -2225,13 +2289,27 @@ function setupTasksWidget() {
         const isOpen = autoExpand || expandedSubtasksSet.has(task.id);
         if (isOpen) fold.open = true;
 
+        const doneCount = children.filter(c => c.status === "done").length;
+
         fold.innerHTML = `
           <summary class="subtasks-summary">
-            <span class="subtasks-arrow">▶</span>
-            <span>Sous-tâches (${children.length})</span>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="subtasks-arrow">▶</span>
+              <span style="font-weight: 700; color: #cbd5e1;">Sous-tâches</span>
+              <span class="subtasks-count-pill">${doneCount}/${children.length}</span>
+            </div>
+            <button type="button" class="agenda-event-btn-action sub-quick-add-btn" title="Ajouter une sous-tâche" style="padding: 0 4px; font-size: 11px;">+</button>
           </summary>
         `;
 
+        const quickAddBtn = fold.querySelector(".sub-quick-add-btn");
+        if (quickAddBtn) {
+          quickAddBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            showInlineSubtaskForm(task, branchEl);
+          });
+        }
         const subtasksListEl = document.createElement("div");
         subtasksListEl.className = "subtasks-list";
 
@@ -2255,6 +2333,54 @@ function setupTasksWidget() {
 
       listContainer.appendChild(branchEl);
     });
+  }
+
+  function showInlineSubtaskForm(parentTask, parentBranchEl) {
+    if (!parentBranchEl) return;
+    let existingForm = parentBranchEl.querySelector(".subtask-inline-add");
+    if (existingForm) {
+      existingForm.remove();
+      return;
+    }
+    const form = document.createElement("div");
+    form.className = "subtask-inline-add";
+    form.innerHTML = `
+      <input type="text" class="subtask-inline-input" placeholder="Titre de la sous-tâche..." />
+      <button type="button" class="btn-xs btn-xs-primary save-sub-btn" style="padding: 2px 7px; font-weight: 600;">+ Ajouter</button>
+      <button type="button" class="btn-xs cancel-sub-btn" style="padding: 2px 5px;">✕</button>
+    `;
+    const input = form.querySelector(".subtask-inline-input");
+    const saveBtn = form.querySelector(".save-sub-btn");
+    const cancelBtn = form.querySelector(".cancel-sub-btn");
+
+    const submitSubtask = () => {
+      const subTitle = input.value.trim();
+      if (!subTitle) return;
+      tasksList.push({
+        id: "sub_" + Date.now(),
+        title: subTitle,
+        parent: parentTask.id,
+        groupId: parentTask.groupId || "Général",
+        priority: parentTask.priority || "NONE",
+        status: "todo",
+        due: ""
+      });
+      expandedSubtasksSet.add(parentTask.id);
+      try { localStorage.setItem(EXPANDED_KEY, JSON.stringify([...expandedSubtasksSet])); } catch (_) {}
+      saveTasks();
+      renderTasks();
+      showToast(`Sous-tâche ajoutée : ${subTitle}`);
+    };
+
+    saveBtn.addEventListener("click", submitSubtask);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") submitSubtask();
+      if (e.key === "Escape") form.remove();
+    });
+    cancelBtn.addEventListener("click", () => form.remove());
+
+    parentBranchEl.appendChild(form);
+    input.focus();
   }
 
   // Crée un élément DOM pour une ligne de tâche
@@ -2485,6 +2611,20 @@ function setupTasksWidget() {
         }, 5000);
       }
     });
+
+    if (!isSubtask) {
+      const addSubBtn = document.createElement("button");
+      addSubBtn.type = "button";
+      addSubBtn.className = "agenda-event-btn-action add-sub";
+      addSubBtn.textContent = "➕";
+      addSubBtn.title = `Ajouter une sous-tâche à "${task.title}"`;
+      addSubBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const branchEl = row.closest(".task-branch") || row.parentElement;
+        showInlineSubtaskForm(task, branchEl);
+      });
+      actionsBox.appendChild(addSubBtn);
+    }
 
     actionsBox.appendChild(copyBtn);
     actionsBox.appendChild(readBtn);
@@ -4061,7 +4201,87 @@ function setupWidgetDrag(widgetEl, getPos, savePos, title) {
   });
 }
 
+function setupSearchBarDrag() {
+  const section = document.getElementById("centerSearchSection");
+  if (!section) return;
+
+  const dragHandle = document.getElementById("searchDragHandle");
+  const targetDrag = dragHandle || section;
+
+  targetDrag.addEventListener("pointerdown", (e) => {
+    if (!isLiveEditMode) return;
+    if (e.button !== 0) return;
+    if (e.target.closest("input") || e.target.closest("button") || e.target.closest(".search-engine-dropdown")) return;
+
+    e.preventDefault();
+    const containerRect = pillsContainer ? pillsContainer.getBoundingClientRect() : document.body.getBoundingClientRect();
+    const rect = section.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+
+    let hasMoved = false;
+    const startX = e.clientX;
+    const startY = e.clientY;
+
+    const onPointerMove = (moveEv) => {
+      const dx = moveEv.clientX - startX;
+      const dy = moveEv.clientY - startY;
+      if (!hasMoved && Math.hypot(dx, dy) > 4) {
+        hasMoved = true;
+        section.classList.add("free-positioned", "dragging-widget");
+        try { targetDrag.setPointerCapture(e.pointerId); } catch (_) {}
+      }
+      if (hasMoved) {
+        let newLeftPx = moveEv.clientX - containerRect.left - offsetX;
+        let newTopPx = moveEv.clientY - containerRect.top - offsetY;
+
+        const maxLeft = containerRect.width - rect.width - 10;
+        const maxTop = containerRect.height - rect.height - 10;
+        newLeftPx = Math.max(10, Math.min(newLeftPx, maxLeft));
+        newTopPx = Math.max(10, Math.min(newTopPx, maxTop));
+
+        section.style.left = `${newLeftPx}px`;
+        section.style.top = `${newTopPx}px`;
+      }
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+
+      if (hasMoved) {
+        section.classList.remove("dragging-widget");
+        try { targetDrag.releasePointerCapture(e.pointerId); } catch (_) {}
+
+        const currentLeftPx = parseFloat(section.style.left);
+        const currentTopPx = parseFloat(section.style.top);
+        searchBarSettings.posX = Math.round((currentLeftPx / containerRect.width) * 1000) / 10;
+        searchBarSettings.posY = Math.round((currentTopPx / containerRect.height) * 1000) / 10;
+        searchBarSettings.freePos = true;
+
+        chrome.storage.local.set({ searchBarSettings });
+        showToast("Position de la barre de recherche enregistrée !");
+      }
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
+  });
+
+  // Double-clic pour recentrer au milieu par défaut
+  targetDrag.addEventListener("dblclick", () => {
+    if (!isLiveEditMode) return;
+    searchBarSettings.freePos = false;
+    chrome.storage.local.set({ searchBarSettings });
+    applySearchBarPosition();
+    showToast("Barre de recherche recentrée au milieu par défaut");
+  });
+}
+
 function setupAllWidgetsDrag() {
+  setupSearchBarDrag();
   setupWidgetDrag(weatherWidget, () => weatherSettings, (x, y) => {
     weatherSettings.posX = x; weatherSettings.posY = y;
     saveWeatherSettings();
@@ -4112,7 +4332,6 @@ function setupWidgetResize(widgetEl, getSettings, saveSettings, minW = 140, minH
   if (!handle) return;
 
   handle.addEventListener("pointerdown", (e) => {
-    if (!isLiveEditMode) return;
     if (e.button !== 0) return;
     e.stopPropagation();
     e.preventDefault();
@@ -4155,6 +4374,53 @@ function setupWidgetResize(widgetEl, getSettings, saveSettings, minW = 140, minH
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
     window.addEventListener("pointercancel", onPointerUp);
+  });
+}
+
+function clampWidgetWithinViewport(widgetEl) {
+  if (!widgetEl || widgetEl.classList.contains("hidden")) return;
+  const vpW = window.innerWidth;
+  const vpH = window.innerHeight;
+  if (vpW <= 0 || vpH <= 0) return;
+
+  const maxW = Math.max(200, vpW - 20);
+  const maxH = Math.max(180, vpH - 24);
+
+  let currentW = widgetEl.offsetWidth || parseInt(widgetEl.style.width, 10) || 280;
+  let currentH = widgetEl.offsetHeight || parseInt(widgetEl.style.height, 10) || 300;
+
+  if (currentW > maxW) {
+    widgetEl.style.width = `${maxW}px`;
+    currentW = maxW;
+  }
+  if (currentH > maxH) {
+    widgetEl.style.height = `${maxH}px`;
+    currentH = maxH;
+  }
+
+  const rect = widgetEl.getBoundingClientRect();
+  if (rect.bottom > vpH - 8) {
+    const overflow = rect.bottom - (vpH - 8);
+    const newTop = Math.max(8, widgetEl.offsetTop - overflow);
+    widgetEl.style.top = `${newTop}px`;
+  }
+  if (widgetEl.offsetTop < 8) {
+    widgetEl.style.top = "8px";
+  }
+  if (rect.right > vpW - 8) {
+    const overflow = rect.right - (vpW - 8);
+    const newLeft = Math.max(8, widgetEl.offsetLeft - overflow);
+    widgetEl.style.left = `${newLeft}px`;
+  }
+  if (widgetEl.offsetLeft < 8) {
+    widgetEl.style.left = "8px";
+  }
+}
+
+function clampAllWidgetsWithinViewport() {
+  const allWidgets = [agendaWidget, tasksWidget, notesWidget, clockWidget, weatherWidget, pomodoroWidget, recentWidget, calculatorWidget];
+  allWidgets.forEach(w => {
+    if (w) clampWidgetWithinViewport(w);
   });
 }
 
@@ -5146,7 +5412,29 @@ async function loadAllWidgetsSettings() {
         agendaSettings = { ...DEFAULT_AGENDA_SETTINGS, ...(res.agendaSettings || {}) };
         if (!agendaSettings.agendas) agendaSettings.agendas = { ...DEFAULT_AGENDA_SETTINGS.agendas };
         tasksSettings = { ...DEFAULT_TASKS_SETTINGS, ...(res.tasksSettings || {}) };
-        if (Array.isArray(res.tasksData)) tasksList = res.tasksData;
+        if (Array.isArray(res.tasksData) && res.tasksData.length > 0) {
+          tasksList = res.tasksData;
+          // Si aucune sous-tâche n'existe encore, enrichir t1 et t2 pour démo immédiate
+          const hasAnyChild = tasksList.some(t => t.parent);
+          if (!hasAnyChild) {
+            const hasT1 = tasksList.some(t => t.id === "t1");
+            if (hasT1) {
+              tasksList.push(
+                { id: "t1_s1", title: "Tester le glisser-déposer d'une pièce jointe (PDF/image)", parent: "t1", groupId: "DVRC", priority: "P1", status: "todo", due: "" },
+                { id: "t1_s2", title: "Synchroniser avec le compte Google Drive connecté", parent: "t1", groupId: "DVRC", priority: "P1", status: "done", due: "" },
+                { id: "t1_s3", title: "Vérifier l'accordéon pliable des sous-tâches", parent: "t1", groupId: "DVRC", priority: "P2", status: "todo", due: "" }
+              );
+            }
+            const hasT2 = tasksList.some(t => t.id === "t2");
+            if (hasT2) {
+              tasksList.push(
+                { id: "t2_s1", title: "Préparer le dossier technique et notes", parent: "t2", groupId: "Perso", priority: "P0", status: "todo", due: "" },
+                { id: "t2_s2", title: "Envoyer le compte-rendu d'appel", parent: "t2", groupId: "Perso", priority: "P1", status: "todo", due: "" }
+              );
+            }
+            chrome.storage.local.set({ tasksData: tasksList });
+          }
+        }
         if (Array.isArray(res.googleEventsList)) googleEventsList = res.googleEventsList;
         if (Array.isArray(res.googleCalendarsList)) googleCalendarsList = res.googleCalendarsList;
 
@@ -5159,10 +5447,108 @@ async function loadAllWidgetsSettings() {
 
 function shouldShowWidgetOnCurrentPage(settings) {
   if (!settings || !settings.enabled) return false;
-  // Par défaut chaque widget est affecté au Bureau 1 (page 0) : il ne reste PAS sur les autres bureaux !
+  // 1. Visible sur tous les bureaux
+  if (settings.allPages === true || settings.page === -1) return true;
+  // 2. Visible sur plusieurs bureaux spécifiques (tableau settings.pages)
+  if (Array.isArray(settings.pages)) {
+    if (settings.pages.includes(-1)) return true;
+    if (settings.pages.includes(currentDesktopPageIndex)) return true;
+    return false;
+  }
+  // 3. Bureau unique (rétrocompatibilité)
   const widgetPage = (typeof settings.page === "number") ? settings.page : 0;
-  if (widgetPage === -1) return true; // -1 = seulement si l'utilisateur choisit explicitement "Tous les bureaux"
   return widgetPage === currentDesktopPageIndex;
+}
+
+let currentPickerWidgetConfig = null;
+
+function openWidgetDesktopsPicker(config) {
+  currentPickerWidgetConfig = config;
+  const modal = document.getElementById("widgetDesktopsModal");
+  const titleEl = document.getElementById("widgetDesktopsModalTitle");
+  const listEl = document.getElementById("widgetDesktopsChecklist");
+  if (!modal || !listEl) return;
+
+  if (titleEl) titleEl.textContent = `Affichage Bureaux : ${config.name}`;
+  listEl.innerHTML = "";
+
+  const settings = config.settings;
+  const isAll = (settings.allPages === true || settings.page === -1 || (Array.isArray(settings.pages) && settings.pages.includes(-1)));
+  const assignedPages = Array.isArray(settings.pages) ? new Set(settings.pages) : new Set([typeof settings.page === "number" ? settings.page : 0]);
+
+  // Option 1 : Tous les bureaux en même temps
+  const allRow = document.createElement("label");
+  allRow.className = "widget-desktop-check-row";
+  allRow.innerHTML = `
+    <input type="checkbox" id="desktopCheckAll" ${isAll ? "checked" : ""} />
+    <span style="font-weight: 700; color: #60a5fa;">🌐 Tous les bureaux en même temps</span>
+  `;
+  listEl.appendChild(allRow);
+
+  const checkAllInput = allRow.querySelector("#desktopCheckAll");
+  const pageCheckboxes = [];
+
+  for (let i = 0; i < totalDesktopPages; i++) {
+    const row = document.createElement("label");
+    row.className = "widget-desktop-check-row";
+    const isChecked = isAll || assignedPages.has(i);
+    row.innerHTML = `
+      <input type="checkbox" class="desktop-page-chk" data-page-index="${i}" ${isChecked ? "checked" : ""} ${isAll ? "disabled" : ""} />
+      <span>Bureau ${i + 1}</span>
+    `;
+    listEl.appendChild(row);
+    pageCheckboxes.push(row.querySelector(".desktop-page-chk"));
+  }
+
+  checkAllInput.addEventListener("change", () => {
+    const checked = checkAllInput.checked;
+    pageCheckboxes.forEach(chk => {
+      chk.disabled = checked;
+      if (checked) chk.checked = true;
+    });
+  });
+
+  modal.classList.remove("hidden");
+}
+
+function setupWidgetDesktopsModal() {
+  const modal = document.getElementById("widgetDesktopsModal");
+  const saveBtn = document.getElementById("widgetDesktopsSaveBtn");
+  const cancelBtn = document.getElementById("widgetDesktopsCancelBtn");
+  if (!modal) return;
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", () => modal.classList.add("hidden"));
+  }
+
+  if (saveBtn) {
+    saveBtn.addEventListener("click", () => {
+      if (!currentPickerWidgetConfig) return;
+      const { settings, key, name } = currentPickerWidgetConfig;
+      const checkAllInput = document.getElementById("desktopCheckAll");
+      const isAll = checkAllInput && checkAllInput.checked;
+
+      if (isAll) {
+        settings.allPages = true;
+        settings.page = -1;
+        settings.pages = [-1];
+      } else {
+        settings.allPages = false;
+        const selected = [];
+        document.querySelectorAll(".desktop-page-chk").forEach(chk => {
+          if (chk.checked) selected.push(parseInt(chk.dataset.pageIndex, 10));
+        });
+        if (selected.length === 0) selected.push(0);
+        settings.pages = selected;
+        settings.page = selected[0];
+      }
+
+      chrome.storage.local.set({ [key]: settings });
+      modal.classList.add("hidden");
+      updateAllWidgetsVisibility();
+      showToast(`${name} : Affichage multi-bureaux enregistré !`);
+    });
+  }
 }
 
 function updateWidgetDesktopBadges() {
@@ -5177,126 +5563,41 @@ function updateWidgetDesktopBadges() {
     { widget: tasksWidget, settings: tasksSettings, key: "tasksSettings", name: "Tâches" }
   ];
 
-  widgetConfigs.forEach(({ widget, settings, key, name }) => {
+  widgetConfigs.forEach(config => {
+    const { widget, settings, name } = config;
     if (!widget) return;
     const header = widget.querySelector(".widget-header") || widget.querySelector(".weather-inner") || widget;
 
     let badge = widget.querySelector(".widget-desktop-badge");
-    if (!isLiveEditMode) {
-      if (badge) badge.remove();
-      return;
-    }
-
     if (!badge) {
       badge = document.createElement("button");
       badge.type = "button";
       badge.className = "widget-desktop-badge";
       if (header.classList && header.classList.contains("widget-header")) {
-        header.appendChild(badge);
+        header.insertBefore(badge, header.children[1] || null);
       } else {
         widget.appendChild(badge);
       }
     }
 
-    // Par défaut, affecté au Bureau 1 (page 0)
-    const currentPageVal = (typeof settings.page === "number") ? settings.page : 0;
-    const label = currentPageVal === -1 ? "Tous les bureaux" : `Bureau ${currentPageVal + 1}`;
-    badge.textContent = `🖥️ ${currentPageVal === -1 ? "Tous" : (currentPageVal + 1)}`;
-    badge.title = `Ce widget est affecté à : ${label} (Cliquer pour changer)`;
+    const isAll = (settings.allPages === true || settings.page === -1 || (Array.isArray(settings.pages) && settings.pages.includes(-1)));
+    if (isAll) {
+      badge.textContent = "🖥️ Tous";
+      badge.title = `${name} : Visible sur TOUS les bureaux (Cliquer pour choisir les bureaux)`;
+    } else if (Array.isArray(settings.pages) && settings.pages.length > 1) {
+      badge.textContent = "🖥️ B" + settings.pages.map(p => p + 1).join(",");
+      badge.title = `${name} : Visible sur les bureaux ${settings.pages.map(p => p + 1).join(", ")} (Cliquer pour modifier)`;
+    } else {
+      const pNum = (typeof settings.page === "number" ? settings.page : 0) + 1;
+      badge.textContent = `🖥️ B${pNum}`;
+      badge.title = `${name} : Affecté au Bureau ${pNum} (Cliquer pour afficher sur d'autres bureaux)`;
+    }
 
     badge.onclick = (e) => {
       e.stopPropagation();
-      let nextVal = currentPageVal + 1;
-      if (nextVal >= totalDesktopPages) {
-        nextVal = (currentPageVal === -1) ? 0 : -1;
-      }
-      settings.page = nextVal;
-      chrome.storage.local.set({ [key]: settings });
-      updateAllWidgetsVisibility();
-      showToast(`${name} : ${nextVal === -1 ? "Visible sur tous les bureaux" : "Affecté au Bureau " + (nextVal + 1)}`);
+      openWidgetDesktopsPicker(config);
     };
   });
-}
-
-function updateAllWidgetsVisibility() {
-  if (clockWidget) {
-    const show = shouldShowWidgetOnCurrentPage(clockSettings);
-    clockWidget.classList.toggle("hidden", !show);
-    clockWidget.style.display = show ? "" : "none";
-    clockWidget.style.left = `${clockSettings.posX}%`;
-    clockWidget.style.top = `${clockSettings.posY}%`;
-    if (clockSettings.width) applyWidgetDimensions(clockWidget, clockSettings.width, clockSettings.height);
-  }
-  if (clockEnabledCheckbox) clockEnabledCheckbox.checked = clockSettings.enabled;
-
-  if (weatherWidget) {
-    const show = shouldShowWidgetOnCurrentPage(weatherSettings);
-    weatherWidget.classList.toggle("hidden", !show);
-    weatherWidget.style.display = show ? "" : "none";
-    weatherWidget.style.left = `${weatherSettings.posX}%`;
-    weatherWidget.style.top = `${weatherSettings.posY}%`;
-    if (weatherSettings.width) applyWidgetDimensions(weatherWidget, weatherSettings.width, weatherSettings.height);
-  }
-  if (weatherEnabledCheckbox) weatherEnabledCheckbox.checked = weatherSettings.enabled;
-
-  if (notesWidget) {
-    const show = shouldShowWidgetOnCurrentPage(notesSettings);
-    notesWidget.classList.toggle("hidden", !show);
-    notesWidget.style.display = show ? "" : "none";
-    notesWidget.style.left = `${notesSettings.posX}%`;
-    notesWidget.style.top = `${notesSettings.posY}%`;
-    if (notesSettings.width) applyWidgetDimensions(notesWidget, notesSettings.width, notesSettings.height);
-  }
-  if (notesEnabledCheckbox) notesEnabledCheckbox.checked = notesSettings.enabled;
-
-  if (pomodoroWidget) {
-    const show = shouldShowWidgetOnCurrentPage(pomodoroSettings);
-    pomodoroWidget.classList.toggle("hidden", !show);
-    pomodoroWidget.style.display = show ? "" : "none";
-    pomodoroWidget.style.left = `${pomodoroSettings.posX}%`;
-    pomodoroWidget.style.top = `${pomodoroSettings.posY}%`;
-    if (pomodoroSettings.width) applyWidgetDimensions(pomodoroWidget, pomodoroSettings.width, pomodoroSettings.height);
-  }
-  if (pomodoroEnabledCheckbox) pomodoroEnabledCheckbox.checked = pomodoroSettings.enabled;
-
-  if (recentWidget) {
-    const show = shouldShowWidgetOnCurrentPage(recentSettings);
-    recentWidget.classList.toggle("hidden", !show);
-    recentWidget.style.display = show ? "" : "none";
-    recentWidget.style.left = `${recentSettings.posX}%`;
-    recentWidget.style.top = `${recentSettings.posY}%`;
-    if (recentSettings.width) applyWidgetDimensions(recentWidget, recentSettings.width, recentSettings.height);
-  }
-  if (recentEnabledCheckbox) recentEnabledCheckbox.checked = recentSettings.enabled;
-
-  if (calculatorWidget) {
-    const show = shouldShowWidgetOnCurrentPage(calculatorSettings);
-    calculatorWidget.classList.toggle("hidden", !show);
-    calculatorWidget.style.display = show ? "" : "none";
-    calculatorWidget.style.left = `${calculatorSettings.posX}%`;
-    calculatorWidget.style.top = `${calculatorSettings.posY}%`;
-    if (calculatorSettings.width) applyWidgetDimensions(calculatorWidget, calculatorSettings.width, calculatorSettings.height);
-  }
-
-  if (agendaWidget) {
-    const show = shouldShowWidgetOnCurrentPage(agendaSettings);
-    agendaWidget.classList.toggle("hidden", !show);
-    agendaWidget.style.display = show ? "" : "none";
-    agendaWidget.style.left = `${agendaSettings.posX}%`;
-    agendaWidget.style.top = `${agendaSettings.posY}%`;
-    if (agendaSettings.width) applyWidgetDimensions(agendaWidget, agendaSettings.width, agendaSettings.height);
-  }
-
-  if (tasksWidget) {
-    const show = shouldShowWidgetOnCurrentPage(tasksSettings);
-    tasksWidget.classList.toggle("hidden", !show);
-    tasksWidget.style.display = show ? "" : "none";
-    tasksWidget.style.left = `${tasksSettings.posX}%`;
-    tasksWidget.style.top = `${tasksSettings.posY}%`;
-    if (tasksSettings.width) applyWidgetDimensions(tasksWidget, tasksSettings.width, tasksSettings.height);
-  }
-
-  updateWidgetDesktopBadges();
 }
 
 function setupWidgetControls() {
@@ -7920,3 +8221,8 @@ function renderWidgetGalleryCards() {
     grid.appendChild(card);
   });
 }
+
+// Recadrer automatiquement tous les widgets au redimensionnement de l'écran ou de la fenêtre
+window.addEventListener("resize", () => {
+  clampAllWidgetsWithinViewport();
+});
