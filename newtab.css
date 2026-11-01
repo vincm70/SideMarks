@@ -417,8 +417,9 @@ html, body {
 
 /* 📝 2. Bloc-notes rapide / Post-it */
 .notes-widget {
-  padding: 10px 14px;
-  width: 230px;
+  padding: 10px 12px;
+  min-width: 260px;
+  width: 270px;
 }
 
 .widget-header {
@@ -461,11 +462,11 @@ html, body {
   align-items: center;
   flex-wrap: wrap;
   gap: 3px;
-  margin-bottom: 6px;
-  background: rgba(0, 0, 0, 0.28);
+  margin-bottom: 8px;
+  background: rgba(0, 0, 0, 0.32);
   padding: 4px 6px;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .notes-tool-btn {
@@ -2103,44 +2104,56 @@ html, body {
    ======================================================== */
 .notes-tabs-bar {
   display: flex;
-  align-items: center;
-  background: rgba(10, 15, 24, 0.95);
-  border-bottom: 2px solid rgba(255, 255, 255, 0.18);
-  padding: 5px 8px 0 8px;
+  align-items: flex-end;
+  background: rgba(10, 15, 24, 0.6);
+  border-bottom: 2px solid rgba(59, 130, 246, 0.35);
+  padding: 4px 6px 0 6px;
+  margin-bottom: 8px;
   gap: 4px;
-  overflow-x: auto;
+  overflow: visible;
+  min-height: 32px;
+  box-sizing: border-box;
 }
 
 .notes-tabs-list {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 4px;
   flex: 1;
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 0;
 }
 .notes-tabs-list::-webkit-scrollbar {
   display: none;
+  width: 0;
+  height: 0;
 }
 
 .notes-tab-item {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 5px 10px;
-  background: rgba(30, 41, 59, 0.8);
+  height: 27px;
+  box-sizing: border-box;
+  background: rgba(30, 41, 59, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-bottom: none;
   border-radius: 6px 6px 0 0;
-  color: #e2e8f0;
-  font-size: 12px;
+  color: #cbd5e1;
+  font-size: 11.5px;
   font-weight: 600;
+  line-height: 1;
   cursor: pointer;
   user-select: none;
   transition: all 0.15s ease;
   white-space: nowrap;
-  max-width: 155px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  max-width: 145px;
+  position: relative;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .notes-tab-item:hover {
@@ -2152,50 +2165,60 @@ html, body {
 .notes-tab-item.active {
   background: #1e3a8a !important;
   border: 1px solid #60a5fa !important;
-  border-bottom: 3px solid #38bdf8 !important;
+  border-bottom: 2px solid #1e3a8a !important;
   color: #ffffff !important;
   font-weight: 700;
-  font-size: 12.5px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
-  box-shadow: 0 -2px 10px rgba(59, 130, 246, 0.45);
+  font-size: 12px;
+  height: 29px;
+  margin-bottom: -2px;
+  z-index: 2;
+  box-shadow: 0 -2px 8px rgba(59, 130, 246, 0.45);
 }
 
 .notes-tab-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  letter-spacing: 0.2px;
+  line-height: 1.2;
 }
 
 .notes-tab-close {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.12);
   border: none;
   color: #cbd5e1;
-  font-size: 11px;
+  font-size: 10px;
   cursor: pointer;
-  padding: 1px 4px;
+  padding: 2px 4px;
   border-radius: 3px;
   line-height: 1;
   transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .notes-tab-close:hover {
-  background: rgba(239, 68, 68, 0.7);
+  background: rgba(239, 68, 68, 0.8);
   color: #ffffff;
 }
 
 .notes-add-tab-btn {
   background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px 4px 0 0;
   color: #cbd5e1;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: bold;
   cursor: pointer;
-  padding: 2px 7px;
-  margin-left: 4px;
+  width: 25px;
+  height: 25px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
   transition: all 0.15s ease;
+  flex-shrink: 0;
+  margin-bottom: 0;
 }
 
 .notes-add-tab-btn:hover {

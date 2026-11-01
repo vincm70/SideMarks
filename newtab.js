@@ -4516,7 +4516,7 @@ function applyWidgetDimensions(widgetEl, width, height) {
 
   if (widgetEl.id === "notesWidget" && height) {
     const editor = widgetEl.querySelector(".notes-editor");
-    if (editor) editor.style.height = `${Math.max(60, height - 76)}px`;
+    if (editor) editor.style.height = `${Math.max(60, height - 128)}px`;
   }
   if (widgetEl.id === "recentWidget" && height) {
     const list = widgetEl.querySelector(".recent-links-list");
@@ -5903,7 +5903,10 @@ function updateWidgetDesktopBadges() {
       badge = document.createElement("button");
       badge.type = "button";
       badge.className = "widget-desktop-badge";
-      if (header.classList && header.classList.contains("widget-header")) {
+      const titleWrapper = header.querySelector("div");
+      if (titleWrapper && titleWrapper.querySelector(".widget-title")) {
+        titleWrapper.appendChild(badge);
+      } else if (header.classList && header.classList.contains("widget-header")) {
         header.insertBefore(badge, header.children[1] || null);
       } else {
         widget.appendChild(badge);
