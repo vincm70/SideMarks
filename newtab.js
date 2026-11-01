@@ -891,7 +891,7 @@ function tryLaunchWebAuthFlow() {
   const scopes = [
     "https://www.googleapis.com/auth/calendar.readonly",
     "https://www.googleapis.com/auth/calendar.events",
-    "https://tasks.googleapis.com/auth/tasks",
+    "https://www.googleapis.com/auth/tasks",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/drive.appdata"
   ].join(" ");
@@ -962,7 +962,7 @@ async function getFreshGoogleToken(interactive = false) {
       const scopes = [
         "https://www.googleapis.com/auth/calendar.readonly",
         "https://www.googleapis.com/auth/calendar.events",
-        "https://tasks.googleapis.com/auth/tasks",
+        "https://www.googleapis.com/auth/tasks",
         "https://www.googleapis.com/auth/userinfo.email",
         "https://www.googleapis.com/auth/drive.appdata"
       ].join(" ");
