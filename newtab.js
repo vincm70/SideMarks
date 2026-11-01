@@ -888,7 +888,8 @@ function tryLaunchWebAuthFlow() {
     "https://www.googleapis.com/auth/calendar.readonly",
     "https://www.googleapis.com/auth/calendar.events",
     "https://tasks.googleapis.com/auth/tasks",
-    "https://www.googleapis.com/auth/userinfo.email"
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/drive.appdata"
   ].join(" ");
 
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUrl)}&scope=${encodeURIComponent(scopes)}&prompt=consent`;
@@ -911,13 +912,57 @@ function tryLaunchWebAuthFlow() {
   });
 }
 
-// Effectue la récupération des données avec le jeton Google obtenu
-async function performGoogleDataSync(token, interactive = false) {
+// Utilitaires de gestion et renouvellement du jeton Google
+async function getFreshGoogleToken(interactive = false) {
+  if (!chrome.identity || !chrome.identity.getAuthToken) return null;
+  return new Promise((resolve) => {
+    chrome.identity.getAuthToken({ interactive: false }, (token) => {
+      if (!chrome.runtime.lastError && token) {
+        return resolve(token);
+      }
+      if (interactive) {
+        chrome.identity.getAuthToken({ interactive: true }, (interactiveToken) => {
+          if (chrome.runtime.lastError || !interactiveToken) {
+            console.warn("getAuthToken interactif non obtenu :", chrome.runtime.lastError);
+            return resolve(null);
+          }
+          resolve(interactiveToken);
+        });
+      } else {
+        resolve(null);
+      }
+    });
+  });
+}
+
+async function invalidateGoogleToken(token) {
+  if (!token || !chrome.identity || !chrome.identity.removeCachedAuthToken) return;
+  return new Promise((resolve) => {
+    chrome.identity.removeCachedAuthToken({ token }, () => resolve());
+  });
+}
+
+// Effectue la récupération des données avec le jeton Google obtenu (avec gestion automatique des 401)
+async function performGoogleDataSync(token, interactive = false, isRetry = false) {
   try {
     // 1. Récupérer uniquement les calendriers du profil Google actuellement connecté
-    const calsRes = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList", {
+    let calsRes = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList", {
       headers: { Authorization: `Bearer ${token}` }
     });
+
+    if (calsRes.status === 401) {
+      console.warn("Jeton Google expiré (401 Calendar). Invalidation et renouvellement...");
+      await invalidateGoogleToken(token);
+      if (!isRetry) {
+        const freshToken = await getFreshGoogleToken(interactive);
+        if (freshToken) return performGoogleDataSync(freshToken, interactive, true);
+      }
+      if (interactive) {
+        openGoogleAuthModal();
+        showToast("Session Google expirée. Veuillez vous reconnecter.", "Connexion", () => openGoogleAuthModal(), 6000);
+      }
+      return false;
+    }
 
     if (calsRes.ok) {
       const calsData = await calsRes.json();
@@ -985,10 +1030,19 @@ async function performGoogleDataSync(token, interactive = false) {
     }
 
     // 3. Récupérer les Google Tasks du compte connecté
+    let tasksSyncedCount = 0;
     try {
-      const listsRes = await fetch("https://tasks.googleapis.com/tasks/v1/users/@me/lists", {
+      let listsRes = await fetch("https://tasks.googleapis.com/tasks/v1/users/@me/lists", {
         headers: { Authorization: `Bearer ${token}` }
       });
+
+      if (listsRes.status === 401 && !isRetry) {
+        console.warn("Jeton Google expiré (401 Tasks). Invalidation et renouvellement...");
+        await invalidateGoogleToken(token);
+        const freshToken = await getFreshGoogleToken(interactive);
+        if (freshToken) return performGoogleDataSync(freshToken, interactive, true);
+      }
+
       if (listsRes.ok) {
         const listsData = await listsRes.json();
         const allTasks = [];
@@ -1007,7 +1061,7 @@ async function performGoogleDataSync(token, interactive = false) {
                 let priority = "NONE";
                 const pMatch = (t.notes || "").match(/(?:priorité|priority)[^P0-4]*(P[0-4])/i);
                 if (pMatch) priority = pMatch[1].toUpperCase();
-                else if (list.title.toUpperCase() === "P0") priority = "P0";
+                else if (list.title && list.title.toUpperCase() === "P0") priority = "P0";
 
                 allTasks.push({
                   id: t.id,
@@ -1024,14 +1078,16 @@ async function performGoogleDataSync(token, interactive = false) {
                 });
               });
             } else {
+              console.warn(`Erreur récupération tâches pour ${list.title}:`, tRes.status);
               break;
             }
           } while (pageToken);
         }
-        if (allTasks.length > 0) {
-          tasksList = allTasks;
-          chrome.storage.local.set({ tasksData: tasksList });
-        }
+        tasksList = allTasks;
+        tasksSyncedCount = allTasks.length;
+        chrome.storage.local.set({ tasksData: tasksList });
+      } else {
+        console.warn("listsRes retour non-ok :", listsRes.status);
       }
     } catch (eTasks) {
       console.warn("Erreur chargement Google Tasks :", eTasks);
@@ -1039,9 +1095,11 @@ async function performGoogleDataSync(token, interactive = false) {
 
     if (typeof refreshAgendaDisplay === "function") refreshAgendaDisplay();
     if (typeof refreshTasksDisplay === "function") refreshTasksDisplay();
+    if (typeof renderGroupTabs === "function") renderGroupTabs();
+    if (typeof renderTasks === "function") renderTasks();
 
     if (interactive) {
-      showToast(`Google synchronisé : ${googleEventsList.length} événements, ${googleCalendarsList.length} agendas !`);
+      showToast(`Google synchronisé : ${tasksSyncedCount} tâche(s), ${googleEventsList.length} événement(s) !`);
     }
     return true;
   } catch (err) {
@@ -1059,21 +1117,16 @@ async function syncGoogleCalendarAndTasks(interactive = false) {
     return false;
   }
 
-  return new Promise((resolve) => {
-    chrome.identity.getAuthToken({ interactive: false }, async (token) => {
-      if (chrome.runtime.lastError || !token) {
-        if (interactive) {
-          // Ouvre immédiatement la fenêtre / modal clair d'autorisation Google
-          openGoogleAuthModal();
-          showToast("Veuillez autoriser l'accès à Google Agenda.", "Autoriser", () => openGoogleAuthModal(), 5000);
-        }
-        return resolve(false);
-      }
+  const token = await getFreshGoogleToken(interactive);
+  if (!token) {
+    if (interactive) {
+      openGoogleAuthModal();
+      showToast("Veuillez autoriser l'accès à Google Agenda et Tasks.", "Autoriser", () => openGoogleAuthModal(), 5000);
+    }
+    return false;
+  }
 
-      const ok = await performGoogleDataSync(token, interactive);
-      resolve(ok);
-    });
-  });
+  return performGoogleDataSync(token, interactive);
 }
 
 // Récupère uniquement les calendriers réels du compte connecté
@@ -2163,11 +2216,15 @@ function setupTasksWidget() {
   let readerActiveTask = null;
 
   // Persistance de l'état ouvert/fermé des sous-tâches dans localStorage
-  const EXPANDED_KEY = "agendabip-expanded-subtasks-v1";
+  const EXPANDED_KEY = "sidemarks-expanded-subtasks-v1";
+  const COLLAPSED_KEY = "sidemarks-collapsed-subtasks-v1";
   const expandedSubtasksSet = new Set();
+  const collapsedSubtasksSet = new Set();
   try {
     const savedExp = JSON.parse(localStorage.getItem(EXPANDED_KEY) || "[]");
     savedExp.forEach(id => expandedSubtasksSet.add(id));
+    const savedCol = JSON.parse(localStorage.getItem(COLLAPSED_KEY) || "[]");
+    savedCol.forEach(id => collapsedSubtasksSet.add(id));
   } catch (_) {}
 
   const PRIORITY_SCORES = { P0: 0, P1: 1, P2: 2, NONE: 9 };
@@ -2355,13 +2412,13 @@ function renderTasks() {
       const rowEl = createTaskRowElement(task, false);
       branchEl.appendChild(rowEl);
 
-      // Accordéon de sous-tâches sous leur tâche parente : REPLIÉ PAR DÉFAUT
+      // Accordéon de sous-tâches sous leur tâche parente : OUVERT PAR DÉFAUT (sauf si replié par l'utilisateur)
       if (children.length > 0) {
         const fold = document.createElement("details");
         fold.className = "subtasks-fold";
         fold.dataset.taskFold = task.id;
-        // Replié par défaut : ouvert uniquement si l'utilisateur l'a expressément déplié ou recherche active
-        const isOpen = Boolean(autoExpand || expandedSubtasksSet.has(task.id));
+        const isCollapsedByUser = collapsedSubtasksSet.has(task.id);
+        const isOpen = Boolean(autoExpand || expandedSubtasksSet.has(task.id) || !isCollapsedByUser);
         fold.open = isOpen;
 
         const doneCount = children.filter(c => c.status === "done").length;
@@ -2396,10 +2453,16 @@ function renderTasks() {
         fold.appendChild(subtasksListEl);
 
         fold.addEventListener("toggle", () => {
-          if (fold.open) expandedSubtasksSet.add(task.id);
-          else expandedSubtasksSet.delete(task.id);
+          if (fold.open) {
+            expandedSubtasksSet.add(task.id);
+            collapsedSubtasksSet.delete(task.id);
+          } else {
+            expandedSubtasksSet.delete(task.id);
+            collapsedSubtasksSet.add(task.id);
+          }
           try {
             localStorage.setItem(EXPANDED_KEY, JSON.stringify([...expandedSubtasksSet]));
+            localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsedSubtasksSet]));
           } catch (_) {}
         });
 
@@ -2442,7 +2505,11 @@ function renderTasks() {
         orderIndex: tasksList.length
       });
       expandedSubtasksSet.add(parentTask.id);
-      try { localStorage.setItem(EXPANDED_KEY, JSON.stringify([...expandedSubtasksSet])); } catch (_) {}
+      collapsedSubtasksSet.delete(parentTask.id);
+      try {
+        localStorage.setItem(EXPANDED_KEY, JSON.stringify([...expandedSubtasksSet]));
+        localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsedSubtasksSet]));
+      } catch (_) {}
       saveTasks();
       renderTasks();
       showToast(`Sous-tâche ajoutée : ${subTitle}`);
@@ -2918,11 +2985,13 @@ function renderTasks() {
   if (syncBtn) {
     syncBtn.addEventListener("click", async () => {
       syncBtn.textContent = "⏳";
-      await syncGoogleCalendarAndTasks(true);
+      const ok = await syncGoogleCalendarAndTasks(true);
       syncBtn.textContent = "🔄";
       renderGroupTabs();
       renderTasks();
-      showToast("Tâches Google actualisées !");
+      if (!ok) {
+        showToast("Échec de connexion Google Tasks. Cliquez pour vous connecter.", "Connexion", () => openGoogleAuthModal(), 6000);
+      }
     });
   }
 
