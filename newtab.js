@@ -1989,6 +1989,7 @@ function setupAgendaWidget() {
       settingsPanel.classList.toggle("hidden");
       if (!settingsPanel.classList.contains("hidden")) {
         renderCalendarsCheckboxList();
+        if (typeof renderAgendaDesktopsQuickPicker === "function") renderAgendaDesktopsQuickPicker();
       }
     });
   }
@@ -2105,6 +2106,12 @@ function setupTasksWidget() {
   const totalBadge = document.getElementById("tasksTotalBadge");
   const p0AlertBadge = document.getElementById("tasksP0AlertBadge");
   const syncBtn = document.getElementById("tasksSyncBtn");
+  const tasksDesktopsBtn = document.getElementById("tasksDesktopsBtn");
+  if (tasksDesktopsBtn) {
+    tasksDesktopsBtn.addEventListener("click", () => {
+      if (typeof openWidgetDesktopsPicker === "function") openWidgetDesktopsPicker("tasks");
+    });
+  }
   const addBtn = document.getElementById("tasksAddBtn");
   const filterToggleBtn = document.getElementById("tasksFilterToggleBtn");
   const filterStateText = document.getElementById("tasksFilterStateText");
@@ -2983,6 +2990,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupDockDragAndDrop();
   initMultiDesktop();
   setupWidgetControls();
+  if (typeof setupWidgetDesktopsModal === "function") setupWidgetDesktopsModal();
   setupToolbarDrag();
   setupEvents();
   setupBookmarkListeners();
@@ -4219,6 +4227,9 @@ function setupWidgetDrag(widgetEl, getPos, savePos, title) {
         const pctX = Math.round((currentLeftPx / containerRect.width) * 1000) / 10;
         const pctY = Math.round((currentTopPx / containerRect.height) * 1000) / 10;
 
+        widgetEl.style.left = `${pctX}%`;
+        widgetEl.style.top = `${pctY}%`;
+
         savePos(pctX, pctY);
         showToast(`Position de « ${title} » enregistrée`);
         // Écarter immédiatement les raccourcis pour qu'aucun ne soit caché sous le widget
@@ -4238,6 +4249,21 @@ function setupWidgetDrag(widgetEl, getPos, savePos, title) {
     autoPositionLiveEditToolbar(true);
     showToast("Barre d'édition placée automatiquement dans un espace vide");
   });
+}
+
+function applySearchBarPosition() {
+  const section = document.getElementById("centerSearchSection");
+  if (!section) return;
+  const geo = getWidgetGeometryForCurrentPage(searchBarSettings);
+  if (searchBarSettings.freePos) {
+    section.classList.add("free-positioned");
+    section.style.left = `${geo.posX}%`;
+    section.style.top = `${geo.posY}%`;
+  } else {
+    section.classList.remove("free-positioned");
+    section.style.left = "";
+    section.style.top = "";
+  }
 }
 
 function setupSearchBarDrag() {
@@ -5490,16 +5516,41 @@ async function loadAllWidgetsSettings() {
 
 
 // ========================================================
-// GÉOMÉTRIE ET EMPLACEMENTS INDÉPENDANTS PAR BUREAU
+// GÉOMÉTRIE ET EMPLACEMENTS INDÉPENDANTS PAR BUREAU (v5.6)
 // ========================================================
+function initWidgetPositionsByPage(settings) {
+  if (!settings) return;
+  if (!settings.positionsByPage || typeof settings.positionsByPage !== "object") {
+    settings.positionsByPage = {};
+  }
+  const basePosX = (typeof settings.posX === "number") ? settings.posX : 50;
+  const basePosY = (typeof settings.posY === "number") ? settings.posY : 50;
+  const baseW = settings.width;
+  const baseH = settings.height;
+
+  if (Array.isArray(settings.pages)) {
+    settings.pages.forEach(p => {
+      if (typeof p === "number" && p >= 0 && !settings.positionsByPage[p]) {
+        settings.positionsByPage[p] = { posX: basePosX, posY: basePosY, width: baseW, height: baseH };
+      }
+    });
+  }
+  const originPage = (typeof settings.page === "number" && settings.page >= 0) ? settings.page : 0;
+  if (!settings.positionsByPage[originPage]) {
+    settings.positionsByPage[originPage] = { posX: basePosX, posY: basePosY, width: baseW, height: baseH };
+  }
+}
+
 function getWidgetGeometryForCurrentPage(settings) {
   if (!settings) return { posX: 50, posY: 50, width: undefined, height: undefined };
+  initWidgetPositionsByPage(settings);
   const pIdx = (typeof currentDesktopPageIndex === "number") ? currentDesktopPageIndex : 0;
+
   if (settings.positionsByPage && settings.positionsByPage[pIdx]) {
     const p = settings.positionsByPage[pIdx];
     return {
-      posX: (typeof p.posX === "number") ? p.posX : (typeof settings.posX === "number" ? settings.posX : 50),
-      posY: (typeof p.posY === "number") ? p.posY : (typeof settings.posY === "number" ? settings.posY : 50),
+      posX: (typeof p.posX === "number") ? p.posX : ((typeof settings.posX === "number") ? settings.posX : 50),
+      posY: (typeof p.posY === "number") ? p.posY : ((typeof settings.posY === "number") ? settings.posY : 50),
       width: p.width || settings.width,
       height: p.height || settings.height
     };
@@ -5513,52 +5564,97 @@ function getWidgetGeometryForCurrentPage(settings) {
 }
 
 function saveWidgetGeometryForCurrentPage(settings, partialGeom) {
-  if (!settings) return;
+  if (!settings || !partialGeom) return;
+  initWidgetPositionsByPage(settings);
   const pIdx = (typeof currentDesktopPageIndex === "number") ? currentDesktopPageIndex : 0;
-  if (!settings.positionsByPage) settings.positionsByPage = {};
+
   if (!settings.positionsByPage[pIdx]) {
+    const basePosX = (typeof settings.posX === "number") ? settings.posX : 50;
+    const basePosY = (typeof settings.posY === "number") ? settings.posY : 50;
     settings.positionsByPage[pIdx] = {
-      posX: settings.posX,
-      posY: settings.posY,
+      posX: basePosX,
+      posY: basePosY,
       width: settings.width,
       height: settings.height
     };
   }
+
+  // Enregistrer indépendamment pour le bureau courant
   Object.assign(settings.positionsByPage[pIdx], partialGeom);
-  if (typeof partialGeom.posX === "number") settings.posX = partialGeom.posX;
-  if (typeof partialGeom.posY === "number") settings.posY = partialGeom.posY;
-  if (partialGeom.width) settings.width = partialGeom.width;
-  if (partialGeom.height) settings.height = partialGeom.height;
+
+  // Rétrocompatibilité globale pour le bureau principal
+  if (pIdx === 0 || settings.page === pIdx) {
+    if (typeof partialGeom.posX === "number") settings.posX = partialGeom.posX;
+    if (typeof partialGeom.posY === "number") settings.posY = partialGeom.posY;
+    if (partialGeom.width) settings.width = partialGeom.width;
+    if (partialGeom.height) settings.height = partialGeom.height;
+  }
 }
 
 function shouldShowWidgetOnCurrentPage(settings) {
   if (!settings || !settings.enabled) return false;
-  // 1. Visible sur tous les bureaux
   if (settings.allPages === true || settings.page === -1) return true;
-  // 2. Visible sur plusieurs bureaux spécifiques (tableau settings.pages)
   if (Array.isArray(settings.pages)) {
     if (settings.pages.includes(-1)) return true;
     if (settings.pages.includes(currentDesktopPageIndex)) return true;
     return false;
   }
-  // 3. Bureau unique (rétrocompatibilité)
   const widgetPage = (typeof settings.page === "number") ? settings.page : 0;
   return widgetPage === currentDesktopPageIndex;
 }
 
-let currentPickerWidgetConfig = null;
+// Registre de tous les widgets configurables
+function getAllWidgetConfigs() {
+  return [
+    { id: "agenda", name: "Agenda & Calendrier", getSettings: () => agendaSettings, key: "agendaSettings", getWidget: () => agendaWidget },
+    { id: "tasks", name: "Tâches & Priorités", getSettings: () => tasksSettings, key: "tasksSettings", getWidget: () => tasksWidget },
+    { id: "weather", name: "Météo en Direct", getSettings: () => weatherSettings, key: "weatherSettings", getWidget: () => weatherWidget },
+    { id: "clock", name: "Horloge Numérique", getSettings: () => clockSettings, key: "clockSettings", getWidget: () => clockWidget },
+    { id: "notes", name: "Bloc-notes", getSettings: () => notesSettings, key: "notesSettings", getWidget: () => notesWidget },
+    { id: "pomodoro", name: "Minuteur Pomodoro", getSettings: () => pomodoroSettings, key: "pomodoroSettings", getWidget: () => pomodoroWidget },
+    { id: "recent", name: "Liens Récents", getSettings: () => recentSettings, key: "recentSettings", getWidget: () => recentWidget },
+    { id: "calculator", name: "Calculatrice", getSettings: () => calculatorSettings, key: "calculatorSettings", getWidget: () => calculatorWidget }
+  ];
+}
 
-function openWidgetDesktopsPicker(config) {
-  currentPickerWidgetConfig = config;
+let activePickerWidgetConfig = null;
+
+function openWidgetDesktopsPicker(targetConfigOrId) {
   const modal = document.getElementById("widgetDesktopsModal");
-  const titleEl = document.getElementById("widgetDesktopsModalTitle");
+  const widgetSelect = document.getElementById("widgetDesktopsSelectWidget");
+  if (!modal) return;
+
+  const allConfigs = getAllWidgetConfigs();
+  let config = null;
+
+  if (typeof targetConfigOrId === "string") {
+    config = allConfigs.find(c => c.id === targetConfigOrId);
+  } else if (targetConfigOrId && targetConfigOrId.key) {
+    config = allConfigs.find(c => c.key === targetConfigOrId.key) || targetConfigOrId;
+  }
+  if (!config) {
+    const curVal = widgetSelect ? widgetSelect.value : "agenda";
+    config = allConfigs.find(c => c.id === curVal) || allConfigs[0];
+  }
+
+  activePickerWidgetConfig = config;
+  if (widgetSelect) widgetSelect.value = config.id || "agenda";
+
+  renderWidgetDesktopsChecklist();
+  modal.classList.remove("hidden");
+}
+
+function renderWidgetDesktopsChecklist() {
+  const config = activePickerWidgetConfig;
   const listEl = document.getElementById("widgetDesktopsChecklist");
-  if (!modal || !listEl) return;
+  const titleEl = document.getElementById("widgetDesktopsModalTitle");
+  const hintEl = document.getElementById("widgetDesktopsStatusHint");
+  if (!config || !listEl) return;
 
   if (titleEl) titleEl.textContent = `Affichage Bureaux : ${config.name}`;
   listEl.innerHTML = "";
 
-  const settings = config.settings;
+  const settings = typeof config.getSettings === "function" ? config.getSettings() : config.settings;
   const isAll = (settings.allPages === true || settings.page === -1 || (Array.isArray(settings.pages) && settings.pages.includes(-1)));
   const assignedPages = Array.isArray(settings.pages) ? new Set(settings.pages) : new Set([typeof settings.page === "number" ? settings.page : 0]);
 
@@ -5580,39 +5676,75 @@ function openWidgetDesktopsPicker(config) {
     const isChecked = isAll || assignedPages.has(i);
     row.innerHTML = `
       <input type="checkbox" class="desktop-page-chk" data-page-index="${i}" ${isChecked ? "checked" : ""} ${isAll ? "disabled" : ""} />
-      <span>Bureau ${i + 1}</span>
+      <span>Bureau ${i + 1} ${i === currentDesktopPageIndex ? "⭐ (Bureau actuel)" : ""}</span>
     `;
     listEl.appendChild(row);
     pageCheckboxes.push(row.querySelector(".desktop-page-chk"));
   }
 
-  checkAllInput.addEventListener("change", () => {
-    const checked = checkAllInput.checked;
-    pageCheckboxes.forEach(chk => {
-      chk.disabled = checked;
-      if (checked) chk.checked = true;
+  if (checkAllInput) {
+    checkAllInput.addEventListener("change", () => {
+      const checked = checkAllInput.checked;
+      pageCheckboxes.forEach(chk => {
+        if (chk) {
+          chk.disabled = checked;
+          if (checked) chk.checked = true;
+        }
+      });
     });
-  });
+  }
 
-  modal.classList.remove("hidden");
+  if (hintEl) {
+    hintEl.textContent = "💡 Les positions sont 100% indépendantes par bureau !";
+  }
 }
 
 function setupWidgetDesktopsModal() {
   const modal = document.getElementById("widgetDesktopsModal");
   const saveBtn = document.getElementById("widgetDesktopsSaveBtn");
   const cancelBtn = document.getElementById("widgetDesktopsCancelBtn");
+  const widgetSelect = document.getElementById("widgetDesktopsSelectWidget");
+  const manageToolbarBtn = document.getElementById("manageWidgetsDesktopsBtn");
+
   if (!modal) return;
+
+  if (widgetSelect) {
+    widgetSelect.addEventListener("change", () => {
+      const allConfigs = getAllWidgetConfigs();
+      const chosen = allConfigs.find(c => c.id === widgetSelect.value);
+      if (chosen) {
+        activePickerWidgetConfig = chosen;
+        renderWidgetDesktopsChecklist();
+      }
+    });
+  }
+
+  if (manageToolbarBtn) {
+    manageToolbarBtn.addEventListener("click", () => {
+      openWidgetDesktopsPicker();
+    });
+  }
 
   if (cancelBtn) {
     cancelBtn.addEventListener("click", () => modal.classList.add("hidden"));
   }
 
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) modal.classList.add("hidden");
+  });
+
   if (saveBtn) {
     saveBtn.addEventListener("click", () => {
-      if (!currentPickerWidgetConfig) return;
-      const { settings, key, name } = currentPickerWidgetConfig;
+      if (!activePickerWidgetConfig) return;
+      const config = activePickerWidgetConfig;
+      const settings = typeof config.getSettings === "function" ? config.getSettings() : config.settings;
+      const key = config.key;
+      const name = config.name;
+
       const checkAllInput = document.getElementById("desktopCheckAll");
       const isAll = checkAllInput && checkAllInput.checked;
+
+      settings.enabled = true;
 
       if (isAll) {
         settings.allPages = true;
@@ -5624,7 +5756,7 @@ function setupWidgetDesktopsModal() {
         document.querySelectorAll(".desktop-page-chk").forEach(chk => {
           if (chk.checked) selected.push(parseInt(chk.dataset.pageIndex, 10));
         });
-        if (selected.length === 0) selected.push(0);
+        if (selected.length === 0) selected.push(currentDesktopPageIndex);
         settings.pages = selected;
         settings.page = selected[0];
       }
@@ -5637,20 +5769,74 @@ function setupWidgetDesktopsModal() {
   }
 }
 
+function renderAgendaDesktopsQuickPicker() {
+  const container = document.getElementById("agendaDesktopsQuickList");
+  if (!container) return;
+  container.innerHTML = "";
+
+  const isAll = (agendaSettings.allPages === true || agendaSettings.page === -1 || (Array.isArray(agendaSettings.pages) && agendaSettings.pages.includes(-1)));
+  const assigned = Array.isArray(agendaSettings.pages) ? new Set(agendaSettings.pages) : new Set([typeof agendaSettings.page === "number" ? agendaSettings.page : 0]);
+
+  // Bouton "Tous"
+  const allChip = document.createElement("button");
+  allChip.type = "button";
+  allChip.className = "agenda-desktop-chip" + (isAll ? " active" : "");
+  allChip.textContent = "🌐 Tous";
+  allChip.title = "Afficher l'Agenda sur TOUS les bureaux";
+  allChip.addEventListener("click", () => {
+    if (isAll) {
+      agendaSettings.allPages = false;
+      agendaSettings.pages = [currentDesktopPageIndex];
+      agendaSettings.page = currentDesktopPageIndex;
+    } else {
+      agendaSettings.allPages = true;
+      agendaSettings.page = -1;
+      agendaSettings.pages = [-1];
+    }
+    chrome.storage.local.set({ agendaSettings });
+    updateAllWidgetsVisibility();
+    renderAgendaDesktopsQuickPicker();
+    showToast(`Agenda : ${agendaSettings.allPages ? "Visible sur TOUS les bureaux" : "Visible sur Bureau " + (currentDesktopPageIndex + 1)}`);
+  });
+  container.appendChild(allChip);
+
+  // Boutons par bureau
+  for (let i = 0; i < totalDesktopPages; i++) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    const isActive = isAll || assigned.has(i);
+    chip.className = "agenda-desktop-chip" + (isActive ? " active" : "");
+    chip.textContent = `B${i + 1}`;
+    chip.title = `Afficher l'Agenda sur le Bureau ${i + 1}`;
+    chip.addEventListener("click", () => {
+      agendaSettings.allPages = false;
+      let set = Array.isArray(agendaSettings.pages) && !agendaSettings.pages.includes(-1)
+        ? new Set(agendaSettings.pages)
+        : new Set([typeof agendaSettings.page === "number" && agendaSettings.page >= 0 ? agendaSettings.page : 0]);
+      if (set.has(i)) {
+        if (set.size > 1) set.delete(i);
+        else showToast("L'Agenda doit être visible sur au moins un bureau !");
+      } else {
+        set.add(i);
+      }
+      agendaSettings.pages = Array.from(set);
+      agendaSettings.page = agendaSettings.pages[0];
+      chrome.storage.local.set({ agendaSettings });
+      updateAllWidgetsVisibility();
+      renderAgendaDesktopsQuickPicker();
+      showToast(`Agenda : Visible sur Bureau ${agendaSettings.pages.map(p => p + 1).join(", ")}`);
+    });
+    container.appendChild(chip);
+  }
+}
+
 function updateWidgetDesktopBadges() {
-  const widgetConfigs = [
-    { widget: clockWidget, settings: clockSettings, key: "clockSettings", name: "Horloge" },
-    { widget: weatherWidget, settings: weatherSettings, key: "weatherSettings", name: "Météo" },
-    { widget: notesWidget, settings: notesSettings, key: "notesSettings", name: "Bloc-notes" },
-    { widget: pomodoroWidget, settings: pomodoroSettings, key: "pomodoroSettings", name: "Pomodoro" },
-    { widget: recentWidget, settings: recentSettings, key: "recentSettings", name: "Récents" },
-    { widget: calculatorWidget, settings: calculatorSettings, key: "calculatorSettings", name: "Calculatrice" },
-    { widget: agendaWidget, settings: agendaSettings, key: "agendaSettings", name: "Agenda" },
-    { widget: tasksWidget, settings: tasksSettings, key: "tasksSettings", name: "Tâches" }
-  ];
+  const widgetConfigs = getAllWidgetConfigs();
 
   widgetConfigs.forEach(config => {
-    const { widget, settings, name } = config;
+    const settings = typeof config.getSettings === "function" ? config.getSettings() : config.settings;
+    const widget = typeof config.getWidget === "function" ? config.getWidget() : config.widget;
+    const name = config.name;
     if (!widget) return;
     const header = widget.querySelector(".widget-header") || widget.querySelector(".weather-inner") || widget;
 
@@ -5668,14 +5854,14 @@ function updateWidgetDesktopBadges() {
 
     const isAll = (settings.allPages === true || settings.page === -1 || (Array.isArray(settings.pages) && settings.pages.includes(-1)));
     if (isAll) {
-      badge.textContent = "🖥️ Tous";
+      badge.innerHTML = "🖥️ Tous ▾";
       badge.title = `${name} : Visible sur TOUS les bureaux (Cliquer pour choisir les bureaux)`;
     } else if (Array.isArray(settings.pages) && settings.pages.length > 1) {
-      badge.textContent = "🖥️ B" + settings.pages.map(p => p + 1).join(",");
+      badge.innerHTML = `🖥️ B${settings.pages.map(p => p + 1).join(",")} ▾`;
       badge.title = `${name} : Visible sur les bureaux ${settings.pages.map(p => p + 1).join(", ")} (Cliquer pour modifier)`;
     } else {
       const pNum = (typeof settings.page === "number" ? settings.page : 0) + 1;
-      badge.textContent = `🖥️ B${pNum}`;
+      badge.innerHTML = `🖥️ B${pNum} ▾`;
       badge.title = `${name} : Affecté au Bureau ${pNum} (Cliquer pour afficher sur d'autres bureaux)`;
     }
 
@@ -8384,18 +8570,75 @@ function renderWidgetGalleryCards() {
 
     card.appendChild(topDiv);
 
+    // Statut actuel de visibilité sur les bureaux
+    const allConfigs = typeof getAllWidgetConfigs === "function" ? getAllWidgetConfigs() : [];
+    const matchedConfig = allConfigs.find(c => c.id === item.type);
+    const itemSettings = matchedConfig ? (typeof matchedConfig.getSettings === "function" ? matchedConfig.getSettings() : matchedConfig.settings) : null;
+
+    if (itemSettings) {
+      const statusDiv = document.createElement("div");
+      statusDiv.className = "widget-card-desktop-status";
+      if (itemSettings.enabled) {
+        if (itemSettings.allPages || itemSettings.page === -1 || (Array.isArray(itemSettings.pages) && itemSettings.pages.includes(-1))) {
+          statusDiv.innerHTML = `<span style="color:#60a5fa;">🌐 Présent sur <b>Tous les bureaux</b></span>`;
+        } else if (Array.isArray(itemSettings.pages) && itemSettings.pages.length > 0) {
+          statusDiv.innerHTML = `<span style="color:#93c5fd;">🖥️ Présent sur : <b>${itemSettings.pages.map(p => "B" + (p + 1)).join(", ")}</b></span>`;
+        } else {
+          statusDiv.innerHTML = `<span style="color:#93c5fd;">🖥️ Présent sur : <b>Bureau ${(itemSettings.page || 0) + 1}</b></span>`;
+        }
+      } else {
+        statusDiv.innerHTML = `<span style="color:#64748b;">⚪ Actuellement masqué</span>`;
+      }
+      topDiv.appendChild(statusDiv);
+    }
+
+    const actionRow = document.createElement("div");
+    actionRow.style.display = "flex";
+    actionRow.style.gap = "6px";
+    actionRow.style.marginTop = "8px";
+
     const addBtn = document.createElement("button");
     addBtn.type = "button";
     addBtn.className = "widget-card-add-btn";
-    addBtn.innerHTML = `<span>+ Poser sur le Bureau ${currentDesktopPageIndex + 1}</span>`;
+    addBtn.style.flex = "1";
+    addBtn.innerHTML = `<span>+ Bureau ${currentDesktopPageIndex + 1}</span>`;
     addBtn.addEventListener("click", () => {
-      item.apply(currentDesktopPageIndex);
+      if (matchedConfig && itemSettings) {
+        itemSettings.enabled = true;
+        let pList = Array.isArray(itemSettings.pages) && !itemSettings.pages.includes(-1) ? [...itemSettings.pages] : [typeof itemSettings.page === "number" && itemSettings.page >= 0 ? itemSettings.page : 0];
+        if (!pList.includes(currentDesktopPageIndex)) pList.push(currentDesktopPageIndex);
+        itemSettings.pages = pList;
+        itemSettings.page = pList[0];
+        itemSettings.allPages = false;
+        chrome.storage.local.set({ [matchedConfig.key]: itemSettings });
+        updateAllWidgetsVisibility();
+      } else {
+        item.apply(currentDesktopPageIndex);
+      }
       const modal = document.getElementById("widgetGalleryModal");
       if (modal) modal.classList.add("hidden");
-      showToast(`Widget « ${item.name} » ajouté au Bureau ${currentDesktopPageIndex + 1} !`);
+      showToast(`« ${item.name} » ajouté au Bureau ${currentDesktopPageIndex + 1} !`);
     });
+    actionRow.appendChild(addBtn);
 
-    card.appendChild(addBtn);
+    const manageBtn = document.createElement("button");
+    manageBtn.type = "button";
+    manageBtn.className = "btn-xs";
+    manageBtn.style.padding = "6px 10px";
+    manageBtn.style.background = "rgba(59, 130, 246, 0.25)";
+    manageBtn.style.border = "1px solid rgba(96, 165, 250, 0.5)";
+    manageBtn.style.color = "#bfdbfe";
+    manageBtn.style.borderRadius = "8px";
+    manageBtn.title = "Choisir précisément les bureaux d'affichage de ce widget";
+    manageBtn.textContent = "⚙️ Bureaux...";
+    manageBtn.addEventListener("click", () => {
+      const gModal = document.getElementById("widgetGalleryModal");
+      if (gModal) gModal.classList.add("hidden");
+      openWidgetDesktopsPicker(item.type);
+    });
+    actionRow.appendChild(manageBtn);
+
+    card.appendChild(actionRow);
     grid.appendChild(card);
   });
 }

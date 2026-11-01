@@ -1,7 +1,7 @@
 import zipfile
 import os
 
-zip_name = 'SideMarks_v5.5.zip'
+zip_name = 'SideMarks_v5.6.zip'
 
 # Fichiers à exclure de l'archive publique
 exclude_files = {
@@ -14,7 +14,9 @@ exclude_files = {
     'SideMarks_v5.1.zip',
     'SideMarks_v5.2.zip',
     'SideMarks_v5.3.zip',
+    'SideMarks_v5.4.zip',
     'SideMarks_v5.5.zip',
+    'SideMarks_v5.6.zip',
     'Bookmark_Original_v1.0.zip',
     'original_family_wallpaper.jpg',
     'default_public_wallpaper.jpg',

@@ -214,7 +214,15 @@
             </div>
 
             <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.08);">
-              <button type="button" id="agendaResetSizeBtn" class="btn-xs" style="width: 100%; padding: 5px; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(96, 165, 250, 0.4); border-radius: 6px; cursor: pointer; color: #93c5fd; font-weight: 600; font-size: 10px;" title="Rétablir une taille compacte et recentrer dans l'écran visible">📐 Réinitialiser taille & position compacte</button>
+              <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <span style="font-size: 10px; font-weight: 600; color: #93c5fd;">🖥️ Affichage sur les bureaux :</span>
+              </div>
+              <div id="agendaDesktopsQuickList" style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px;">
+                <!-- Rempli dynamiquement -->
+              </div>
+            </div>
+            <button type="button" id="agendaResetSizeBtn" class="btn-xs" style="width: 100%; padding: 5px; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(96, 165, 250, 0.4); border-radius: 6px; cursor: pointer; color: #93c5fd; font-weight: 600; font-size: 10px;" title="Rétablir une taille compacte et recentrer dans l'écran visible">📐 Réinitialiser taille & position compacte</button>
             </div>
             <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px;">
               <button type="button" id="agendaSaveSettingsBtn" class="btn-xs btn-xs-primary">Appliquer</button>
@@ -300,6 +308,7 @@
               <button type="button" id="tasksP0AlertBadge" class="tasks-p0-alert-badge hidden" title="Tâches P0 urgentes immédiates !">⚡ P0 : 0</button>
             </div>
             <div class="tasks-header-actions">
+              <button type="button" id="tasksDesktopsBtn" class="widget-header-btn" title="Afficher les Tâches sur plusieurs bureaux (🖥️)">🖥️</button>
               <button type="button" id="tasksFitSizeBtn" class="widget-header-btn" title="Ajuster la taille / Format compact pour petit écran">📐</button>
               <button type="button" id="tasksSyncBtn" class="widget-header-btn" title="Synchroniser avec Google Tasks">🔄</button>
               <button type="button" id="tasksAddBtn" class="widget-header-btn" title="Ajouter une tâche (Titre, Priorité, Groupe, Échéance)">+</button>
@@ -456,6 +465,7 @@
             <button type="button" id="moveSelectionToPageBtn" class="btn-xs" style="background: rgba(168, 85, 247, 0.35); border: 1px solid rgba(168, 85, 247, 0.6); color: #e9d5ff;" title="Déplacer les raccourcis sélectionnés vers un autre bureau">📲 Déplacer bureau</button>
             <button type="button" id="clearSelectionBtn" class="btn-xs" style="background: transparent; color: #cbd5e1; padding: 2px 5px;" title="Désélectionner tout">✕</button>
           </div>
+          <button type="button" id="manageWidgetsDesktopsBtn" class="btn-xs" style="background: rgba(59, 130, 246, 0.35); border: 1px solid rgba(96, 165, 250, 0.6); color: #bfdbfe; font-weight: 600;" title="Choisir sur quels bureaux afficher chaque widget">🖥️ Bureaux widgets</button>
           <button type="button" id="openWidgetGalleryBtn" class="btn-xs" style="background: rgba(168, 85, 247, 0.35); border: 1px solid rgba(168, 85, 247, 0.6); color: #f3e8ff; font-weight: 600;" title="Ouvrir la Galerie de widgets pour ajouter un widget sur ce bureau">🧩 + Widget</button>
           <button type="button" id="liveAddPillBtn" class="btn-xs btn-xs-primary" title="Ajouter un nouveau raccourci (Nom, URL, Catégorie)">+ Ajouter</button>
           <button type="button" id="liveExitEditBtn" class="btn-xs" style="background:#10b981; color:#fff;" title="Quitter le mode édition">✓ Terminer</button>
@@ -943,15 +953,33 @@
           <span>🖥️</span>
           <span id="widgetDesktopsModalTitle">Affichage sur les Bureaux</span>
         </div>
+        
+        <div style="display: flex; align-items: center; gap: 6px; margin: 2px 0;">
+          <label for="widgetDesktopsSelectWidget" style="font-size: 11px; color: #94a3b8; font-weight: 600;">Widget :</label>
+          <select id="widgetDesktopsSelectWidget" style="flex: 1; padding: 4px 8px; border-radius: 6px; background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.2); font-size: 11.5px;">
+            <option value="agenda">📅 Agenda & Calendrier</option>
+            <option value="tasks">✅ Tâches & Priorités</option>
+            <option value="weather">🌤️ Météo en Direct</option>
+            <option value="clock">⏰ Horloge Numérique</option>
+            <option value="notes">📝 Bloc-notes</option>
+            <option value="pomodoro">🍅 Minuteur Pomodoro</option>
+            <option value="recent">🕒 Liens Récents</option>
+            <option value="calculator">🧮 Calculatrice</option>
+          </select>
+        </div>
+
         <p style="font-size: 11px; color: #94a3b8; margin: 0;">
-          Cochez les bureaux sur lesquels vous souhaitez afficher ce widget :
+          Cochez les bureaux sur lesquels vous souhaitez afficher ce widget. Vous pouvez le positionner librement à un endroit différent sur chaque bureau !
         </p>
         <div class="widget-desktops-list" id="widgetDesktopsChecklist">
           <!-- Rempli dynamiquement -->
         </div>
-        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px;">
-          <button type="button" id="widgetDesktopsSaveBtn" class="btn-xs btn-xs-primary" style="padding: 5px 12px; font-weight: 600;">Appliquer</button>
-          <button type="button" id="widgetDesktopsCancelBtn" class="btn-xs" style="padding: 5px 10px;">Fermer</button>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+          <span id="widgetDesktopsStatusHint" style="font-size: 10px; color: #60a5fa;"></span>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" id="widgetDesktopsSaveBtn" class="btn-xs btn-xs-primary" style="padding: 5px 12px; font-weight: 600;">Appliquer</button>
+            <button type="button" id="widgetDesktopsCancelBtn" class="btn-xs" style="padding: 5px 10px;">Fermer</button>
+          </div>
         </div>
       </div>
     </div>
