@@ -904,7 +904,8 @@ function tryLaunchWebAuthFlow() {
     const match = responseUrl.match(/access_token=([^&]+)/);
     if (match && match[1]) {
       const token = match[1];
-      showToast("✅ Connexion Google validée ! Chargement des agendas...");
+      chrome.storage.local.set({ savedGoogleToken: token, savedGoogleTokenTime: Date.now() });
+      showToast("✅ Connexion Google validée ! Synchronisation en cours...");
       await performGoogleDataSync(token, true);
     } else {
       showToast("Impossible d'extraire le jeton Google");
@@ -914,28 +915,78 @@ function tryLaunchWebAuthFlow() {
 
 // Utilitaires de gestion et renouvellement du jeton Google
 async function getFreshGoogleToken(interactive = false) {
-  if (!chrome.identity || !chrome.identity.getAuthToken) return null;
-  return new Promise((resolve) => {
-    chrome.identity.getAuthToken({ interactive: false }, (token) => {
-      if (!chrome.runtime.lastError && token) {
-        return resolve(token);
-      }
-      if (interactive) {
-        chrome.identity.getAuthToken({ interactive: true }, (interactiveToken) => {
-          if (chrome.runtime.lastError || !interactiveToken) {
-            console.warn("getAuthToken interactif non obtenu :", chrome.runtime.lastError);
-            return resolve(null);
-          }
-          resolve(interactiveToken);
-        });
+  // 1. Tenter chrome.identity.getAuthToken en mode silencieux
+  if (chrome.identity && chrome.identity.getAuthToken) {
+    const cachedToken = await new Promise((resolve) => {
+      chrome.identity.getAuthToken({ interactive: false }, (t) => {
+        if (!chrome.runtime.lastError && t) resolve(t);
+        else resolve(null);
+      });
+    });
+    if (cachedToken) return cachedToken;
+  }
+
+  // 2. Vérifier si un jeton récent (< 50 minutes) a été stocké par launchWebAuthFlow
+  const stored = await new Promise((resolve) => {
+    chrome.storage.local.get(["savedGoogleToken", "savedGoogleTokenTime"], (res) => {
+      if (res && res.savedGoogleToken && res.savedGoogleTokenTime && (Date.now() - res.savedGoogleTokenTime < 50 * 60 * 1000)) {
+        resolve(res.savedGoogleToken);
       } else {
         resolve(null);
       }
     });
   });
+  if (stored) return stored;
+
+  // 3. Si interactif, tenter getAuthToken interactif puis repli sur launchWebAuthFlow
+  if (interactive) {
+    if (chrome.identity && chrome.identity.getAuthToken) {
+      const interactiveToken = await new Promise((resolve) => {
+        chrome.identity.getAuthToken({ interactive: true }, (t) => {
+          if (!chrome.runtime.lastError && t) resolve(t);
+          else resolve(null);
+        });
+      });
+      if (interactiveToken) return interactiveToken;
+    }
+
+    // Repli WebAuthFlow officiel
+    return new Promise((resolve) => {
+      if (!chrome.identity || !chrome.identity.launchWebAuthFlow) return resolve(null);
+      const clientId = "266928074814-gfsj5gntbtjo54qi3c9qm852htabc4ve.apps.googleusercontent.com";
+      const redirectUrl = chrome.identity.getRedirectURL();
+      const scopes = [
+        "https://www.googleapis.com/auth/calendar.readonly",
+        "https://www.googleapis.com/auth/calendar.events",
+        "https://tasks.googleapis.com/auth/tasks",
+        "https://www.googleapis.com/auth/userinfo.email",
+        "https://www.googleapis.com/auth/drive.appdata"
+      ].join(" ");
+
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUrl)}&scope=${encodeURIComponent(scopes)}&prompt=consent`;
+
+      chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, (responseUrl) => {
+        if (chrome.runtime.lastError || !responseUrl) {
+          console.warn("launchWebAuthFlow échec :", chrome.runtime.lastError);
+          return resolve(null);
+        }
+        const match = responseUrl.match(/access_token=([^&]+)/);
+        if (match && match[1]) {
+          const t = match[1];
+          chrome.storage.local.set({ savedGoogleToken: t, savedGoogleTokenTime: Date.now() });
+          resolve(t);
+        } else {
+          resolve(null);
+        }
+      });
+    });
+  }
+
+  return null;
 }
 
 async function invalidateGoogleToken(token) {
+  chrome.storage.local.remove(["savedGoogleToken", "savedGoogleTokenTime"]);
   if (!token || !chrome.identity || !chrome.identity.removeCachedAuthToken) return;
   return new Promise((resolve) => {
     chrome.identity.removeCachedAuthToken({ token }, () => resolve());
