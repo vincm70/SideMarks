@@ -470,10 +470,34 @@ let notesSettings = { ...DEFAULT_NOTES_SETTINGS };
 let pomodoroSettings = { ...DEFAULT_POMODORO_SETTINGS };
 let recentSettings = { ...DEFAULT_RECENT_SETTINGS };
 
+const DEFAULT_CALCULATOR_SETTINGS = { enabled: false, posX: 70, posY: 25, width: 240, height: 320, page: 0 };
+const DEFAULT_AGENDA_SETTINGS = {
+  enabled: false,
+  posX: 35,
+  posY: 20,
+  width: 280,
+  height: 380,
+  page: 0,
+  activeAgenda: "default",
+  customName: "",
+  syncUrl: "",
+  agendas: {
+    default: { name: "Principal", events: {} },
+    rdvtzt: { name: "Rendez-vous RDVTZT", events: {} },
+    famille: { name: "Famille & Scolaire", events: {} },
+    pro: { name: "Professionnel", events: {} }
+  }
+};
+
+let calculatorSettings = { ...DEFAULT_CALCULATOR_SETTINGS };
+let agendaSettings = { ...DEFAULT_AGENDA_SETTINGS };
+
 const clockWidget = document.getElementById("clockWidget");
 const notesWidget = document.getElementById("notesWidget");
 const pomodoroWidget = document.getElementById("pomodoroWidget");
 const recentWidget = document.getElementById("recentWidget");
+const calculatorWidget = document.getElementById("calculatorWidget");
+const agendaWidget = document.getElementById("agendaWidget");
 
 const clockEnabledCheckbox = document.getElementById("clockEnabledCheckbox");
 const notesEnabledCheckbox = document.getElementById("notesEnabledCheckbox");
@@ -529,6 +553,502 @@ async function loadPills() {
   });
 }
 
+
+// ========================================================
+// 🧮 WIDGET CALCULATRICE MODERNE
+// ========================================================
+function setupCalculatorWidget() {
+  const widget = document.getElementById("calculatorWidget");
+  if (!widget) return;
+
+  const screen = document.getElementById("calcScreen");
+  const exprDisplay = document.getElementById("calcExpressionDisplay");
+  const miniHistory = document.getElementById("calcMiniHistory");
+  const keypad = widget.querySelector(".calc-keypad");
+
+  let currentVal = "0";
+  let prevVal = null;
+  let currentOp = null;
+  let resetNext = false;
+
+  function updateScreen() {
+    if (screen) screen.value = currentVal.replace(".", ",");
+  }
+
+  function updateExpr(expr) {
+    if (exprDisplay) exprDisplay.textContent = expr || "";
+  }
+
+  function appendNumber(num) {
+    if (resetNext) {
+      currentVal = (num === ".") ? "0." : num;
+      resetNext = false;
+    } else {
+      if (num === "." && currentVal.includes(".")) return;
+      if (currentVal === "0" && num !== ".") {
+        currentVal = num;
+      } else {
+        if (currentVal.length < 14) currentVal += num;
+      }
+    }
+    updateScreen();
+  }
+
+  function calculate(a, b, op) {
+    const numA = parseFloat(a);
+    const numB = parseFloat(b);
+    if (isNaN(numA) || isNaN(numB)) return 0;
+    switch (op) {
+      case "+": return numA + numB;
+      case "-": return numA - numB;
+      case "*": return numA * numB;
+      case "/": return numB === 0 ? "Erreur" : numA / numB;
+      default: return numB;
+    }
+  }
+
+  function formatResult(val) {
+    if (typeof val === "string") return val;
+    const rounded = Math.round(val * 100000000) / 100000000;
+    return String(rounded);
+  }
+
+  function handleAction(action) {
+    if (action === "clear") {
+      currentVal = "0";
+      prevVal = null;
+      currentOp = null;
+      resetNext = false;
+      updateScreen();
+      updateExpr("");
+      return;
+    }
+
+    if (action === "backspace") {
+      if (resetNext || currentVal === "Erreur") {
+        currentVal = "0";
+      } else {
+        currentVal = currentVal.length > 1 ? currentVal.slice(0, -1) : "0";
+      }
+      updateScreen();
+      return;
+    }
+
+    if (action === "percent") {
+      const num = parseFloat(currentVal);
+      if (!isNaN(num)) {
+        currentVal = formatResult(num / 100);
+        updateScreen();
+      }
+      return;
+    }
+
+    if (action === "=") {
+      if (currentOp && prevVal !== null) {
+        const result = calculate(prevVal, currentVal, currentOp);
+        const formatted = formatResult(result);
+        const opSymbol = currentOp === "*" ? "×" : currentOp === "/" ? "÷" : currentOp === "-" ? "−" : "+";
+        updateExpr(`${prevVal.replace(".", ",")} ${opSymbol} ${currentVal.replace(".", ",")} =`);
+        if (miniHistory) miniHistory.textContent = formatted.replace(".", ",");
+        currentVal = formatted;
+        prevVal = null;
+        currentOp = null;
+        resetNext = true;
+        updateScreen();
+      }
+      return;
+    }
+
+    // Opérations (+, -, *, /)
+    if (["+", "-", "*", "/"].includes(action)) {
+      if (currentOp && !resetNext && prevVal !== null) {
+        const intermediate = calculate(prevVal, currentVal, currentOp);
+        prevVal = formatResult(intermediate);
+        currentVal = prevVal;
+        updateScreen();
+      } else {
+        prevVal = currentVal;
+      }
+      currentOp = action;
+      resetNext = true;
+      const opSymbol = action === "*" ? "×" : action === "/" ? "÷" : action === "-" ? "−" : "+";
+      updateExpr(`${prevVal.replace(".", ",")} ${opSymbol}`);
+    }
+  }
+
+  if (keypad) {
+    keypad.addEventListener("click", (e) => {
+      const btn = e.target.closest(".calc-btn");
+      if (!btn) return;
+      if (btn.dataset.num !== undefined) {
+        appendNumber(btn.dataset.num);
+      } else if (btn.dataset.action) {
+        handleAction(btn.dataset.action);
+      }
+    });
+  }
+
+  // Raccourcis clavier physiques
+  window.addEventListener("keydown", (e) => {
+    if (widget.classList.contains("hidden") || widget.style.display === "none") return;
+    const activeEl = document.activeElement;
+    if (activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA" || activeEl.isContentEditable)) {
+      if (!widget.contains(activeEl)) return;
+    }
+
+    if (e.key >= "0" && e.key <= "9") {
+      appendNumber(e.key);
+    } else if (e.key === "." || e.key === ",") {
+      appendNumber(".");
+    } else if (e.key === "+" || e.key === "-" || e.key === "*" || e.key === "/") {
+      handleAction(e.key);
+    } else if (e.key === "Enter" || e.key === "=") {
+      e.preventDefault();
+      handleAction("=");
+    } else if (e.key === "Backspace") {
+      handleAction("backspace");
+    } else if (e.key === "Escape" || e.key.toLowerCase() === "c") {
+      handleAction("clear");
+    }
+  });
+
+  updateScreen();
+}
+
+// ========================================================
+// 📅 WIDGET AGENDA / CALENDRIER (STYLE AGENDA BIP & GOOGLE CALENDAR)
+// ========================================================
+function setupAgendaWidget() {
+  const widget = document.getElementById("agendaWidget");
+  if (!widget) return;
+
+  const activeBadge = document.getElementById("agendaActiveBadge");
+  const settingsBtn = document.getElementById("agendaSettingsBtn");
+  const settingsPanel = document.getElementById("agendaSettingsPanel");
+  const agendaSelect = document.getElementById("agendaSelect");
+  const customNameRow = document.getElementById("agendaCustomNameRow");
+  const customNameInput = document.getElementById("agendaCustomNameInput");
+  const syncUrlInput = document.getElementById("agendaSyncUrlInput");
+  const saveSettingsBtn = document.getElementById("agendaSaveSettingsBtn");
+  const closeSettingsBtn = document.getElementById("agendaCloseSettingsBtn");
+
+  const prevMonthBtn = document.getElementById("agendaPrevMonthBtn");
+  const nextMonthBtn = document.getElementById("agendaNextMonthBtn");
+  const todayBtn = document.getElementById("agendaTodayBtn");
+  const monthTitle = document.getElementById("agendaMonthTitle");
+  const daysContainer = document.getElementById("agendaDaysContainer");
+
+  const selectedDayText = document.getElementById("agendaSelectedDayText");
+  const eventsCount = document.getElementById("agendaEventsCount");
+  const eventsList = document.getElementById("agendaEventsList");
+  const addEventBtn = document.getElementById("agendaAddEventBtn");
+
+  let viewDate = new Date();
+  let selectedDate = new Date();
+
+  const MONTH_NAMES = [
+    "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+    "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+  ];
+
+  const AGENDA_PRESETS = {
+    default: { name: "Principal", badgeColor: "#3b82f6" },
+    rdvtzt: { name: "Rendez-vous RDVTZT", badgeColor: "#10b981" },
+    famille: { name: "Famille & Scolaire", badgeColor: "#a855f7" },
+    pro: { name: "Professionnel", badgeColor: "#f97316" },
+    custom: { name: "Personnalisé", badgeColor: "#06b6d4" }
+  };
+
+  function toDateKey(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  function getActiveAgendaKey() {
+    return agendaSettings.activeAgenda || "default";
+  }
+
+  function getActiveEvents() {
+    if (!agendaSettings.agendas) agendaSettings.agendas = { ...DEFAULT_AGENDA_SETTINGS.agendas };
+    const key = getActiveAgendaKey();
+    if (!agendaSettings.agendas[key]) {
+      agendaSettings.agendas[key] = { name: "Agenda", events: {} };
+    }
+    if (!agendaSettings.agendas[key].events) {
+      agendaSettings.agendas[key].events = {};
+    }
+    return agendaSettings.agendas[key].events;
+  }
+
+  function updateBadge() {
+    if (!activeBadge) return;
+    const key = getActiveAgendaKey();
+    if (key === "custom" && agendaSettings.customName) {
+      activeBadge.textContent = agendaSettings.customName;
+    } else if (AGENDA_PRESETS[key]) {
+      activeBadge.textContent = AGENDA_PRESETS[key].name;
+    } else {
+      activeBadge.textContent = "Agenda";
+    }
+  }
+
+  function renderCalendar() {
+    if (!daysContainer || !monthTitle) return;
+
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+    monthTitle.textContent = `${MONTH_NAMES[month]} ${year}`;
+
+    daysContainer.innerHTML = "";
+
+    const firstDayIndex = (new Date(year, month, 1).getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+    const todayKey = toDateKey(new Date());
+    const selectedKey = toDateKey(selectedDate);
+    const events = getActiveEvents();
+
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+      const dayNum = daysInPrevMonth - i;
+      const cellDate = new Date(year, month - 1, dayNum);
+      const cellKey = toDateKey(cellDate);
+
+      const cell = document.createElement("div");
+      cell.className = "agenda-day other-month";
+      cell.textContent = dayNum;
+      if (cellKey === selectedKey) cell.classList.add("selected");
+      if (events[cellKey] && events[cellKey].length > 0) {
+        const dot = document.createElement("span");
+        dot.className = "agenda-day-dot";
+        cell.appendChild(dot);
+      }
+      cell.addEventListener("click", () => {
+        selectedDate = cellDate;
+        viewDate = new Date(year, month - 1, 1);
+        renderCalendar();
+        renderEvents();
+      });
+      daysContainer.appendChild(cell);
+    }
+
+    for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
+      const cellDate = new Date(year, month, dayNum);
+      const cellKey = toDateKey(cellDate);
+
+      const cell = document.createElement("div");
+      cell.className = "agenda-day";
+      cell.textContent = dayNum;
+
+      if (cellKey === todayKey) cell.classList.add("today");
+      if (cellKey === selectedKey) cell.classList.add("selected");
+
+      if (events[cellKey] && events[cellKey].length > 0) {
+        const dot = document.createElement("span");
+        dot.className = "agenda-day-dot";
+        cell.appendChild(dot);
+      }
+
+      cell.addEventListener("click", () => {
+        selectedDate = cellDate;
+        renderCalendar();
+        renderEvents();
+      });
+      daysContainer.appendChild(cell);
+    }
+
+    const totalRendered = firstDayIndex + daysInMonth;
+    const remaining = (7 - (totalRendered % 7)) % 7;
+    for (let dayNum = 1; dayNum <= remaining; dayNum++) {
+      const cellDate = new Date(year, month + 1, dayNum);
+      const cellKey = toDateKey(cellDate);
+
+      const cell = document.createElement("div");
+      cell.className = "agenda-day other-month";
+      cell.textContent = dayNum;
+      if (cellKey === selectedKey) cell.classList.add("selected");
+      if (events[cellKey] && events[cellKey].length > 0) {
+        const dot = document.createElement("span");
+        dot.className = "agenda-day-dot";
+        cell.appendChild(dot);
+      }
+      cell.addEventListener("click", () => {
+        selectedDate = cellDate;
+        viewDate = new Date(year, month + 1, 1);
+        renderCalendar();
+        renderEvents();
+      });
+      daysContainer.appendChild(cell);
+    }
+  }
+
+  function renderEvents() {
+    if (!eventsList) return;
+    const selKey = toDateKey(selectedDate);
+    const events = getActiveEvents();
+    const dayEvents = events[selKey] || [];
+
+    const options = { weekday: "short", day: "numeric", month: "short" };
+    if (selectedDayText) {
+      selectedDayText.textContent = selectedDate.toLocaleDateString("fr-FR", options);
+    }
+    if (eventsCount) {
+      eventsCount.textContent = `${dayEvents.length} RDV`;
+    }
+
+    eventsList.innerHTML = "";
+
+    if (dayEvents.length === 0) {
+      eventsList.innerHTML = '<div class="agenda-empty-events">Aucun rendez-vous pour ce jour</div>';
+      return;
+    }
+
+    const sorted = [...dayEvents].sort((a, b) => (a.time || "00:00").localeCompare(b.time || "00:00"));
+
+    sorted.forEach((ev, idx) => {
+      const item = document.createElement("div");
+      item.className = "agenda-event-item";
+
+      const timeSpan = document.createElement("span");
+      timeSpan.className = "agenda-event-time";
+      timeSpan.textContent = ev.time || "Journée";
+
+      const titleSpan = document.createElement("span");
+      titleSpan.className = "agenda-event-title";
+      titleSpan.textContent = ev.title;
+      titleSpan.title = ev.title;
+
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "agenda-event-delete-btn";
+      delBtn.textContent = "✕";
+      delBtn.title = "Supprimer ce rendez-vous";
+      delBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        dayEvents.splice(idx, 1);
+        if (dayEvents.length === 0) {
+          delete events[selKey];
+        } else {
+          events[selKey] = dayEvents;
+        }
+        chrome.storage.local.set({ agendaSettings });
+        renderCalendar();
+        renderEvents();
+        showToast("Rendez-vous supprimé");
+      });
+
+      item.appendChild(timeSpan);
+      item.appendChild(titleSpan);
+      item.appendChild(delBtn);
+      eventsList.appendChild(item);
+    });
+  }
+
+  if (prevMonthBtn) {
+    prevMonthBtn.addEventListener("click", () => {
+      viewDate.setMonth(viewDate.getMonth() - 1);
+      renderCalendar();
+    });
+  }
+
+  if (nextMonthBtn) {
+    nextMonthBtn.addEventListener("click", () => {
+      viewDate.setMonth(viewDate.getMonth() + 1);
+      renderCalendar();
+    });
+  }
+
+  if (todayBtn) {
+    todayBtn.addEventListener("click", () => {
+      viewDate = new Date();
+      selectedDate = new Date();
+      renderCalendar();
+      renderEvents();
+    });
+  }
+
+  if (addEventBtn) {
+    addEventBtn.addEventListener("click", () => {
+      const selKey = toDateKey(selectedDate);
+      const defaultTime = "09:00";
+      const input = prompt(
+        `Ajouter un rendez-vous pour le ${selectedDate.toLocaleDateString("fr-FR")}\nFormat : [Heure] Titre (ex: 14:30 Réunion)`,
+        `${defaultTime} `
+      );
+      if (!input || !input.trim()) return;
+
+      const trimmed = input.trim();
+      let time = defaultTime;
+      let title = trimmed;
+
+      const match = trimmed.match(/^(\d{1,2}[:h]\d{2})\s*(.*)$/i);
+      if (match) {
+        time = match[1].replace("h", ":");
+        title = match[2] || "Rendez-vous";
+      }
+
+      const events = getActiveEvents();
+      if (!events[selKey]) events[selKey] = [];
+      events[selKey].push({ id: Date.now().toString(), time, title });
+
+      chrome.storage.local.set({ agendaSettings });
+      renderCalendar();
+      renderEvents();
+      showToast(`RDV ajouté : ${title} à ${time}`);
+    });
+  }
+
+  if (settingsBtn && settingsPanel) {
+    settingsBtn.addEventListener("click", () => {
+      const isHidden = settingsPanel.classList.contains("hidden");
+      if (isHidden) {
+        if (agendaSelect) agendaSelect.value = agendaSettings.activeAgenda || "default";
+        if (customNameInput) customNameInput.value = agendaSettings.customName || "";
+        if (syncUrlInput) syncUrlInput.value = agendaSettings.syncUrl || "";
+        if (customNameRow) {
+          customNameRow.classList.toggle("hidden", agendaSelect.value !== "custom");
+        }
+        settingsPanel.classList.remove("hidden");
+      } else {
+        settingsPanel.classList.add("hidden");
+      }
+    });
+  }
+
+  if (agendaSelect && customNameRow) {
+    agendaSelect.addEventListener("change", () => {
+      customNameRow.classList.toggle("hidden", agendaSelect.value !== "custom");
+    });
+  }
+
+  if (saveSettingsBtn && settingsPanel) {
+    saveSettingsBtn.addEventListener("click", () => {
+      agendaSettings.activeAgenda = agendaSelect ? agendaSelect.value : "default";
+      agendaSettings.customName = customNameInput ? customNameInput.value.trim() : "";
+      agendaSettings.syncUrl = syncUrlInput ? syncUrlInput.value.trim() : "";
+
+      chrome.storage.local.set({ agendaSettings });
+      updateBadge();
+      renderCalendar();
+      renderEvents();
+      settingsPanel.classList.add("hidden");
+      showToast(`Agenda actif : ${activeBadge.textContent}`);
+    });
+  }
+
+  if (closeSettingsBtn && settingsPanel) {
+    closeSettingsBtn.addEventListener("click", () => {
+      settingsPanel.classList.add("hidden");
+    });
+  }
+
+  updateBadge();
+  renderCalendar();
+  renderEvents();
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   if (window.I18N && typeof I18N.init === "function") {
     await I18N.init();
@@ -550,6 +1070,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupNotesWidget();
   setupPomodoroWidget();
   setupRecentWidget();
+  setupCalculatorWidget();
+  setupAgendaWidget();
   setupAllWidgetsDrag();
   setupAllWidgetsResize();
   setupWeatherControls();
@@ -1836,6 +2358,16 @@ function setupAllWidgetsDrag() {
     recentSettings.posX = x; recentSettings.posY = y;
     chrome.storage.local.set({ recentSettings });
   }, "Raccourcis dynamiques");
+
+  setupWidgetDrag(calculatorWidget, () => calculatorSettings, (x, y) => {
+    calculatorSettings.posX = x; calculatorSettings.posY = y;
+    chrome.storage.local.set({ calculatorSettings });
+  }, "Calculatrice");
+
+  setupWidgetDrag(agendaWidget, () => agendaSettings, (x, y) => {
+    agendaSettings.posX = x; agendaSettings.posY = y;
+    chrome.storage.local.set({ agendaSettings });
+  }, "Agenda");
 }
 
 // ========================================================
@@ -1937,6 +2469,16 @@ function setupAllWidgetsResize() {
     recentSettings = s;
     chrome.storage.local.set({ recentSettings });
   }, 180, 110);
+
+  setupWidgetResize(calculatorWidget, () => calculatorSettings, (s) => {
+    calculatorSettings = s;
+    chrome.storage.local.set({ calculatorSettings });
+  }, 200, 260);
+
+  setupWidgetResize(agendaWidget, () => agendaSettings, (s) => {
+    agendaSettings = s;
+    chrome.storage.local.set({ agendaSettings });
+  }, 240, 280);
 }
 
 // ⏰ 1. Horloge Digitale & Date
@@ -2847,12 +3389,15 @@ function displayRecentItems(container, items) {
 async function loadAllWidgetsSettings() {
   return new Promise((resolve) => {
     chrome.storage.local.get(
-      ["clockSettings", "notesSettings", "pomodoroSettings", "recentSettings"],
+      ["clockSettings", "notesSettings", "pomodoroSettings", "recentSettings", "calculatorSettings", "agendaSettings"],
       (res) => {
         clockSettings = { ...DEFAULT_CLOCK_SETTINGS, ...(res.clockSettings || {}) };
         notesSettings = { ...DEFAULT_NOTES_SETTINGS, ...(res.notesSettings || {}) };
         pomodoroSettings = { ...DEFAULT_POMODORO_SETTINGS, ...(res.pomodoroSettings || {}) };
         recentSettings = { ...DEFAULT_RECENT_SETTINGS, ...(res.recentSettings || {}) };
+        calculatorSettings = { ...DEFAULT_CALCULATOR_SETTINGS, ...(res.calculatorSettings || {}) };
+        agendaSettings = { ...DEFAULT_AGENDA_SETTINGS, ...(res.agendaSettings || {}) };
+        if (!agendaSettings.agendas) agendaSettings.agendas = { ...DEFAULT_AGENDA_SETTINGS.agendas };
 
         updateAllWidgetsVisibility();
         resolve();
@@ -2875,7 +3420,9 @@ function updateWidgetDesktopBadges() {
     { widget: weatherWidget, settings: weatherSettings, key: "weatherSettings", name: "Météo" },
     { widget: notesWidget, settings: notesSettings, key: "notesSettings", name: "Bloc-notes" },
     { widget: pomodoroWidget, settings: pomodoroSettings, key: "pomodoroSettings", name: "Pomodoro" },
-    { widget: recentWidget, settings: recentSettings, key: "recentSettings", name: "Récents" }
+    { widget: recentWidget, settings: recentSettings, key: "recentSettings", name: "Récents" },
+    { widget: calculatorWidget, settings: calculatorSettings, key: "calculatorSettings", name: "Calculatrice" },
+    { widget: agendaWidget, settings: agendaSettings, key: "agendaSettings", name: "Agenda" }
   ];
 
   widgetConfigs.forEach(({ widget, settings, key, name }) => {
@@ -2969,6 +3516,24 @@ function updateAllWidgetsVisibility() {
     if (recentSettings.width) applyWidgetDimensions(recentWidget, recentSettings.width, recentSettings.height);
   }
   if (recentEnabledCheckbox) recentEnabledCheckbox.checked = recentSettings.enabled;
+
+  if (calculatorWidget) {
+    const show = shouldShowWidgetOnCurrentPage(calculatorSettings);
+    calculatorWidget.classList.toggle("hidden", !show);
+    calculatorWidget.style.display = show ? "" : "none";
+    calculatorWidget.style.left = `${calculatorSettings.posX}%`;
+    calculatorWidget.style.top = `${calculatorSettings.posY}%`;
+    if (calculatorSettings.width) applyWidgetDimensions(calculatorWidget, calculatorSettings.width, calculatorSettings.height);
+  }
+
+  if (agendaWidget) {
+    const show = shouldShowWidgetOnCurrentPage(agendaSettings);
+    agendaWidget.classList.toggle("hidden", !show);
+    agendaWidget.style.display = show ? "" : "none";
+    agendaWidget.style.left = `${agendaSettings.posX}%`;
+    agendaWidget.style.top = `${agendaSettings.posY}%`;
+    if (agendaSettings.width) applyWidgetDimensions(agendaWidget, agendaSettings.width, agendaSettings.height);
+  }
 
   updateWidgetDesktopBadges();
 }
@@ -5256,6 +5821,32 @@ const WIDGET_CATALOG = [
       recentSettings.enabled = true;
       recentSettings.page = targetPage;
       chrome.storage.local.set({ recentSettings });
+      updateAllWidgetsVisibility();
+    }
+  },
+  {
+    type: "calculator",
+    name: "Calculatrice Intégrée",
+    category: "tools",
+    icon: "🧮",
+    description: "Calculatrice moderne complète avec historique, calculs instantanés et raccourcis clavier.",
+    apply: (targetPage) => {
+      calculatorSettings.enabled = true;
+      calculatorSettings.page = targetPage;
+      chrome.storage.local.set({ calculatorSettings });
+      updateAllWidgetsVisibility();
+    }
+  },
+  {
+    type: "agenda",
+    name: "Agenda & Calendrier (BIP)",
+    category: "tools",
+    icon: "📅",
+    description: "Calendrier mensuel interactif avec gestion des rendez-vous et choix de l'agenda actif (⚙️ Roue crantée, iCal, Google).",
+    apply: (targetPage) => {
+      agendaSettings.enabled = true;
+      agendaSettings.page = targetPage;
+      chrome.storage.local.set({ agendaSettings });
       updateAllWidgetsVisibility();
     }
   }

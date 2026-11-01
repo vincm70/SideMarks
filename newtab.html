@@ -128,6 +128,127 @@
           <div class="widget-drag-handle" title="Glisser pour déplacer les raccourcis">✥ Déplacer</div>
           <div class="widget-resize-handle" title="Glisser pour redimensionner les raccourcis">⋱</div>
         </div>
+      
+        <!-- 🧮 WIDGET CALCULATRICE MODERNE -->
+        <div id="calculatorWidget" class="floating-widget calculator-widget hidden" title="Calculatrice">
+          <div class="widget-header">
+            <span class="widget-title">🧮 Calculatrice</span>
+            <div class="calculator-header-actions">
+              <span id="calcMiniHistory" class="calc-mini-history"></span>
+            </div>
+          </div>
+          <div class="calculator-body">
+            <div class="calc-screen-container">
+              <div id="calcExpressionDisplay" class="calc-expression-display"></div>
+              <input type="text" id="calcScreen" class="calc-screen" value="0" readonly>
+            </div>
+            <div class="calc-keypad">
+              <button type="button" class="calc-btn calc-btn-fn" data-action="clear">C</button>
+              <button type="button" class="calc-btn calc-btn-fn" data-action="backspace">⌫</button>
+              <button type="button" class="calc-btn calc-btn-fn" data-action="percent">%</button>
+              <button type="button" class="calc-btn calc-btn-op" data-action="/">÷</button>
+
+              <button type="button" class="calc-btn calc-btn-num" data-num="7">7</button>
+              <button type="button" class="calc-btn calc-btn-num" data-num="8">8</button>
+              <button type="button" class="calc-btn calc-btn-num" data-num="9">9</button>
+              <button type="button" class="calc-btn calc-btn-op" data-action="*">×</button>
+
+              <button type="button" class="calc-btn calc-btn-num" data-num="4">4</button>
+              <button type="button" class="calc-btn calc-btn-num" data-num="5">5</button>
+              <button type="button" class="calc-btn calc-btn-num" data-num="6">6</button>
+              <button type="button" class="calc-btn calc-btn-op" data-action="-">−</button>
+
+              <button type="button" class="calc-btn calc-btn-num" data-num="1">1</button>
+              <button type="button" class="calc-btn calc-btn-num" data-num="2">2</button>
+              <button type="button" class="calc-btn calc-btn-num" data-num="3">3</button>
+              <button type="button" class="calc-btn calc-btn-op" data-action="+">+</button>
+
+              <button type="button" class="calc-btn calc-btn-num calc-btn-zero" data-num="0">0</button>
+              <button type="button" class="calc-btn calc-btn-num" data-num=".">,</button>
+              <button type="button" class="calc-btn calc-btn-eq" data-action="=">=</button>
+            </div>
+          </div>
+          <div class="widget-drag-handle" title="Glisser pour déplacer la calculatrice">✥ Déplacer</div>
+          <div class="widget-resize-handle" title="Glisser pour redimensionner la calculatrice">⋱</div>
+        </div>
+
+        <!-- 📅 WIDGET AGENDA / CALENDRIER (STYLE AGENDA BIP & GOOGLE CALENDAR) -->
+        <div id="agendaWidget" class="floating-widget agenda-widget hidden" title="Agenda & Rendez-vous">
+          <div class="widget-header">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="widget-title">📅 Agenda</span>
+              <span id="agendaActiveBadge" class="agenda-active-badge">Principal</span>
+            </div>
+            <div class="agenda-header-actions">
+              <button type="button" id="agendaAddEventBtn" class="widget-header-btn" title="Ajouter un rendez-vous">+</button>
+              <button type="button" id="agendaSettingsBtn" class="widget-header-btn agenda-gear-btn" title="Paramètres : Choisir l'agenda à afficher (Roue crantée)">⚙️</button>
+            </div>
+          </div>
+
+          <!-- Panneau de configuration déroulant (Roue crantée) -->
+          <div id="agendaSettingsPanel" class="agenda-settings-panel hidden">
+            <div class="agenda-settings-title">⚙️ Configuration de l'Agenda</div>
+            <div class="agenda-setting-row">
+              <label for="agendaSelect">Agenda actif :</label>
+              <select id="agendaSelect" class="agenda-select">
+                <option value="default">🔵 Agenda Principal</option>
+                <option value="rdvtzt">🟢 Rendez-vous RDVTZT</option>
+                <option value="famille">🟣 Famille & Scolaire</option>
+                <option value="pro">🟠 Professionnel</option>
+                <option value="custom">➕ Agenda Personnalisé...</option>
+              </select>
+            </div>
+            <div id="agendaCustomNameRow" class="agenda-setting-row hidden">
+              <label for="agendaCustomNameInput">Nom de l'agenda :</label>
+              <input type="text" id="agendaCustomNameInput" class="agenda-input" placeholder="Ex: Mairie, Médical, Association...">
+            </div>
+            <div class="agenda-setting-row">
+              <label for="agendaSyncUrlInput">Lien iCal / Google / Web :</label>
+              <input type="text" id="agendaSyncUrlInput" class="agenda-input" placeholder="URL Google Agenda, lien web ou iCal (.ics)">
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px;">
+              <button type="button" id="agendaSaveSettingsBtn" class="btn-xs btn-xs-primary">Enregistrer</button>
+              <button type="button" id="agendaCloseSettingsBtn" class="btn-xs">Fermer</button>
+            </div>
+          </div>
+
+          <!-- Corps de l'Agenda -->
+          <div class="agenda-body">
+            <!-- Navigation mensuelle -->
+            <div class="agenda-month-nav">
+              <button type="button" id="agendaPrevMonthBtn" class="agenda-nav-btn" title="Mois précédent">‹</button>
+              <span id="agendaMonthTitle" class="agenda-month-title">Novembre 2026</span>
+              <button type="button" id="agendaTodayBtn" class="agenda-today-btn" title="Aujourd'hui">Aujourd'hui</button>
+              <button type="button" id="agendaNextMonthBtn" class="agenda-nav-btn" title="Mois suivant">›</button>
+            </div>
+
+            <!-- Grille du calendrier mensuel -->
+            <div class="agenda-calendar-grid">
+              <div class="agenda-weekday">L</div>
+              <div class="agenda-weekday">M</div>
+              <div class="agenda-weekday">M</div>
+              <div class="agenda-weekday">J</div>
+              <div class="agenda-weekday">V</div>
+              <div class="agenda-weekday">S</div>
+              <div class="agenda-weekday">D</div>
+              <div id="agendaDaysContainer" class="agenda-days-container"></div>
+            </div>
+
+            <!-- Liste des rendez-vous / événements du jour -->
+            <div class="agenda-events-section">
+              <div class="agenda-events-header">
+                <span id="agendaSelectedDayText" class="agenda-selected-day-text">Rendez-vous</span>
+                <span id="agendaEventsCount" class="agenda-events-count">0 RDV</span>
+              </div>
+              <div id="agendaEventsList" class="agenda-events-list">
+                <!-- Rempli dynamiquement -->
+              </div>
+            </div>
+          </div>
+
+          <div class="widget-drag-handle" title="Glisser pour déplacer l'agenda">✥ Déplacer</div>
+          <div class="widget-resize-handle" title="Glisser pour redimensionner l'agenda">⋱</div>
+        </div>
       </nav>
 
       <!-- Centre : Recherche Multi-moteurs -->

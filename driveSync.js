@@ -90,7 +90,7 @@ const DriveSync = {
         [
           "quickPills", "customWallpaper", "wallpaperSettings", "collapsedFolders",
           "notesData", "notesHtml", "notesContent", "notesSettings",
-          "clockSettings", "pomodoroSettings", "recentSettings", "weatherSettings",
+          "clockSettings", "pomodoroSettings", "recentSettings", "weatherSettings", "calculatorSettings", "agendaSettings",
           "dockShortcuts", "totalDesktopPages", "pillsSize", "placedWidgets"
         ],
         (localRes) => {
@@ -110,6 +110,8 @@ const DriveSync = {
               pomodoroSettings: localRes.pomodoroSettings || null,
               recentSettings: localRes.recentSettings || null,
               weatherSettings: localRes.weatherSettings || null,
+              calculatorSettings: localRes.calculatorSettings || null,
+              agendaSettings: localRes.agendaSettings || null,
               dockShortcuts: localRes.dockShortcuts || null,
               totalDesktopPages: localRes.totalDesktopPages || 1,
               pillsSize: localRes.pillsSize || "standard",
@@ -154,6 +156,8 @@ const DriveSync = {
       if (payload.pomodoroSettings) localData.pomodoroSettings = payload.pomodoroSettings;
       if (payload.recentSettings) localData.recentSettings = payload.recentSettings;
       if (payload.weatherSettings) localData.weatherSettings = payload.weatherSettings;
+      if (payload.calculatorSettings) localData.calculatorSettings = payload.calculatorSettings;
+      if (payload.agendaSettings) localData.agendaSettings = payload.agendaSettings;
       if (payload.dockShortcuts) localData.dockShortcuts = payload.dockShortcuts;
       if (payload.totalDesktopPages) localData.totalDesktopPages = payload.totalDesktopPages;
       if (payload.pillsSize) localData.pillsSize = payload.pillsSize;

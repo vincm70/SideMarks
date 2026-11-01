@@ -2579,3 +2579,431 @@ html, body {
   background: rgba(239, 68, 68, 0.3);
   color: #ef4444;
 }
+
+
+/* ==========================================================================
+   🧮 WIDGET CALCULATRICE MODERNE
+   ========================================================================== */
+.calculator-widget {
+  width: 240px;
+  min-width: 220px;
+  max-width: 320px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  user-select: none;
+}
+
+.calculator-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.calc-screen-container {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.calc-expression-display {
+  font-size: 11px;
+  color: #94a3b8;
+  min-height: 14px;
+  line-height: 14px;
+  word-break: break-all;
+  text-align: right;
+  font-family: 'Consolas', 'Courier New', monospace;
+}
+
+.calc-screen {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  font-size: 24px;
+  font-weight: 700;
+  text-align: right;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+  padding: 2px 0 0 0;
+  cursor: default;
+}
+
+.calc-keypad {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.calc-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: #f1f5f9;
+  font-size: 15px;
+  font-weight: 600;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  backdrop-filter: blur(4px);
+}
+
+.calc-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.calc-btn:active {
+  transform: translateY(1px);
+  filter: brightness(0.9);
+}
+
+.calc-btn-fn {
+  background: rgba(255, 255, 255, 0.14);
+  color: #cbd5e1;
+  font-weight: 700;
+}
+
+.calc-btn-fn:hover {
+  background: rgba(255, 255, 255, 0.24);
+  color: #fff;
+}
+
+.calc-btn-op {
+  background: rgba(245, 158, 11, 0.25);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.calc-btn-op:hover {
+  background: rgba(245, 158, 11, 0.45);
+  color: #fff;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+}
+
+.calc-btn-eq {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  border-color: #60a5fa;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.calc-btn-eq:hover {
+  background: linear-gradient(135deg, #1d4ed8, #1e40af);
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.6);
+}
+
+.calc-btn-zero {
+  grid-column: span 1;
+}
+
+/* ==========================================================================
+   📅 WIDGET AGENDA / CALENDRIER (STYLE AGENDA BIP & GOOGLE CALENDAR)
+   ========================================================================== */
+.agenda-widget {
+  width: 270px;
+  min-width: 250px;
+  max-width: 380px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agenda-active-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.25);
+  color: #93c5fd;
+  border: 1px solid rgba(96, 165, 250, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.agenda-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.agenda-gear-btn {
+  font-size: 14px;
+  transition: transform 0.25s ease;
+}
+.agenda-gear-btn:hover {
+  transform: rotate(45deg);
+}
+
+/* Panneau de configuration déroulant */
+.agenda-settings-panel {
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  animation: fadeIn 0.15s ease-out;
+}
+
+.agenda-settings-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #e2e8f0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 4px;
+}
+
+.agenda-setting-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.agenda-setting-row label {
+  font-size: 10px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.agenda-select, .agenda-input {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: #f1f5f9;
+  font-size: 11px;
+  padding: 5px 8px;
+  outline: none;
+  width: 100%;
+}
+
+.agenda-select:focus, .agenda-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 6px rgba(59, 130, 246, 0.3);
+}
+
+.agenda-select option {
+  background: #1e293b;
+  color: #f8fafc;
+}
+
+/* Corps de l'Agenda */
+.agenda-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agenda-month-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+
+.agenda-month-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  text-transform: capitalize;
+}
+
+.agenda-nav-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  border-radius: 6px;
+  color: #cbd5e1;
+  font-size: 16px;
+  line-height: 1;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.agenda-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.agenda-today-btn {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  border-radius: 6px;
+  color: #93c5fd;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.agenda-today-btn:hover {
+  background: rgba(59, 130, 246, 0.3);
+  color: #ffffff;
+}
+
+/* Grille mensuelle */
+.agenda-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+  text-align: center;
+}
+
+.agenda-weekday {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  padding: 2px 0;
+}
+
+.agenda-days-container {
+  display: contents;
+}
+
+.agenda-day {
+  font-size: 11px;
+  font-weight: 500;
+  height: 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #cbd5e1;
+  position: relative;
+  transition: all 0.12s ease;
+}
+
+.agenda-day:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.agenda-day.other-month {
+  color: #475569;
+}
+
+.agenda-day.today {
+  background: rgba(59, 130, 246, 0.3);
+  border: 1px solid #3b82f6;
+  color: #60a5fa;
+  font-weight: 700;
+}
+
+.agenda-day.selected {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  font-weight: 700;
+  box-shadow: 0 0 8px rgba(37, 99, 235, 0.5);
+}
+
+.agenda-day-dot {
+  position: absolute;
+  bottom: 2px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #f59e0b;
+}
+
+/* Section événements du jour */
+.agenda-events-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.agenda-events-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.agenda-events-list {
+  max-height: 90px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 2px;
+}
+
+.agenda-event-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.05);
+  border-left: 3px solid #3b82f6;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 11px;
+}
+
+.agenda-event-time {
+  font-weight: 700;
+  color: #93c5fd;
+  margin-right: 6px;
+  font-size: 10px;
+}
+
+.agenda-event-title {
+  flex: 1;
+  color: #f1f5f9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agenda-event-delete-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+
+.agenda-event-delete-btn:hover {
+  color: #ef4444;
+}
+
+.agenda-empty-events {
+  font-size: 10px;
+  color: #64748b;
+  font-style: italic;
+  text-align: center;
+  padding: 6px 0;
+}
