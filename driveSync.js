@@ -23,29 +23,83 @@ const DriveSync = {
     }
   },
 
-  // Récupère le jeton d'authentification Google (transparent si déjà connecté, interactif si demandé)
+  // Récupère le jeton d'authentification Google (avec support WebAuthFlow pour client Web)
   async getAuthToken(interactive = false) {
-    if (!chrome.identity || !chrome.identity.getAuthToken) {
-      throw new Error("L'API chrome.identity n'est pas disponible.");
-    }
-
     if (!this.hasConfiguredOAuth()) {
       throw new Error(
-        "OAuth2_NON_CONFIGURE: L'ID Client Google Cloud de l'éditeur TOUZIO APPS doit être renseigné dans le manifest.json avant le premier déploiement public."
+        "OAuth2_NON_CONFIGURE: L'ID Client Google Cloud doit être renseigné dans le manifest.json."
       );
     }
 
-    return new Promise((resolve, reject) => {
-      chrome.identity.getAuthToken({ interactive }, (token) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-        } else if (!token) {
-          reject(new Error("Aucun jeton d'accès n'a été retourné par Google."));
+    // 1. Tenter chrome.identity.getAuthToken en mode silencieux
+    if (chrome.identity && chrome.identity.getAuthToken) {
+      const token = await new Promise((resolve) => {
+        chrome.identity.getAuthToken({ interactive: false }, (t) => {
+          if (!chrome.runtime.lastError && t) resolve(t);
+          else resolve(null);
+        });
+      });
+      if (token) return token;
+    }
+
+    // 2. Vérifier si un jeton récent (< 50 minutes) a été stocké par launchWebAuthFlow
+    const stored = await new Promise((resolve) => {
+      chrome.storage.local.get(["savedGoogleToken", "savedGoogleTokenTime"], (res) => {
+        if (res && res.savedGoogleToken && res.savedGoogleTokenTime && (Date.now() - res.savedGoogleTokenTime < 50 * 60 * 1000)) {
+          resolve(res.savedGoogleToken);
         } else {
-          resolve(token);
+          resolve(null);
         }
       });
     });
+    if (stored) return stored;
+
+    // 3. Si interactif : tenter getAuthToken puis repli sur launchWebAuthFlow officiel
+    if (interactive) {
+      if (chrome.identity && chrome.identity.getAuthToken) {
+        const directToken = await new Promise((resolve) => {
+          chrome.identity.getAuthToken({ interactive: true }, (t) => {
+            if (!chrome.runtime.lastError && t) resolve(t);
+            else resolve(null);
+          });
+        });
+        if (directToken) return directToken;
+      }
+
+      // Repli WebAuthFlow officiel
+      if (chrome.identity && chrome.identity.launchWebAuthFlow) {
+        const manifest = chrome.runtime.getManifest();
+        const clientId = manifest?.oauth2?.client_id || "266928074814-tni93lcf3rhr9k96ce86a22kko8uo64s.apps.googleusercontent.com";
+        const redirectUrl = chrome.identity.getRedirectURL();
+        const scopes = [
+          "https://www.googleapis.com/auth/calendar.readonly",
+          "https://www.googleapis.com/auth/calendar.events",
+          "https://www.googleapis.com/auth/tasks",
+          "https://www.googleapis.com/auth/userinfo.email",
+          "https://www.googleapis.com/auth/drive.appdata"
+        ].join(" ");
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUrl)}&scope=${encodeURIComponent(scopes)}&prompt=consent`;
+
+        return new Promise((resolve, reject) => {
+          chrome.identity.launchWebAuthFlow({ url: authUrl, interactive: true }, (responseUrl) => {
+            if (chrome.runtime.lastError || !responseUrl) {
+              const msg = chrome.runtime.lastError ? chrome.runtime.lastError.message : "Autorisation Google annulée";
+              return reject(new Error(msg));
+            }
+            const match = responseUrl.match(/access_token=([^&]+)/);
+            if (match && match[1]) {
+              const t = match[1];
+              chrome.storage.local.set({ savedGoogleToken: t, savedGoogleTokenTime: Date.now() });
+              resolve(t);
+            } else {
+              reject(new Error("Impossible d'extraire le jeton Google"));
+            }
+          });
+        });
+      }
+    }
+
+    throw new Error("Authentification Google requise.");
   },
 
   // Récupère l'adresse email de l'utilisateur Google connecté
