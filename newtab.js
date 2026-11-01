@@ -978,12 +978,16 @@ async function performGoogleDataSync(token, interactive = false) {
         const listsData = await listsRes.json();
         const allTasks = [];
         for (const list of (listsData.items || [])) {
-          const tRes = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${encodeURIComponent(list.id)}/tasks?showCompleted=true&showHidden=true&maxResults=100`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (tRes.ok) {
-            const tData = await tRes.json();
-            (tData.items || []).forEach(t => {
+          let pageToken = "";
+          do {
+            const pageParam = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "";
+            const tRes = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${encodeURIComponent(list.id)}/tasks?showCompleted=true&showHidden=true&maxResults=100${pageParam}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (tRes.ok) {
+              const tData = await tRes.json();
+              pageToken = tData.nextPageToken || "";
+              (tData.items || []).forEach(t => {
               let priority = "NONE";
               const pMatch = (t.notes || "").match(/(?:priorité|priority)[^P0-4]*(P[0-4])/i);
               if (pMatch) priority = pMatch[1].toUpperCase();
@@ -1001,7 +1005,10 @@ async function performGoogleDataSync(token, interactive = false) {
                 priority
               });
             });
-          }
+            } else {
+              break;
+            }
+          } while (pageToken);
         }
         if (allTasks.length > 0) {
           tasksList = allTasks;
@@ -2196,7 +2203,33 @@ function setupTasksWidget() {
   }
 
   // Construction de l'arborescence des tâches et sous-tâches
-  function renderTasks() {
+  
+// Extraction automatique des sous-tâches rédigées dans les notes (- [ ] ou [ ])
+function extractSubtasksFromNotes(parentTask) {
+  if (!parentTask || !parentTask.notes) return [];
+  const lines = parentTask.notes.split(/\r?\n/);
+  const subs = [];
+  lines.forEach((line, idx) => {
+    const trimmed = line.trim();
+    const chkMatch = trimmed.match(/^[-*•]?\s*\[([ xX])\]\s*(.+)$/);
+    if (chkMatch) {
+      const isDone = chkMatch[1].toLowerCase() === "x";
+      subs.push({
+        id: `${parentTask.id}_note_sub_${idx}`,
+        title: chkMatch[2].trim(),
+        parent: parentTask.id,
+        groupId: parentTask.groupId,
+        status: isDone ? "done" : "todo",
+        due: parentTask.due || "",
+        isNoteSubtask: true,
+        noteLineIndex: idx
+      });
+    }
+  });
+  return subs;
+}
+
+function renderTasks() {
     if (!listContainer) return;
 
     const todoTasks = tasksList.filter(t => t.status !== "done");
@@ -2242,7 +2275,12 @@ function setupTasksWidget() {
     const matchingRoots = [];
 
     rootTasks.forEach(root => {
-      const children = childrenMap.get(root.id) || [];
+      let children = childrenMap.get(root.id) || [];
+      // Si aucune sous-tâche native avec parent n'est liée, chercher dans les notes
+      if (children.length === 0) {
+        const noteSubs = extractSubtasksFromNotes(root);
+        if (noteSubs.length > 0) children = noteSubs;
+      }
       const rootMatches = taskMatchesFilters(root);
       const childMatches = children.some(c => taskMatchesFilters(c));
 
@@ -2286,7 +2324,8 @@ function setupTasksWidget() {
         const fold = document.createElement("details");
         fold.className = "subtasks-fold";
         fold.dataset.taskFold = task.id;
-        const isOpen = autoExpand || expandedSubtasksSet.has(task.id);
+        const isClosedExplicitly = (localStorage.getItem("agendabip-closed-subtasks-v1") || "").includes(task.id);
+        const isOpen = autoExpand || expandedSubtasksSet.has(task.id) || !isClosedExplicitly;
         if (isOpen) fold.open = true;
 
         const doneCount = children.filter(c => c.status === "done").length;
@@ -4256,8 +4295,9 @@ function setupSearchBarDrag() {
 
         const currentLeftPx = parseFloat(section.style.left);
         const currentTopPx = parseFloat(section.style.top);
-        searchBarSettings.posX = Math.round((currentLeftPx / containerRect.width) * 1000) / 10;
-        searchBarSettings.posY = Math.round((currentTopPx / containerRect.height) * 1000) / 10;
+        const sX = Math.round((currentLeftPx / containerRect.width) * 1000) / 10;
+        const sY = Math.round((currentTopPx / containerRect.height) * 1000) / 10;
+        saveWidgetGeometryForCurrentPage(searchBarSettings, { posX: sX, posY: sY, freePos: true });
         searchBarSettings.freePos = true;
 
         chrome.storage.local.set({ searchBarSettings });
@@ -4283,49 +4323,46 @@ function setupSearchBarDrag() {
 function setupAllWidgetsDrag() {
   setupSearchBarDrag();
   setupWidgetDrag(weatherWidget, () => weatherSettings, (x, y) => {
-    weatherSettings.posX = x; weatherSettings.posY = y;
+    saveWidgetGeometryForCurrentPage(weatherSettings, { posX: x, posY: y });
     saveWeatherSettings();
   }, "Météo");
 
   setupWidgetDrag(clockWidget, () => clockSettings, (x, y) => {
-    clockSettings.posX = x; clockSettings.posY = y;
+    saveWidgetGeometryForCurrentPage(clockSettings, { posX: x, posY: y });
     chrome.storage.local.set({ clockSettings });
   }, "Horloge & Date");
 
   setupWidgetDrag(notesWidget, () => notesSettings, (x, y) => {
-    notesSettings.posX = x; notesSettings.posY = y;
+    saveWidgetGeometryForCurrentPage(notesSettings, { posX: x, posY: y });
     chrome.storage.local.set({ notesSettings });
   }, "Bloc-notes");
 
   setupWidgetDrag(pomodoroWidget, () => pomodoroSettings, (x, y) => {
-    pomodoroSettings.posX = x; pomodoroSettings.posY = y;
+    saveWidgetGeometryForCurrentPage(pomodoroSettings, { posX: x, posY: y });
     chrome.storage.local.set({ pomodoroSettings });
   }, "Minuteur Focus");
 
   setupWidgetDrag(recentWidget, () => recentSettings, (x, y) => {
-    recentSettings.posX = x; recentSettings.posY = y;
+    saveWidgetGeometryForCurrentPage(recentSettings, { posX: x, posY: y });
     chrome.storage.local.set({ recentSettings });
   }, "Raccourcis dynamiques");
 
   setupWidgetDrag(calculatorWidget, () => calculatorSettings, (x, y) => {
-    calculatorSettings.posX = x; calculatorSettings.posY = y;
+    saveWidgetGeometryForCurrentPage(calculatorSettings, { posX: x, posY: y });
     chrome.storage.local.set({ calculatorSettings });
   }, "Calculatrice");
 
   setupWidgetDrag(agendaWidget, () => agendaSettings, (x, y) => {
-    agendaSettings.posX = x; agendaSettings.posY = y;
+    saveWidgetGeometryForCurrentPage(agendaSettings, { posX: x, posY: y });
     chrome.storage.local.set({ agendaSettings });
   }, "Agenda");
 
   setupWidgetDrag(tasksWidget, () => tasksSettings, (x, y) => {
-    tasksSettings.posX = x; tasksSettings.posY = y;
+    saveWidgetGeometryForCurrentPage(tasksSettings, { posX: x, posY: y });
     chrome.storage.local.set({ tasksSettings });
   }, "Tâches");
 }
 
-// ========================================================
-// REDIMENSIONNEMENT DES WIDGETS (Coin inférieur droit ⋱)
-// ========================================================
 function setupWidgetResize(widgetEl, getSettings, saveSettings, minW = 140, minH = 60) {
   if (!widgetEl) return;
   const handle = widgetEl.querySelector(".widget-resize-handle");
@@ -4341,7 +4378,7 @@ function setupWidgetResize(widgetEl, getSettings, saveSettings, minW = 140, minH
     const startW = widgetEl.offsetWidth;
     const startH = widgetEl.offsetHeight;
 
-    try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+    try { handle.setPointerCapture(e.pointerId); } catch (_) {}
 
     const onPointerMove = (moveEv) => {
       const dx = moveEv.clientX - startX;
@@ -4360,14 +4397,20 @@ function setupWidgetResize(widgetEl, getSettings, saveSettings, minW = 140, minH
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerUp);
-      try { handle.releasePointerCapture(e.pointerId); } catch (err) {}
+      try { handle.releasePointerCapture(e.pointerId); } catch (_) {}
 
       const settings = getSettings();
-      settings.width = widgetEl.offsetWidth;
-      settings.height = widgetEl.offsetHeight;
+      if (typeof saveWidgetGeometryForCurrentPage === "function") {
+        saveWidgetGeometryForCurrentPage(settings, {
+          width: widgetEl.offsetWidth,
+          height: widgetEl.offsetHeight
+        });
+      } else {
+        settings.width = widgetEl.offsetWidth;
+        settings.height = widgetEl.offsetHeight;
+      }
       saveSettings(settings);
-      showToast("Taille du widget enregistrée");
-      // Dégager les raccourcis si le widget agrandi les chevauche
+      showToast("Taille du widget enregistrée pour ce bureau");
       setTimeout(resolvePillsOverlap, 30);
     };
 
@@ -5445,6 +5488,49 @@ async function loadAllWidgetsSettings() {
   });
 }
 
+
+// ========================================================
+// GÉOMÉTRIE ET EMPLACEMENTS INDÉPENDANTS PAR BUREAU
+// ========================================================
+function getWidgetGeometryForCurrentPage(settings) {
+  if (!settings) return { posX: 50, posY: 50, width: undefined, height: undefined };
+  const pIdx = (typeof currentDesktopPageIndex === "number") ? currentDesktopPageIndex : 0;
+  if (settings.positionsByPage && settings.positionsByPage[pIdx]) {
+    const p = settings.positionsByPage[pIdx];
+    return {
+      posX: (typeof p.posX === "number") ? p.posX : (typeof settings.posX === "number" ? settings.posX : 50),
+      posY: (typeof p.posY === "number") ? p.posY : (typeof settings.posY === "number" ? settings.posY : 50),
+      width: p.width || settings.width,
+      height: p.height || settings.height
+    };
+  }
+  return {
+    posX: (typeof settings.posX === "number") ? settings.posX : 50,
+    posY: (typeof settings.posY === "number") ? settings.posY : 50,
+    width: settings.width,
+    height: settings.height
+  };
+}
+
+function saveWidgetGeometryForCurrentPage(settings, partialGeom) {
+  if (!settings) return;
+  const pIdx = (typeof currentDesktopPageIndex === "number") ? currentDesktopPageIndex : 0;
+  if (!settings.positionsByPage) settings.positionsByPage = {};
+  if (!settings.positionsByPage[pIdx]) {
+    settings.positionsByPage[pIdx] = {
+      posX: settings.posX,
+      posY: settings.posY,
+      width: settings.width,
+      height: settings.height
+    };
+  }
+  Object.assign(settings.positionsByPage[pIdx], partialGeom);
+  if (typeof partialGeom.posX === "number") settings.posX = partialGeom.posX;
+  if (typeof partialGeom.posY === "number") settings.posY = partialGeom.posY;
+  if (partialGeom.width) settings.width = partialGeom.width;
+  if (partialGeom.height) settings.height = partialGeom.height;
+}
+
 function shouldShowWidgetOnCurrentPage(settings) {
   if (!settings || !settings.enabled) return false;
   // 1. Visible sur tous les bureaux
@@ -5607,9 +5693,10 @@ function updateAllWidgetsVisibility() {
     const show = shouldShowWidgetOnCurrentPage(clockSettings);
     clockWidget.classList.toggle("hidden", !show);
     clockWidget.style.display = show ? "" : "none";
-    clockWidget.style.left = `${clockSettings.posX}%`;
-    clockWidget.style.top = `${clockSettings.posY}%`;
-    if (clockSettings.width) applyWidgetDimensions(clockWidget, clockSettings.width, clockSettings.height);
+    const geo = getWidgetGeometryForCurrentPage(clockSettings);
+    clockWidget.style.left = `${geo.posX}%`;
+    clockWidget.style.top = `${geo.posY}%`;
+    if (geo.width) applyWidgetDimensions(clockWidget, geo.width, geo.height);
   }
   if (clockEnabledCheckbox) clockEnabledCheckbox.checked = clockSettings.enabled;
 
@@ -5617,9 +5704,10 @@ function updateAllWidgetsVisibility() {
     const show = shouldShowWidgetOnCurrentPage(weatherSettings);
     weatherWidget.classList.toggle("hidden", !show);
     weatherWidget.style.display = show ? "" : "none";
-    weatherWidget.style.left = `${weatherSettings.posX}%`;
-    weatherWidget.style.top = `${weatherSettings.posY}%`;
-    if (weatherSettings.width) applyWidgetDimensions(weatherWidget, weatherSettings.width, weatherSettings.height);
+    const geo = getWidgetGeometryForCurrentPage(weatherSettings);
+    weatherWidget.style.left = `${geo.posX}%`;
+    weatherWidget.style.top = `${geo.posY}%`;
+    if (geo.width) applyWidgetDimensions(weatherWidget, geo.width, geo.height);
   }
   if (weatherEnabledCheckbox) weatherEnabledCheckbox.checked = weatherSettings.enabled;
 
@@ -5627,9 +5715,10 @@ function updateAllWidgetsVisibility() {
     const show = shouldShowWidgetOnCurrentPage(notesSettings);
     notesWidget.classList.toggle("hidden", !show);
     notesWidget.style.display = show ? "" : "none";
-    notesWidget.style.left = `${notesSettings.posX}%`;
-    notesWidget.style.top = `${notesSettings.posY}%`;
-    if (notesSettings.width) applyWidgetDimensions(notesWidget, notesSettings.width, notesSettings.height);
+    const geo = getWidgetGeometryForCurrentPage(notesSettings);
+    notesWidget.style.left = `${geo.posX}%`;
+    notesWidget.style.top = `${geo.posY}%`;
+    if (geo.width) applyWidgetDimensions(notesWidget, geo.width, geo.height);
   }
   if (notesEnabledCheckbox) notesEnabledCheckbox.checked = notesSettings.enabled;
 
@@ -5637,9 +5726,10 @@ function updateAllWidgetsVisibility() {
     const show = shouldShowWidgetOnCurrentPage(pomodoroSettings);
     pomodoroWidget.classList.toggle("hidden", !show);
     pomodoroWidget.style.display = show ? "" : "none";
-    pomodoroWidget.style.left = `${pomodoroSettings.posX}%`;
-    pomodoroWidget.style.top = `${pomodoroSettings.posY}%`;
-    if (pomodoroSettings.width) applyWidgetDimensions(pomodoroWidget, pomodoroSettings.width, pomodoroSettings.height);
+    const geo = getWidgetGeometryForCurrentPage(pomodoroSettings);
+    pomodoroWidget.style.left = `${geo.posX}%`;
+    pomodoroWidget.style.top = `${geo.posY}%`;
+    if (geo.width) applyWidgetDimensions(pomodoroWidget, geo.width, geo.height);
   }
   if (pomodoroEnabledCheckbox) pomodoroEnabledCheckbox.checked = pomodoroSettings.enabled;
 
@@ -5647,9 +5737,10 @@ function updateAllWidgetsVisibility() {
     const show = shouldShowWidgetOnCurrentPage(recentSettings);
     recentWidget.classList.toggle("hidden", !show);
     recentWidget.style.display = show ? "" : "none";
-    recentWidget.style.left = `${recentSettings.posX}%`;
-    recentWidget.style.top = `${recentSettings.posY}%`;
-    if (recentSettings.width) applyWidgetDimensions(recentWidget, recentSettings.width, recentSettings.height);
+    const geo = getWidgetGeometryForCurrentPage(recentSettings);
+    recentWidget.style.left = `${geo.posX}%`;
+    recentWidget.style.top = `${geo.posY}%`;
+    if (geo.width) applyWidgetDimensions(recentWidget, geo.width, geo.height);
   }
   if (recentEnabledCheckbox) recentEnabledCheckbox.checked = recentSettings.enabled;
 
@@ -5657,27 +5748,30 @@ function updateAllWidgetsVisibility() {
     const show = shouldShowWidgetOnCurrentPage(calculatorSettings);
     calculatorWidget.classList.toggle("hidden", !show);
     calculatorWidget.style.display = show ? "" : "none";
-    calculatorWidget.style.left = `${calculatorSettings.posX}%`;
-    calculatorWidget.style.top = `${calculatorSettings.posY}%`;
-    if (calculatorSettings.width) applyWidgetDimensions(calculatorWidget, calculatorSettings.width, calculatorSettings.height);
+    const geo = getWidgetGeometryForCurrentPage(calculatorSettings);
+    calculatorWidget.style.left = `${geo.posX}%`;
+    calculatorWidget.style.top = `${geo.posY}%`;
+    if (geo.width) applyWidgetDimensions(calculatorWidget, geo.width, geo.height);
   }
 
   if (agendaWidget) {
     const show = shouldShowWidgetOnCurrentPage(agendaSettings);
     agendaWidget.classList.toggle("hidden", !show);
     agendaWidget.style.display = show ? "" : "none";
-    agendaWidget.style.left = `${agendaSettings.posX}%`;
-    agendaWidget.style.top = `${agendaSettings.posY}%`;
-    if (agendaSettings.width) applyWidgetDimensions(agendaWidget, agendaSettings.width, agendaSettings.height);
+    const geo = getWidgetGeometryForCurrentPage(agendaSettings);
+    agendaWidget.style.left = `${geo.posX}%`;
+    agendaWidget.style.top = `${geo.posY}%`;
+    if (geo.width) applyWidgetDimensions(agendaWidget, geo.width, geo.height);
   }
 
   if (tasksWidget) {
     const show = shouldShowWidgetOnCurrentPage(tasksSettings);
     tasksWidget.classList.toggle("hidden", !show);
     tasksWidget.style.display = show ? "" : "none";
-    tasksWidget.style.left = `${tasksSettings.posX}%`;
-    tasksWidget.style.top = `${tasksSettings.posY}%`;
-    if (tasksSettings.width) applyWidgetDimensions(tasksWidget, tasksSettings.width, tasksSettings.height);
+    const geo = getWidgetGeometryForCurrentPage(tasksSettings);
+    tasksWidget.style.left = `${geo.posX}%`;
+    tasksWidget.style.top = `${geo.posY}%`;
+    if (geo.width) applyWidgetDimensions(tasksWidget, geo.width, geo.height);
   }
 
   if (typeof updateWidgetDesktopBadges === "function") updateWidgetDesktopBadges();
