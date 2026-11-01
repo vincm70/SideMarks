@@ -4271,12 +4271,12 @@ function setupSearchBarDrag() {
   if (!section) return;
 
   const dragHandle = document.getElementById("searchDragHandle");
-  const targetDrag = dragHandle || section;
 
-  targetDrag.addEventListener("pointerdown", (e) => {
+  const startDrag = (e) => {
     if (!isLiveEditMode) return;
     if (e.button !== 0) return;
-    if (e.target.closest("input") || e.target.closest("button") || e.target.closest(".search-engine-dropdown")) return;
+    // En mode édition, ne pas démarrer le glisser si on clique sur un bouton interactif
+    if (e.target.closest("button") || e.target.closest(".search-engine-dropdown")) return;
 
     e.preventDefault();
     const containerRect = pillsContainer ? pillsContainer.getBoundingClientRect() : document.body.getBoundingClientRect();
@@ -4294,11 +4294,16 @@ function setupSearchBarDrag() {
       if (!hasMoved && Math.hypot(dx, dy) > 4) {
         hasMoved = true;
         section.classList.add("free-positioned", "dragging-widget");
-        try { targetDrag.setPointerCapture(e.pointerId); } catch (_) {}
+        try { section.setPointerCapture(e.pointerId); } catch (_) {}
       }
       if (hasMoved) {
         let newLeftPx = moveEv.clientX - containerRect.left - offsetX;
         let newTopPx = moveEv.clientY - containerRect.top - offsetY;
+
+        // Magnétisme doux d'alignement avec les autres widgets et raccourcis
+        const snapped = computeSnap(newLeftPx, newTopPx, rect.width, rect.height, section, containerRect);
+        newLeftPx = snapped.left;
+        newTopPx = snapped.top;
 
         const maxLeft = containerRect.width - rect.width - 10;
         const maxTop = containerRect.height - rect.height - 10;
@@ -4314,31 +4319,42 @@ function setupSearchBarDrag() {
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerUp);
+      hideSnapGuides();
 
       if (hasMoved) {
         section.classList.remove("dragging-widget");
-        try { targetDrag.releasePointerCapture(e.pointerId); } catch (_) {}
+        try { section.releasePointerCapture(e.pointerId); } catch (_) {}
 
         const currentLeftPx = parseFloat(section.style.left);
         const currentTopPx = parseFloat(section.style.top);
         const sX = Math.round((currentLeftPx / containerRect.width) * 1000) / 10;
         const sY = Math.round((currentTopPx / containerRect.height) * 1000) / 10;
+
+        section.style.left = `${sX}%`;
+        section.style.top = `${sY}%`;
+
         saveWidgetGeometryForCurrentPage(searchBarSettings, { posX: sX, posY: sY, freePos: true });
         searchBarSettings.freePos = true;
 
         chrome.storage.local.set({ searchBarSettings });
-        showToast("Position de la barre de recherche enregistrée !");
+        showToast("Position de la barre de recherche enregistrée pour ce bureau !");
+        setTimeout(resolvePillsOverlap, 30);
       }
     };
 
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
     window.addEventListener("pointercancel", onPointerUp);
-  });
+  };
 
-  // Double-clic pour recentrer au milieu par défaut
-  targetDrag.addEventListener("dblclick", () => {
+  // Rendre toute la barre déplaçable au toucher / clic en mode édition
+  section.addEventListener("pointerdown", startDrag);
+  if (dragHandle) dragHandle.addEventListener("pointerdown", startDrag);
+
+  // Double-clic sur la barre pour la recentrer automatiquement au milieu
+  section.addEventListener("dblclick", (e) => {
     if (!isLiveEditMode) return;
+    if (e.target.closest("button") || e.target.closest(".search-engine-dropdown")) return;
     searchBarSettings.freePos = false;
     chrome.storage.local.set({ searchBarSettings });
     applySearchBarPosition();
@@ -5512,7 +5528,7 @@ function displayRecentItems(container, items) {
 async function loadAllWidgetsSettings() {
   return new Promise((resolve) => {
     chrome.storage.local.get(
-      ["clockSettings", "notesSettings", "pomodoroSettings", "recentSettings", "calculatorSettings", "agendaSettings", "tasksSettings", "tasksData", "googleEventsList", "googleCalendarsList"],
+      ["clockSettings", "notesSettings", "pomodoroSettings", "recentSettings", "calculatorSettings", "agendaSettings", "tasksSettings", "searchBarSettings", "tasksData", "googleEventsList", "googleCalendarsList"],
       (res) => {
         clockSettings = { ...DEFAULT_CLOCK_SETTINGS, ...(res.clockSettings || {}) };
         notesSettings = { ...DEFAULT_NOTES_SETTINGS, ...(res.notesSettings || {}) };
@@ -5522,6 +5538,7 @@ async function loadAllWidgetsSettings() {
         agendaSettings = { ...DEFAULT_AGENDA_SETTINGS, ...(res.agendaSettings || {}) };
         if (!agendaSettings.agendas) agendaSettings.agendas = { ...DEFAULT_AGENDA_SETTINGS.agendas };
         tasksSettings = { ...DEFAULT_TASKS_SETTINGS, ...(res.tasksSettings || {}) };
+        searchBarSettings = { ...DEFAULT_SEARCH_BAR_SETTINGS, ...(res.searchBarSettings || {}) };
         if (Array.isArray(res.tasksData) && res.tasksData.length > 0) {
           tasksList = res.tasksData;
           // Si aucune sous-tâche n'existe encore, enrichir t1 et t2 pour démo immédiate
@@ -6334,6 +6351,10 @@ function toggleLiveEditMode(forceState) {
   allWidgets.forEach((w) => {
     w.classList.toggle("edit-active", isLiveEditMode);
   });
+  const centerSearch = document.getElementById("centerSearchSection");
+  if (centerSearch) {
+    centerSearch.classList.toggle("edit-active", isLiveEditMode);
+  }
 }
 
 function startInlineEdit(span, index) {

@@ -4077,17 +4077,26 @@ html, body {
 .center-search-section.free-positioned {
   position: absolute !important;
   margin: 0 !important;
-  width: auto !important;
-  max-width: calc(100vw - 40px) !important;
+  width: min(580px, calc(100vw - 40px)) !important;
   z-index: 44 !important;
 }
 
+.center-search-section.free-positioned #googleSearchForm {
+  width: 100% !important;
+}
+
 .center-search-section.edit-active {
-  outline: 2px dashed #3b82f6;
+  outline: 2px dashed #3b82f6 !important;
   outline-offset: 4px;
   border-radius: 28px;
   cursor: grab !important;
   box-shadow: 0 0 16px rgba(59, 130, 246, 0.45);
+  user-select: none;
+}
+
+.center-search-section.edit-active .search-box-glass,
+.center-search-section.edit-active #googleSearchInput {
+  cursor: grab !important;
 }
 
 .center-search-section.dragging-widget {
