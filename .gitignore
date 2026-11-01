@@ -21,3 +21,5 @@ __pycache__/
 Thumbs.db
 desktop.ini
 *.log
+*.pem
+generated_key.json

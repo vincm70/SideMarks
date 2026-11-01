@@ -3,6 +3,7 @@
   "default_locale": "fr",
   "name": "__MSG_appName__",
   "version": "5.6.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAueuP4Mlini8sGOElcwYQFvmH+UzIiDb0dpLh1uDSM8Q1AqeP41ZJx2MXgM4SIzSKWlkIesydtn7d8rWWUCRRZWII8KanxzihUyXY8BI5p62hcPtI8Ig6vOE1Su/fNrfYXVvBcAPNaWo3fMJsIaTDsZFH3JhwGVkuCfg4ZmcvfDstfW/TVrzC4HzhkTUmEa8URgHXMmxiP7jMCgoUFNhzauVr78kFKunJFjosCBxXE0IqkAgfPq0wUHIvTGDmM8oi2HxJKAJjImhVdl+iavQjGm2PWEVPkdNDB2zPEFvnppM4mEgvKGZKluFP2jwB3AUw7OpPEcmeUKm4mZPHxeS2gwIDAQAB",
   "author": "TOUZIO APPS",
   "description": "__MSG_appDesc__",
   "permissions": [
