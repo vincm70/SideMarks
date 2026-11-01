@@ -28,9 +28,33 @@
           <!-- Rempli dynamiquement avec les raccourcis -->
         </div>
 
-        <!-- Widget Météo flottant / déplaçable -->
-        <div id="weatherWidget" class="weather-widget floating-widget hidden" title="Météo actuelle (Cliquer pour rafraîchir)">
-          <div class="weather-inner">
+        <!-- Widget Météo flottant / déplaçable avec mode réduit ou 7 jours et alertes pluie -->
+        <div id="weatherWidget" class="weather-widget floating-widget weather-mode-compact hidden" title="Météo en Direct (Déplaçable en mode édition)">
+          <!-- En-tête / Barre d'outils du widget -->
+          <div class="weather-top-bar" id="weatherTopBar">
+            <div class="weather-top-left">
+              <span class="weather-city-badge" id="weatherCityBadge">Paris</span>
+            </div>
+            <div class="weather-actions">
+              <button id="weatherRefreshActionBtn" class="weather-action-btn" type="button" title="Actualiser les données météo">🔄</button>
+              <button id="weatherToggleModeBtn" class="weather-mode-toggle-btn" type="button" title="Basculer entre format Réduit et Prévisions 7 jours pour ce bureau">📅 7j</button>
+              <a id="weatherExtLinkBtn" class="weather-ext-link-btn" href="#" target="_blank" title="Ouvrir les prévisions météo complètes en ligne">↗ Météo</a>
+            </div>
+          </div>
+
+          <!-- Alertes Météo Dynamiques (Pluie dans l'heure & Pluie demain) -->
+          <div id="weatherRainHourAlert" class="weather-rain-alert rain-hour-alert hidden">
+            <span class="weather-rain-alert-icon">🌧️</span>
+            <span class="weather-rain-alert-text" id="weatherRainHourText">Pluie imminente dans l'heure !</span>
+            <button id="weatherAudioMuteBtn" class="weather-sound-btn" type="button" title="Alerte sonore pluie active (cliquer pour activer/désactiver)">🔔</button>
+          </div>
+          <div id="weatherRainTomorrowAlert" class="weather-rain-alert rain-tomorrow-alert hidden">
+            <span class="weather-rain-alert-icon">☔</span>
+            <span class="weather-rain-alert-text" id="weatherRainTomorrowText">Pluie prévue demain : 85%</span>
+          </div>
+
+          <!-- Contenu Météo Actuel (du jour) -->
+          <div class="weather-inner" id="weatherCompactInner">
             <div class="weather-icon" id="weatherIcon">☀️</div>
             <div class="weather-info">
               <div class="weather-temp-row">
@@ -40,6 +64,12 @@
               <div class="weather-desc" id="weatherDesc">Chargement...</div>
             </div>
           </div>
+
+          <!-- Prévisions détaillées sur 7 jours (Mode Étendu) -->
+          <div id="weatherForecast7Days" class="weather-forecast-grid hidden">
+            <!-- 7 cartes journalières générées dynamiquement -->
+          </div>
+
           <div class="weather-edit-handle widget-drag-handle" title="Glisser pour déplacer le widget météo">✥ Déplacer</div>
           <div class="widget-resize-handle" title="Glisser pour redimensionner le widget">⋱</div>
         </div>
@@ -816,6 +846,19 @@
             <button type="button" id="weatherSaveCityBtn" class="btn btn-secondary btn-xs" style="padding: 7px 12px;">Valider</button>
           </div>
 
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px;">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; color: #cbd5e1;">
+              <input type="checkbox" id="weatherSoundCheckbox" checked>
+              🔔 Émettre un signal sonore doux en cas de pluie imminente (dans l'heure)
+            </label>
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #cbd5e1;">
+              <span>Format d'affichage pour ce bureau :</span>
+              <select id="weatherDefaultModeSelect" class="form-select form-select-xs" style="background: rgba(15,23,42,0.8); border: 1px solid rgba(255,255,255,0.18); border-radius: 6px; color: #fff; padding: 3px 8px; font-size: 12px;">
+                <option value="compact">🌤️ Format Réduit (du jour)</option>
+                <option value="forecast7">📅 Prévisions complètes sur 7 jours</option>
+              </select>
+            </div>
+          </div>
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
             <button type="button" id="weatherRefreshBtn" class="btn btn-secondary btn-xs">🔄 Actualiser la météo</button>
             <button type="button" id="weatherResetPosBtn" class="btn btn-secondary btn-xs">📍 Réinitialiser la position</button>

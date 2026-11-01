@@ -436,7 +436,10 @@ const DEFAULT_WEATHER_SETTINGS = {
   lon: 2.3522,
   posX: 78,
   posY: 3.5,
-  page: 0
+  page: 0,
+  displayMode: "compact", // "compact" | "forecast7"
+  modesByPage: {}, // { [pIdx]: "compact" | "forecast7" }
+  rainSoundEnabled: true
 };
 
 let weatherSettings = { ...DEFAULT_WEATHER_SETTINGS };
@@ -446,6 +449,16 @@ const weatherIcon = document.getElementById("weatherIcon");
 const weatherTemp = document.getElementById("weatherTemp");
 const weatherCity = document.getElementById("weatherCity");
 const weatherDesc = document.getElementById("weatherDesc");
+const weatherCityBadge = document.getElementById("weatherCityBadge");
+const weatherToggleModeBtn = document.getElementById("weatherToggleModeBtn");
+const weatherRefreshActionBtn = document.getElementById("weatherRefreshActionBtn");
+const weatherExtLinkBtn = document.getElementById("weatherExtLinkBtn");
+const weatherRainHourAlert = document.getElementById("weatherRainHourAlert");
+const weatherRainHourText = document.getElementById("weatherRainHourText");
+const weatherRainTomorrowAlert = document.getElementById("weatherRainTomorrowAlert");
+const weatherRainTomorrowText = document.getElementById("weatherRainTomorrowText");
+const weatherAudioMuteBtn = document.getElementById("weatherAudioMuteBtn");
+const weatherForecast7Days = document.getElementById("weatherForecast7Days");
 
 const weatherEnabledCheckbox = document.getElementById("weatherEnabledCheckbox");
 const weatherConfigBlock = document.getElementById("weatherConfigBlock");
@@ -456,6 +469,8 @@ const weatherCityInput = document.getElementById("weatherCityInput");
 const weatherSaveCityBtn = document.getElementById("weatherSaveCityBtn");
 const weatherRefreshBtn = document.getElementById("weatherRefreshBtn");
 const weatherResetPosBtn = document.getElementById("weatherResetPosBtn");
+const weatherSoundCheckbox = document.getElementById("weatherSoundCheckbox");
+const weatherDefaultModeSelect = document.getElementById("weatherDefaultModeSelect");
 
 // ========================================================
 // WIDGETS INTERACTIFS ADDITIONNELS (Horloge, Notes, Pomodoro, Récents)
@@ -3883,8 +3898,11 @@ function setupSearchEngineSelector() {
 }
 
 // ========================================================
-// GESTION DU WIDGET MÉTÉO (Open-Meteo)
+// GESTION DU WIDGET MÉTÉO (Open-Meteo & Prévisions 7 Jours & Alertes Pluie)
 // ========================================================
+let lastRainSoundAlertTimestamp = 0;
+let lastWeatherPayload = null;
+
 function getWeatherDetails(code, isDay) {
   switch (code) {
     case 0: return { icon: isDay ? "☀️" : "🌙", desc: "Ciel dégagé" };
@@ -3893,11 +3911,106 @@ function getWeatherDetails(code, isDay) {
     case 3: return { icon: "☁️", desc: "Couvert" };
     case 45: case 48: return { icon: "🌫️", desc: "Brouillard" };
     case 51: case 53: case 55: return { icon: "🌦️", desc: "Bruine" };
+    case 56: case 57: return { icon: "🌧️", desc: "Bruine verglaçante" };
     case 61: case 63: case 65: return { icon: "🌧️", desc: "Pluie" };
-    case 71: case 73: case 75: return { icon: "🌨️", desc: "Chutes de neige" };
+    case 66: case 67: return { icon: "🌧️", desc: "Pluie verglaçante" };
+    case 71: case 73: case 75: case 77: return { icon: "🌨️", desc: "Chutes de neige" };
     case 80: case 81: case 82: return { icon: "🌦️", desc: "Averses" };
+    case 85: case 86: return { icon: "🌨️", desc: "Averses de neige" };
     case 95: case 96: case 99: return { icon: "⛈️", desc: "Orages" };
     default: return { icon: isDay ? "🌤️" : "🌙", desc: "Variable" };
+  }
+}
+
+// Signal sonore doux de pluie (synthèse Web Audio API pure, sans fichier externe)
+function playRainDropSound() {
+  if (weatherSettings && weatherSettings.rainSoundEnabled === false) return;
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const now = ctx.currentTime;
+
+    // Première gouttelette
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = "sine";
+    osc1.frequency.setValueAtTime(880, now);
+    osc1.frequency.exponentialRampToValueAtTime(380, now + 0.12);
+    gain1.gain.setValueAtTime(0.2, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.12);
+
+    // Seconde gouttelette harmonique
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = "sine";
+    osc2.frequency.setValueAtTime(1250, now + 0.14);
+    osc2.frequency.exponentialRampToValueAtTime(520, now + 0.28);
+    gain2.gain.setValueAtTime(0.18, now + 0.14);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.14);
+    osc2.stop(now + 0.28);
+  } catch (err) {
+    console.warn("Son météo:", err);
+  }
+}
+
+function getCurrentDesktopWeatherMode() {
+  const pIdx = (typeof currentDesktopPageIndex === "number") ? currentDesktopPageIndex : 0;
+  if (weatherSettings && weatherSettings.modesByPage && weatherSettings.modesByPage[pIdx]) {
+    return weatherSettings.modesByPage[pIdx];
+  }
+  return (weatherSettings && weatherSettings.displayMode) || "compact";
+}
+
+function setDesktopWeatherMode(mode, pIdx = currentDesktopPageIndex) {
+  if (!weatherSettings.modesByPage) weatherSettings.modesByPage = {};
+  weatherSettings.modesByPage[pIdx] = mode;
+  saveWeatherSettings();
+  applyWeatherDisplayMode();
+}
+
+function applyWeatherDisplayMode() {
+  if (!weatherWidget) return;
+  const mode = getCurrentDesktopWeatherMode();
+  const isForecast = (mode === "forecast7");
+
+  weatherWidget.classList.toggle("weather-mode-forecast7", isForecast);
+  weatherWidget.classList.toggle("weather-mode-compact", !isForecast);
+
+  if (weatherForecast7Days) {
+    weatherForecast7Days.classList.toggle("hidden", !isForecast);
+  }
+
+  if (weatherToggleModeBtn) {
+    weatherToggleModeBtn.textContent = isForecast ? "🌤️ Réduit" : "📅 7j";
+    weatherToggleModeBtn.title = isForecast 
+      ? `Bureau ${currentDesktopPageIndex + 1} : Repasser au format réduit du jour` 
+      : `Bureau ${currentDesktopPageIndex + 1} : Afficher les prévisions complètes sur 7 jours`;
+  }
+
+  if (weatherDefaultModeSelect) {
+    weatherDefaultModeSelect.value = mode;
+  }
+  updateWeatherSoundBtn();
+}
+
+function updateWeatherSoundBtn() {
+  if (!weatherAudioMuteBtn) return;
+  const soundActive = (weatherSettings.rainSoundEnabled !== false);
+  weatherAudioMuteBtn.textContent = soundActive ? "🔔" : "🔕";
+  weatherAudioMuteBtn.classList.toggle("muted", !soundActive);
+  weatherAudioMuteBtn.title = soundActive 
+    ? "Alerte sonore pluie active (cliquer pour couper le son)" 
+    : "Alerte sonore pluie coupée (cliquer pour activer le son)";
+  if (weatherSoundCheckbox) {
+    weatherSoundCheckbox.checked = soundActive;
   }
 }
 
@@ -3912,6 +4025,7 @@ async function loadWeatherSettings() {
         const cache = res.weatherCache;
         const now = Date.now();
         if (cache && cache.timestamp && (now - cache.timestamp < 30 * 60 * 1000) && cache.data) {
+          lastWeatherPayload = cache.data;
           displayWeatherData(cache.data);
         } else {
           fetchWeather();
@@ -3961,6 +4075,8 @@ function updateWeatherUI() {
   } else {
     weatherWidget.classList.remove("edit-active");
   }
+
+  applyWeatherDisplayMode();
 }
 
 async function fetchWeather(force = false) {
@@ -4006,7 +4122,8 @@ async function fetchWeather(force = false) {
     weatherSettings.lat = lat;
     weatherSettings.lon = lon;
 
-    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m&timezone=auto`;
+    // Appel API Open-Meteo complet avec données actuelles, 7 jours et précipitations horaires
+    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum&hourly=precipitation,precipitation_probability&timezone=auto`;
     const res = await fetch(weatherUrl);
     const data = await res.json();
 
@@ -4016,8 +4133,19 @@ async function fetchWeather(force = false) {
         temp: Math.round(data.current.temperature_2m),
         apparentTemp: Math.round(data.current.apparent_temperature),
         code: data.current.weather_code,
-        isDay: data.current.is_day === 1
+        isDay: data.current.is_day === 1,
+        windSpeed: Math.round(data.current.wind_speed_10m || 0),
+        humidity: Math.round(data.current.relative_humidity_2m || 0),
+        currentTime: data.current.time,
+        daily: data.daily || null,
+        hourly: {
+          time: data.hourly?.time || [],
+          precipitation: data.hourly?.precipitation || [],
+          precipitation_probability: data.hourly?.precipitation_probability || []
+        }
       };
+
+      lastWeatherPayload = weatherPayload;
 
       chrome.storage.local.set({
         weatherCache: { data: weatherPayload, timestamp: Date.now() },
@@ -4035,12 +4163,127 @@ async function fetchWeather(force = false) {
 }
 
 function displayWeatherData(payload) {
-  if (!weatherWidget) return;
+  if (!weatherWidget || !payload) return;
+  lastWeatherPayload = payload;
+
   const { icon, desc } = getWeatherDetails(payload.code, payload.isDay);
   if (weatherIcon) weatherIcon.textContent = icon;
   if (weatherTemp) weatherTemp.textContent = `${payload.temp}°`;
   if (weatherCity) weatherCity.textContent = payload.city;
+  if (weatherCityBadge) weatherCityBadge.textContent = payload.city || "MÉTÉO";
   if (weatherDesc) weatherDesc.textContent = `${desc} (Ressenti ${payload.apparentTemp}°)`;
+
+  // Lien vers la météo complète sur Google Météo / Web
+  const cityName = payload.city || weatherSettings.city || "Paris";
+  const meteoSearchUrl = `https://www.google.com/search?q=${encodeURIComponent("meteo " + cityName)}`;
+  if (weatherExtLinkBtn) {
+    weatherExtLinkBtn.href = meteoSearchUrl;
+  }
+
+  // 1. DÉTECTION ALERTE PLUIE IMMINENTE DANS L'HEURE (avec son sonore)
+  let rainInNextHour = false;
+  let rainProbNextHour = 0;
+  let rainMmNextHour = 0;
+
+  if (payload.hourly && Array.isArray(payload.hourly.time) && payload.hourly.time.length > 0) {
+    const curTimeStr = payload.currentTime || new Date().toISOString().slice(0, 13) + ":00";
+    let hourIdx = payload.hourly.time.findIndex(t => t.startsWith(curTimeStr.slice(0, 13)));
+    if (hourIdx === -1) hourIdx = 0;
+
+    const h0_precip = Number(payload.hourly.precipitation?.[hourIdx] || 0);
+    const h1_precip = Number(payload.hourly.precipitation?.[hourIdx + 1] || 0);
+    const h0_prob = Number(payload.hourly.precipitation_probability?.[hourIdx] || 0);
+    const h1_prob = Number(payload.hourly.precipitation_probability?.[hourIdx + 1] || 0);
+
+    rainMmNextHour = Math.max(h0_precip, h1_precip);
+    rainProbNextHour = Math.max(h0_prob, h1_prob);
+
+    if (rainMmNextHour >= 0.1 || rainProbNextHour >= 35) {
+      rainInNextHour = true;
+    }
+  }
+
+  if (weatherRainHourAlert) {
+    if (rainInNextHour) {
+      weatherRainHourAlert.classList.remove("hidden");
+      if (weatherRainHourText) {
+        weatherRainHourText.textContent = `Pluie dans l'heure : ${rainProbNextHour}% (${rainMmNextHour.toFixed(1)} mm)`;
+      }
+      // Émission d'un son sonore doux une fois par tranche de 30 min
+      const now = Date.now();
+      if (now - lastRainSoundAlertTimestamp > 30 * 60 * 1000) {
+        playRainDropSound();
+        lastRainSoundAlertTimestamp = now;
+      }
+    } else {
+      weatherRainHourAlert.classList.add("hidden");
+    }
+  }
+
+  // 2. DÉTECTION ALERTE PLUIE DU LENDEMAIN (très visuelle)
+  let rainTomorrow = false;
+  let rainTomorrowProb = 0;
+  let rainTomorrowSum = 0;
+
+  if (payload.daily && Array.isArray(payload.daily.time) && payload.daily.time.length > 1) {
+    rainTomorrowProb = Number(payload.daily.precipitation_probability_max?.[1] || 0);
+    rainTomorrowSum = Number(payload.daily.precipitation_sum?.[1] || 0);
+    if (rainTomorrowProb >= 35 || rainTomorrowSum >= 0.5) {
+      rainTomorrow = true;
+    }
+  }
+
+  if (weatherRainTomorrowAlert) {
+    if (rainTomorrow) {
+      weatherRainTomorrowAlert.classList.remove("hidden");
+      if (weatherRainTomorrowText) {
+        weatherRainTomorrowText.textContent = `Pluie demain : ${rainTomorrowProb}% (~${rainTomorrowSum.toFixed(1)} mm)`;
+      }
+    } else {
+      weatherRainTomorrowAlert.classList.add("hidden");
+    }
+  }
+
+  // 3. PRÉVISIONS COMPLÈTES SUR 7 JOURS
+  if (weatherForecast7Days && payload.daily && Array.isArray(payload.daily.time)) {
+    weatherForecast7Days.innerHTML = "";
+    const daysCount = Math.min(payload.daily.time.length, 7);
+    const dayNames = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+
+    for (let i = 0; i < daysCount; i++) {
+      const dateStr = payload.daily.time[i];
+      const d = new Date(dateStr + "T12:00:00");
+      let dayLabel = dayNames[d.getDay()];
+      if (i === 0) dayLabel = "Auj.";
+      else if (i === 1) dayLabel = "Dem.";
+
+      const code = payload.daily.weather_code?.[i] ?? 0;
+      const { icon } = getWeatherDetails(code, true);
+      const minTemp = Math.round(payload.daily.temperature_2m_min?.[i] ?? 0);
+      const maxTemp = Math.round(payload.daily.temperature_2m_max?.[i] ?? 0);
+      const rainProb = payload.daily.precipitation_probability_max?.[i] ?? 0;
+      const rainSum = payload.daily.precipitation_sum?.[i] ?? 0;
+      const isRainy = (rainProb >= 35 || rainSum >= 0.5);
+
+      const card = document.createElement("div");
+      card.className = "forecast-day-card" + (i === 0 ? " day-today" : "") + (isRainy ? " day-rainy" : "");
+      card.title = `${dateStr} : ${minTemp}° à ${maxTemp}°C
+Pluie : ${rainProb}% (${rainSum.toFixed(1)} mm)`;
+
+      card.innerHTML = `
+        <span class="forecast-day-name">${dayLabel}</span>
+        <span class="forecast-day-icon">${icon}</span>
+        <div class="forecast-day-temps">
+          <span class="forecast-temp-max">${maxTemp}°</span>
+          <span class="forecast-temp-min">${minTemp}°</span>
+        </div>
+        ${rainProb > 0 ? `<span class="forecast-rain-pill" title="Risque de pluie : ${rainProb}%">💧${rainProb}%</span>` : ""}
+      `;
+      weatherForecast7Days.appendChild(card);
+    }
+  }
+
+  applyWeatherDisplayMode();
 }
 
 // ========================================================
@@ -4164,7 +4407,14 @@ function setupWidgetDrag(widgetEl, getPos, savePos, title) {
   widgetEl.addEventListener("click", (e) => {
     if (isLiveEditMode) return;
     if (widgetEl.id === "weatherWidget") {
-      fetchWeather(true);
+      if (e.target.closest("button") || e.target.closest("a")) return;
+      const curMode = getCurrentDesktopWeatherMode();
+      if (curMode === "forecast7") {
+        const cityName = (lastWeatherPayload && lastWeatherPayload.city) || weatherSettings.city || "Paris";
+        openInNewTab(`https://www.google.com/search?q=${encodeURIComponent("meteo " + cityName)}`);
+      } else {
+        fetchWeather(true);
+      }
     }
   });
 
@@ -5896,20 +6146,24 @@ function updateWidgetDesktopBadges() {
     const widget = typeof config.getWidget === "function" ? config.getWidget() : config.widget;
     const name = config.name;
     if (!widget) return;
-    const header = widget.querySelector(".widget-header") || widget.querySelector(".weather-inner") || widget;
+    const header = widget.querySelector(".weather-top-left") || widget.querySelector(".widget-header") || widget.querySelector(".weather-inner") || widget;
 
     let badge = widget.querySelector(".widget-desktop-badge");
     if (!badge) {
       badge = document.createElement("button");
       badge.type = "button";
       badge.className = "widget-desktop-badge";
-      const titleWrapper = header.querySelector("div");
-      if (titleWrapper && titleWrapper.querySelector(".widget-title")) {
-        titleWrapper.appendChild(badge);
-      } else if (header.classList && header.classList.contains("widget-header")) {
-        header.insertBefore(badge, header.children[1] || null);
+      if (header.classList && header.classList.contains("weather-top-left")) {
+        header.appendChild(badge);
       } else {
-        widget.appendChild(badge);
+        const titleWrapper = header.querySelector("div");
+        if (titleWrapper && titleWrapper.querySelector(".widget-title")) {
+          titleWrapper.appendChild(badge);
+        } else if (header.classList && header.classList.contains("widget-header")) {
+          header.insertBefore(badge, header.children[1] || null);
+        } else {
+          widget.appendChild(badge);
+        }
       }
     }
 
@@ -5955,6 +6209,8 @@ function updateAllWidgetsVisibility() {
     weatherWidget.style.left = `${geo.posX}%`;
     weatherWidget.style.top = `${geo.posY}%`;
     if (geo.width) applyWidgetDimensions(weatherWidget, geo.width, geo.height);
+    // Appliquer le format d'affichage spécifique au bureau actif (Réduit vs 7 Jours)
+    applyWeatherDisplayMode();
   }
   if (weatherEnabledCheckbox) weatherEnabledCheckbox.checked = weatherSettings.enabled;
 
@@ -6312,6 +6568,61 @@ function setupWeatherControls() {
       weatherSettings.posY = 3.5;
       saveWeatherSettings();
       showToast("Position météo réinitialisée (en haut à droite)");
+    });
+  }
+
+  // Bascule rapide de format Réduit <-> 7 Jours pour ce bureau
+  if (weatherToggleModeBtn) {
+    weatherToggleModeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const currentMode = getCurrentDesktopWeatherMode();
+      const newMode = (currentMode === "forecast7") ? "compact" : "forecast7";
+      setDesktopWeatherMode(newMode);
+      showToast(newMode === "forecast7"
+        ? `Bureau ${currentDesktopPageIndex + 1} : Prévisions 7 jours activées !`
+        : `Bureau ${currentDesktopPageIndex + 1} : Format réduit activé !`);
+    });
+  }
+
+  if (weatherRefreshActionBtn) {
+    weatherRefreshActionBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      fetchWeather(true);
+    });
+  }
+
+  if (weatherExtLinkBtn) {
+    weatherExtLinkBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!isLiveEditMode) {
+        e.preventDefault();
+        openInNewTab(weatherExtLinkBtn.href);
+      }
+    });
+  }
+
+  if (weatherAudioMuteBtn) {
+    weatherAudioMuteBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      weatherSettings.rainSoundEnabled = !(weatherSettings.rainSoundEnabled !== false);
+      saveWeatherSettings();
+      updateWeatherSoundBtn();
+      showToast(weatherSettings.rainSoundEnabled ? "Son alerte pluie activé 🔔" : "Son alerte pluie coupé 🔕");
+    });
+  }
+
+  if (weatherSoundCheckbox) {
+    weatherSoundCheckbox.addEventListener("change", () => {
+      weatherSettings.rainSoundEnabled = weatherSoundCheckbox.checked;
+      saveWeatherSettings();
+      updateWeatherSoundBtn();
+    });
+  }
+
+  if (weatherDefaultModeSelect) {
+    weatherDefaultModeSelect.addEventListener("change", () => {
+      setDesktopWeatherMode(weatherDefaultModeSelect.value);
+      showToast(`Format météo pour Bureau ${currentDesktopPageIndex + 1} mis à jour !`);
     });
   }
 }
