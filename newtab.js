@@ -1136,19 +1136,20 @@ function setupAgendaWidget() {
     if (typeof refreshTasksDisplay === "function") refreshTasksDisplay();
     renderCurrentView();
 
-    // Synchro d'arrière-plan avec AgendaBIP local si ouvert
-    try {
-      fetch("http://127.0.0.1:8766/api/features", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "editTask",
-          id: task.id,
-          groupId: task.rawGroupId || task.groupId || "default",
-          due: dateStr
-        })
-      }).catch(() => {});
-    } catch (_) {}
+    // Synchronisation directe avec l'API Google Tasks du compte connecté
+    if (chrome.identity && chrome.identity.getAuthToken && task.rawGroupId) {
+      chrome.identity.getAuthToken({ interactive: false }, (token) => {
+        if (!token) return;
+        fetch(`https://tasks.googleapis.com/tasks/v1/lists/${encodeURIComponent(task.rawGroupId)}/tasks/${encodeURIComponent(task.id)}`, {
+          method: "PATCH",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ id: task.id, due: dateStr + "T00:00:00.000Z" })
+        }).catch(err => console.warn("Google Tasks due update error:", err));
+      });
+    }
   }
 
   // Bascule des vues d'agenda
@@ -2230,19 +2231,23 @@ function setupTasksWidget() {
       saveTasks();
       renderTasks();
 
-      // Synchro d'arrière-plan vers AgendaBIP / Google Tasks
-      try {
-        fetch("http://127.0.0.1:8766/api/features", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "editTask",
-            id: task.id,
-            groupId: task.rawGroupId || task.groupId || "default",
-            status: task.status
-          })
-        }).catch(() => {});
-      } catch (_) {}
+      // Synchronisation directe avec l'API Google Tasks du compte connecté
+      if (chrome.identity && chrome.identity.getAuthToken && task.rawGroupId) {
+        chrome.identity.getAuthToken({ interactive: false }, (token) => {
+          if (!token) return;
+          fetch(`https://tasks.googleapis.com/tasks/v1/lists/${encodeURIComponent(task.rawGroupId)}/tasks/${encodeURIComponent(task.id)}`, {
+            method: "PATCH",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              id: task.id,
+              status: task.status === "done" ? "completed" : "needsAction"
+            })
+          }).catch(err => console.warn("Google Tasks status update error:", err));
+        });
+      }
     });
 
     const contentBox = document.createElement("div");
