@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Windows.Forms;
@@ -167,9 +168,25 @@ namespace SideMarksBridge
                 return;
             }
 
-            target = target.Trim();
+            target = target.Trim(' ', '"', '\'', '\r', '\n');
 
-            // Si c'est un dossier existant, ouvrir avec Explorer
+            // Enlever les éventuels slashes superflus ajoutés par le navigateur (ex: calc.exe/)
+            if (target.EndsWith("/") || (target.EndsWith("\\") && !target.EndsWith(":\\")))
+            {
+                target = target.TrimEnd('/', '\\');
+            }
+
+            // Normaliser les protocoles de fichier (file:///...)
+            if (target.StartsWith("file:///", StringComparison.OrdinalIgnoreCase))
+            {
+                target = target.Substring(8).Replace('/', '\\');
+            }
+            else if (target.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+            {
+                target = target.Substring(7).Replace('/', '\\');
+            }
+
+            // 1. Si c'est un dossier direct existant, ouvrir avec Explorer
             if (Directory.Exists(target))
             {
                 Process.Start(new ProcessStartInfo
@@ -181,14 +198,128 @@ namespace SideMarksBridge
                 return;
             }
 
-            // Exécution standard (fichier, application, commande système, raccourci .lnk)
-            var startInfo = new ProcessStartInfo
+            // 2. Si c'est un fichier direct existant, l'ouvrir
+            if (File.Exists(target))
             {
-                FileName = target,
-                UseShellExecute = true
-            };
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = target,
+                    UseShellExecute = true
+                });
+                return;
+            }
 
-            Process.Start(startInfo);
+            // 3. Résolution intelligente si nom de dossier ou chemin partiel (OneDrive, CODEX, UserProfile, Bureau, etc.)
+            string smartResolved = ResolveSmartPath(target);
+            if (!string.IsNullOrEmpty(smartResolved))
+            {
+                if (Directory.Exists(smartResolved))
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "explorer.exe",
+                        Arguments = "\"" + smartResolved + "\"",
+                        UseShellExecute = true
+                    });
+                    return;
+                }
+                else if (File.Exists(smartResolved))
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = smartResolved,
+                        UseShellExecute = true
+                    });
+                    return;
+                }
+            }
+
+            // 4. Lancement standard (exécutable, commande système Windows comme calc.exe ou notepad.exe, raccourci .lnk)
+            try
+            {
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = target,
+                    UseShellExecute = true
+                };
+
+                Process.Start(startInfo);
+            }
+            catch (Exception)
+            {
+                MessageBox.Show(
+                    "SideMarks Bridge n'a pas pu ouvrir l'élément suivant :\n\n" +
+                    "  \"" + target + "\"\n\n" +
+                    "Conseil :\n" +
+                    "• Pour un dossier : Vérifiez son chemin complet dans les paramètres de SideMarks\n" +
+                    "  (ex: C:\\Users\\...\\Dossier)\n" +
+                    "• Pour une application : Indiquez son nom (ex: calc.exe) ou son chemin complet vers le .exe.",
+                    "SideMarks Bridge - Fichier ou dossier introuvable",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+        }
+
+        private static string ResolveSmartPath(string target)
+        {
+            if (string.IsNullOrWhiteSpace(target)) return null;
+
+            // Comparaison tolérante (ex: 00000-DVRC -> dvrc)
+            string cleanTarget = target.TrimStart('0', '-').Trim().ToLowerInvariant();
+
+            var baseDirs = new List<string>();
+
+            string oneDrive = Environment.GetEnvironmentVariable("OneDrive");
+            if (!string.IsNullOrEmpty(oneDrive) && Directory.Exists(oneDrive))
+            {
+                baseDirs.Add(oneDrive);
+                string codex = Path.Combine(oneDrive, @"00000-My_Projects\CODEX");
+                if (Directory.Exists(codex)) baseDirs.Add(codex);
+                string projects = Path.Combine(oneDrive, @"00000-My_Projects");
+                if (Directory.Exists(projects)) baseDirs.Add(projects);
+            }
+
+            string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (!string.IsNullOrEmpty(userProfile) && Directory.Exists(userProfile))
+            {
+                baseDirs.Add(userProfile);
+            }
+
+            string desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+            if (!string.IsNullOrEmpty(desktop) && Directory.Exists(desktop)) baseDirs.Add(desktop);
+
+            string docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            if (!string.IsNullOrEmpty(docs) && Directory.Exists(docs)) baseDirs.Add(docs);
+
+            foreach (string baseDir in baseDirs)
+            {
+                if (!Directory.Exists(baseDir)) continue;
+
+                // Test direct chemin relatif
+                try
+                {
+                    string direct = Path.Combine(baseDir, target);
+                    if (Directory.Exists(direct) || File.Exists(direct)) return direct;
+                }
+                catch { }
+
+                // Parcours des sous-dossiers
+                try
+                {
+                    foreach (string subDir in Directory.GetDirectories(baseDir))
+                    {
+                        string name = Path.GetFileName(subDir);
+                        if (name.Equals(target, StringComparison.OrdinalIgnoreCase)) return subDir;
+                        if (!string.IsNullOrEmpty(cleanTarget) && name.TrimStart('0', '-').Trim().Equals(cleanTarget, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return subDir;
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            return null;
         }
     }
 }
