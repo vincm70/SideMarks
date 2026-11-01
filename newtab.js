@@ -1838,7 +1838,8 @@ function setupAgendaWidget() {
 
   // Fenêtre modale : Planifier une tâche ou ajouter un rendez-vous dans Google Agenda
   function openScheduleTaskModal(taskData, targetDate) {
-    if (!scheduleTaskModal) return;
+    const modal = scheduleTaskModal || document.getElementById("scheduleTaskModal");
+    if (!modal) return;
     pendingScheduleTaskId = taskData ? taskData.id : null;
     const task = taskData ? (tasksList.find(t => t.id === taskData.id) || taskData) : null;
 
@@ -1847,47 +1848,64 @@ function setupAgendaWidget() {
       modalTitle.textContent = task ? "📅 Planifier la tâche dans Google Agenda" : "📅 Nouveau Rendez-vous Google Agenda";
     }
 
-    if (scheduleTaskTitleInput) scheduleTaskTitleInput.value = task ? (task.title || "") : "";
-    if (scheduleTaskDateInput) scheduleTaskDateInput.value = targetDate || toDateKey(selectedDate);
-    if (scheduleTaskTimeInput) scheduleTaskTimeInput.value = "09:00";
-    if (scheduleTaskNotesInput) scheduleTaskNotesInput.value = task ? (task.notes || "") : "";
+    const titleInput = scheduleTaskTitleInput || document.getElementById("scheduleTaskTitleInput");
+    const dateInput = scheduleTaskDateInput || document.getElementById("scheduleTaskDateInput");
+    const timeInput = scheduleTaskTimeInput || document.getElementById("scheduleTaskTimeInput");
+    const notesInput = scheduleTaskNotesInput || document.getElementById("scheduleTaskNotesInput");
+    const calSelect = scheduleTaskCalendarSelect || document.getElementById("scheduleTaskCalendarSelect");
 
-    if (scheduleTaskCalendarSelect) {
-      scheduleTaskCalendarSelect.innerHTML = "";
+    if (titleInput) titleInput.value = task ? (task.title || "") : "";
+    if (dateInput) dateInput.value = targetDate || toDateKey(selectedDate);
+    if (timeInput) timeInput.value = "09:00";
+    if (notesInput) notesInput.value = task ? (task.notes || "") : "";
+
+    if (calSelect) {
+      calSelect.innerHTML = "";
       const discovered = getDiscoveredCalendars();
       if (discovered.length === 0) {
         const opt = document.createElement("option");
         opt.value = "primary";
         opt.textContent = "Agenda Principal";
-        scheduleTaskCalendarSelect.appendChild(opt);
+        calSelect.appendChild(opt);
       } else {
         discovered.forEach(cal => {
           const opt = document.createElement("option");
           opt.value = cal.id || cal.name;
           opt.textContent = cal.name;
-          scheduleTaskCalendarSelect.appendChild(opt);
+          calSelect.appendChild(opt);
         });
       }
     }
 
-    scheduleTaskModal.classList.remove("hidden");
-    if (scheduleTaskTitleInput) setTimeout(() => scheduleTaskTitleInput.focus(), 80);
+    modal.classList.remove("hidden");
+    if (titleInput) setTimeout(() => titleInput.focus(), 80);
   }
 
   // Clic sur le bouton "+" de l'en-tête de l'Agenda
-  if (addEventBtn) {
-    addEventBtn.addEventListener("click", () => {
+  const addBtn = addEventBtn || document.getElementById("agendaAddEventBtn");
+  if (addBtn && !addBtn.dataset.bound) {
+    addBtn.dataset.bound = "1";
+    addBtn.addEventListener("click", () => {
       openScheduleTaskModal(null, toDateKey(selectedDate));
     });
   }
 
   function closeScheduleTaskModal() {
-    if (scheduleTaskModal) scheduleTaskModal.classList.add("hidden");
+    const modal = scheduleTaskModal || document.getElementById("scheduleTaskModal");
+    if (modal) modal.classList.add("hidden");
     pendingScheduleTaskId = null;
   }
 
-  if (scheduleTaskCloseBtn) scheduleTaskCloseBtn.addEventListener("click", closeScheduleTaskModal);
-  if (scheduleTaskCancelBtn) scheduleTaskCancelBtn.addEventListener("click", closeScheduleTaskModal);
+  const closeBtnEl = scheduleTaskCloseBtn || document.getElementById("scheduleTaskCloseBtn");
+  const cancelBtnEl = scheduleTaskCancelBtn || document.getElementById("scheduleTaskCancelBtn");
+  if (closeBtnEl && !closeBtnEl.dataset.bound) {
+    closeBtnEl.dataset.bound = "1";
+    closeBtnEl.addEventListener("click", closeScheduleTaskModal);
+  }
+  if (cancelBtnEl && !cancelBtnEl.dataset.bound) {
+    cancelBtnEl.dataset.bound = "1";
+    cancelBtnEl.addEventListener("click", closeScheduleTaskModal);
+  }
 
   if (scheduleTaskConfirmBtn) {
     scheduleTaskConfirmBtn.addEventListener("click", async () => {
@@ -4784,6 +4802,7 @@ let currentConversationTarget = null;
 let currentConversationIsEvent = false;
 
 function openTaskConversationModal(item, isEvent = false) {
+  initTaskConversation();
   const modal = document.getElementById("taskConversationModal");
   if (!modal) return;
   currentConversationTarget = item;
@@ -4851,81 +4870,88 @@ function renderTaskConversationHistory() {
   historyContainer.scrollTop = historyContainer.scrollHeight;
 }
 
-// Initialisation des écouteurs de la modale de conversation
-const convModal = document.getElementById("taskConversationModal");
-const convCloseBtn = document.getElementById("taskConversationCloseBtn");
-const convForm = document.getElementById("taskConversationForm");
+// Initialisation sécurisée des écouteurs de la modale de conversation
+function initTaskConversation() {
+  const convModal = document.getElementById("taskConversationModal");
+  const convCloseBtn = document.getElementById("taskConversationCloseBtn");
+  const convForm = document.getElementById("taskConversationForm");
 
-if (convCloseBtn) {
-  convCloseBtn.addEventListener("click", () => {
-    if (convModal) convModal.classList.add("hidden");
-    currentConversationTarget = null;
-  });
-}
+  if (convCloseBtn && !convCloseBtn.dataset.bound) {
+    convCloseBtn.dataset.bound = "1";
+    convCloseBtn.addEventListener("click", () => {
+      if (convModal) convModal.classList.add("hidden");
+      currentConversationTarget = null;
+    });
+  }
 
-if (convForm) {
-  convForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const input = document.getElementById("taskConversationInput");
-    const statusEl = document.getElementById("taskConversationStatus");
-    const comment = input ? input.value.trim() : "";
-    if (!comment || !currentConversationTarget) return;
+  if (convForm && !convForm.dataset.bound) {
+    convForm.dataset.bound = "1";
+    convForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = document.getElementById("taskConversationInput");
+      const statusEl = document.getElementById("taskConversationStatus");
+      const comment = input ? input.value.trim() : "";
+      if (!comment || !currentConversationTarget) return;
 
-    if (statusEl) statusEl.textContent = "Enregistrement...";
-    const oldNotes = currentConversationTarget.notes || currentConversationTarget.description || "";
-    const updatedNotes = addAgendaBipFollowup(oldNotes, comment);
+      if (statusEl) statusEl.textContent = "Enregistrement...";
+      const oldNotes = currentConversationTarget.notes || currentConversationTarget.description || "";
+      const updatedNotes = addAgendaBipFollowup(oldNotes, comment);
 
-    currentConversationTarget.notes = updatedNotes;
-    if (currentConversationIsEvent) {
-      currentConversationTarget.description = updatedNotes;
-    }
-
-    if (currentConversationIsEvent) {
-      chrome.storage.local.set({ googleEventsList });
-    } else {
-      chrome.storage.local.set({ tasksData: tasksList });
-    }
-
-    renderTaskConversationHistory();
-    if (input) input.value = "";
-    if (statusEl) statusEl.textContent = "✅ Commentaire ajouté ! Synchronisation en cours...";
-
-    try {
-      const token = await getFreshGoogleToken(false);
-      if (token) {
-        if (currentConversationIsEvent && currentConversationTarget.id && currentConversationTarget.calendarId) {
-          await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(currentConversationTarget.calendarId)}/events/${encodeURIComponent(currentConversationTarget.id)}`, {
-            method: "PATCH",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ id: currentConversationTarget.id, description: updatedNotes })
-          });
-          if (statusEl) statusEl.textContent = "✅ Synchronisé avec Google Agenda !";
-        } else if (!currentConversationIsEvent && currentConversationTarget.id && currentConversationTarget.rawGroupId) {
-          await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${encodeURIComponent(currentConversationTarget.rawGroupId)}/tasks/${encodeURIComponent(currentConversationTarget.id)}`, {
-            method: "PATCH",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ id: currentConversationTarget.id, notes: updatedNotes })
-          });
-          if (statusEl) statusEl.textContent = "✅ Synchronisé avec Google Tasks !";
-        }
+      currentConversationTarget.notes = updatedNotes;
+      if (currentConversationIsEvent) {
+        currentConversationTarget.description = updatedNotes;
       }
-    } catch (err) {
-      console.warn("Erreur réseau suivi Google:", err);
-    }
 
-    if (currentConversationIsEvent) {
-      if (typeof renderCurrentView === "function") renderCurrentView();
-    } else {
-      if (typeof renderTasks === "function") renderTasks();
-    }
-  });
+      if (currentConversationIsEvent) {
+        chrome.storage.local.set({ googleEventsList });
+      } else {
+        chrome.storage.local.set({ tasksData: tasksList });
+      }
+
+      renderTaskConversationHistory();
+      if (input) input.value = "";
+      if (statusEl) statusEl.textContent = "✅ Commentaire ajouté ! Synchronisation en cours...";
+
+      try {
+        const token = await getFreshGoogleToken(false);
+        if (token) {
+          if (currentConversationIsEvent && currentConversationTarget.id && currentConversationTarget.calendarId) {
+            await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(currentConversationTarget.calendarId)}/events/${encodeURIComponent(currentConversationTarget.id)}`, {
+              method: "PATCH",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({ id: currentConversationTarget.id, description: updatedNotes })
+            });
+            if (statusEl) statusEl.textContent = "✅ Synchronisé avec Google Agenda !";
+          } else if (!currentConversationIsEvent && currentConversationTarget.id && currentConversationTarget.rawGroupId) {
+            await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${encodeURIComponent(currentConversationTarget.rawGroupId)}/tasks/${encodeURIComponent(currentConversationTarget.id)}`, {
+              method: "PATCH",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({ id: currentConversationTarget.id, notes: updatedNotes })
+            });
+            if (statusEl) statusEl.textContent = "✅ Synchronisé avec Google Tasks !";
+          }
+        }
+      } catch (err) {
+        console.warn("Erreur réseau suivi Google:", err);
+      }
+
+      if (currentConversationIsEvent) {
+        if (typeof renderCurrentView === "function") renderCurrentView();
+      } else {
+        if (typeof renderTasks === "function") renderTasks();
+      }
+    });
+  }
 }
+
+// Initialiser les écouteurs dès le chargement
+initTaskConversation();
 
 
 
