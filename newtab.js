@@ -6212,6 +6212,77 @@ function updateWidgetDesktopBadges() {
       e.stopPropagation();
       openWidgetDesktopsPicker(config);
     };
+
+    // 2. Bouton Petite Croix de suppression en mode édition dans le coin supérieur droit
+    let delBtn = widget.querySelector(".widget-delete-badge");
+    if (!delBtn) {
+      delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "widget-delete-badge";
+      delBtn.textContent = "✕";
+      delBtn.title = `Supprimer « ${name} » de ce bureau`;
+      delBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+      delBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        removeWidgetFromCurrentDesktop(config);
+      });
+      widget.appendChild(delBtn);
+    } else {
+      delBtn.title = `Supprimer « ${name} » de ce bureau`;
+    }
+  });
+}
+
+// Supprime ou retire un widget du bureau actuel (avec option Annuler)
+function removeWidgetFromCurrentDesktop(config) {
+  if (!config) return;
+  const settings = typeof config.getSettings === "function" ? config.getSettings() : config.settings;
+  const name = config.name;
+  if (!settings) return;
+
+  const prevSettingsBackup = JSON.parse(JSON.stringify(settings));
+
+  const isAll = (settings.allPages === true || settings.page === -1 || (Array.isArray(settings.pages) && settings.pages.includes(-1)));
+  if (isAll) {
+    const remaining = [];
+    for (let i = 0; i < totalDesktopPages; i++) {
+      if (i !== currentDesktopPageIndex) remaining.push(i);
+    }
+    settings.allPages = false;
+    settings.pages = remaining;
+    settings.page = remaining.length > 0 ? remaining[0] : 0;
+    if (remaining.length === 0) settings.enabled = false;
+  } else if (Array.isArray(settings.pages)) {
+    settings.pages = settings.pages.filter(p => p !== currentDesktopPageIndex && p !== -1);
+    if (settings.pages.length === 0) {
+      settings.enabled = false;
+      settings.page = 0;
+    } else {
+      settings.page = settings.pages[0];
+    }
+  } else {
+    // Était affecté à un seul bureau ou paramètre simple
+    settings.enabled = false;
+  }
+
+  const saveKey = config.key;
+  chrome.storage.local.set({ [saveKey]: settings }, () => {
+    updateAllWidgetsVisibility();
+    if (typeof updateWidgetDesktopBadges === "function") updateWidgetDesktopBadges();
+    showToast(
+      `Widget « ${name} » retiré du Bureau ${currentDesktopPageIndex + 1}`,
+      "Annuler",
+      () => {
+        Object.assign(settings, prevSettingsBackup);
+        chrome.storage.local.set({ [saveKey]: settings }, () => {
+          updateAllWidgetsVisibility();
+          if (typeof updateWidgetDesktopBadges === "function") updateWidgetDesktopBadges();
+          showToast(`Widget « ${name} » rétabli !`);
+        });
+      },
+      6000
+    );
   });
 }
 
@@ -6694,6 +6765,9 @@ function toggleLiveEditMode(forceState) {
   allWidgets.forEach((w) => {
     w.classList.toggle("edit-active", isLiveEditMode);
   });
+  if (typeof updateWidgetDesktopBadges === "function") {
+    updateWidgetDesktopBadges();
+  }
   const centerSearch = document.getElementById("centerSearchSection");
   if (centerSearch) {
     centerSearch.classList.toggle("edit-active", isLiveEditMode);

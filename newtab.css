@@ -2757,6 +2757,51 @@ html, body {
   border-color: #c084fc;
 }
 
+/* Bouton Petite Croix de suppression du widget en mode édition */
+.widget-delete-badge {
+  display: none;
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  width: 22px;
+  height: 22px;
+  background: #ef4444;
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 900;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  padding: 0;
+  line-height: 1;
+  user-select: none;
+}
+
+.floating-widget.edit-active,
+.weather-widget.edit-active {
+  overflow: visible !important;
+}
+
+.floating-widget.edit-active .widget-delete-badge,
+.weather-widget.edit-active .widget-delete-badge {
+  display: flex !important;
+}
+
+.widget-delete-badge:hover {
+  background: #dc2626;
+  transform: scale(1.22);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.6);
+}
+
+.widget-delete-badge:active {
+  transform: scale(0.95);
+}
+
 
 /* ========================================================
    GALERIE DE WIDGETS MODULAIRE (STYLE SMARTPHONE / ANDROID)
