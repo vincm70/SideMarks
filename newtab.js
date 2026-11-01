@@ -5856,6 +5856,7 @@ let activeGalleryCategory = "all";
 
 function setupWidgetGallery() {
   const openBtn = document.getElementById("openWidgetGalleryBtn");
+  const modalOpenBtn = document.getElementById("modalOpenWidgetGalleryBtn");
   const modal = document.getElementById("widgetGalleryModal");
   const closeBtn = document.getElementById("closeWidgetGalleryBtn");
   const searchInput = document.getElementById("widgetGallerySearchInput");
@@ -5863,6 +5864,14 @@ function setupWidgetGallery() {
 
   if (openBtn) {
     openBtn.addEventListener("click", () => openWidgetGallery());
+  }
+
+  if (modalOpenBtn) {
+    modalOpenBtn.addEventListener("click", () => {
+      const editModal = document.getElementById("editPageModal");
+      if (editModal) editModal.classList.add("hidden");
+      openWidgetGallery();
+    });
   }
 
   if (closeBtn && modal) {
@@ -5947,7 +5956,7 @@ function renderWidgetGalleryCards() {
 
     const catBadge = document.createElement("span");
     catBadge.className = "widget-card-cat";
-    catBadge.textContent = item.category === "time" ? "Temps" : (item.category === "notes" ? "Bureautique" : "Infos");
+    catBadge.textContent = item.category === "time" ? "Temps" : (item.category === "notes" ? "Bureautique" : (item.category === "tools" ? "Outil" : "Infos"));
     titleDiv.appendChild(catBadge);
 
     header.appendChild(titleDiv);
