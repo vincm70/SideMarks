@@ -566,6 +566,205 @@ function parseAgendaBipTaskMeta(notes) {
   return meta;
 }
 
+// Parseur des pièces jointes standard AgendaBIP ([AgendaBIP_ATTACHMENTS_BEGIN] ... [AgendaBIP_ATTACHMENTS_END])
+function parseAgendaBipAttachments(notes) {
+  if (!notes || typeof notes !== "string") return [];
+  const list = [];
+  const seenUrls = new Set();
+
+  // 1. Bloc structuré AgendaBIP
+  const block = notes.match(/\[AgendaBIP_ATTACHMENTS_BEGIN\]([\s\S]*?)\[AgendaBIP_ATTACHMENTS_END\]/i);
+  if (block) {
+    const lines = block[1].split(/\r?\n/);
+    lines.forEach(line => {
+      const parts = line.trim().split("|");
+      if (parts.length >= 3) {
+        const name = parts[1].trim();
+        const url = parts[2].trim();
+        if (url && !seenUrls.has(url)) {
+          seenUrls.add(url);
+          list.push({
+            id: "att_" + list.length,
+            name: name || "Document Drive",
+            driveUrl: url,
+            url: url
+          });
+        }
+      }
+    });
+  }
+
+  // 2. Format conversationnel / commentaires : 📎 Nom : url
+  const convMatches = notes.matchAll(/📎\s*([^:\r\n]+)\s*:\s*(https?:\/\/[^\s\r\n]+)/gi);
+  for (const m of convMatches) {
+    const name = m[1].trim();
+    const url = m[2].trim();
+    if (url && !seenUrls.has(url)) {
+      seenUrls.add(url);
+      list.push({
+        id: "att_" + list.length,
+        name: name,
+        driveUrl: url,
+        url: url
+      });
+    }
+  }
+
+  // 3. Format Pièce jointe : Nom \n URL
+  const pjMatches = notes.matchAll(/Pièce jointe\s*:\s*([^\r\n]+)\r?\n(https?:\/\/[^\s\r\n]+)/gi);
+  for (const m of pjMatches) {
+    const name = m[1].trim();
+    const url = m[2].trim();
+    if (url && !seenUrls.has(url)) {
+      seenUrls.add(url);
+      list.push({
+        id: "att_" + list.length,
+        name: name,
+        driveUrl: url,
+        url: url
+      });
+    }
+  }
+
+  return list;
+}
+
+// Calcul du numéro de semaine standard ISO 8601
+function getIsoWeekNumber(d) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+}
+
+// Parseur des conversations de suivi standard AgendaBIP (V2 et V1)
+function parseAgendaBipConversation(notes) {
+  const source = String(notes || "").replace(/\r\n/g, "\n");
+  const entries = [];
+  const v2 = "──────── 💬 SUIVI ────────";
+  const end2 = "──────── FIN DU SUIVI ────────";
+  const v1 = "[AgendaBIP_SUIVI_V1]";
+  const end1 = "[/AgendaBIP_SUIVI_V1]";
+
+  try {
+    if (source.includes(v2) || source.includes(end2)) {
+      const start = source.indexOf(v2);
+      const end = source.indexOf(end2);
+      if (start >= 0 && end > start) {
+        const block = source.slice(start + v2.length, end);
+        const comments = [];
+        let current = null;
+        for (const line of block.split("\n")) {
+          if (line.startsWith("📅 ")) {
+            if (current !== null) comments.push(current.join("\n"));
+            current = [];
+          } else if (line.startsWith("│ ")) {
+            if (current === null) current = [];
+            current.push(line.slice(2));
+          }
+        }
+        if (current !== null) comments.push(current.join("\n"));
+
+        const refs = block.match(/\[AB:S2\|([^\]]*)\]/);
+        const rows = (refs && refs[1]) ? refs[1].split(";") : [];
+        if (rows.length === comments.length) {
+          for (let i = 0; i < rows.length; i++) {
+            const fields = rows[i].split(",");
+            const at = Number(fields[1]);
+            const zone = decodeURIComponent((fields[2] || "").replace(/\+/g, " "));
+            let date;
+            try {
+              date = new Date(at).toLocaleString("fr-FR", { timeZone: zone || undefined });
+            } catch (_) {
+              date = new Date(at).toLocaleString("fr-FR");
+            }
+            entries.push({ id: decodeURIComponent(fields[0]), at, date, comment: comments[i] });
+          }
+        } else {
+          let idx = 0;
+          for (const line of block.split("\n")) {
+            if (line.startsWith("📅 ")) {
+              entries.push({ id: `c_${idx}`, date: line.slice(3).trim(), comment: comments[idx] || "" });
+              idx++;
+            }
+          }
+        }
+      }
+    } else if (source.includes(v1) || source.includes(end1)) {
+      const start = source.indexOf(v1);
+      const end = source.indexOf(end1);
+      if (start >= 0 && end > start) {
+        let current = null;
+        for (const line of source.slice(start + v1.length, end).replace(/^\n|\n$/g, "").split("\n")) {
+          if (line.startsWith("  ") && current) {
+            current.comment += "\n" + line.slice(2);
+            continue;
+          }
+          const old = line.match(/^(.*?) \[([a-zA-Z0-9-]+)\] — (.*)$/);
+          const chat = line.match(/^💬 (.*?) — (.*) · \[([a-zA-Z0-9-]+)\]$/);
+          if (old) {
+            current = { id: old[2], date: old[1], comment: old[3] };
+            entries.push(current);
+          } else if (chat) {
+            current = { id: chat[3], date: chat[1], comment: chat[2] };
+            entries.push(current);
+          }
+        }
+      }
+    }
+    return { entries, error: false };
+  } catch (err) {
+    return { entries: [], error: true, raw: source };
+  }
+}
+
+// Ajoute un commentaire de suivi au format AgendaBIP standard
+function addAgendaBipFollowup(notes, comment) {
+  if (!comment || !comment.trim()) return notes || "";
+  let user = String(notes || "").replace(/\r\n/g, "\n");
+  const now = new Date();
+  const stamp = now.toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const uid = "suivi_" + Date.now();
+
+  const begin = "[AgendaBIP_SUIVI_V1]";
+  const end = "[/AgendaBIP_SUIVI_V1]";
+  const v2Marker = "──────── ⚙ RESTAURATION DU SUIVI ────────";
+
+  if (user.includes("──────── 💬 SUIVI ────────") && user.includes(v2Marker)) {
+    const entry = `📅 ${stamp.replace(" ", " à ")}\n` + comment.trim().split("\n").map(l => "│ " + l).join("\n") + "\n\n";
+    user = user.replace(v2Marker, entry + v2Marker);
+    const match = user.match(/\[AB:S2\|([^\]]*)\]/);
+    if (match) {
+      const ref = `${encodeURIComponent(uid)},${now.getTime()},Europe%2FParis`;
+      user = user.slice(0, match.index) + `[AB:S2|${match[1] ? match[1] + ";" : ""}${ref}]` + user.slice(match.index + match[0].length);
+    }
+  } else if (user.includes(begin) && user.includes(end)) {
+    const entry = `${stamp} [${uid}] — ${comment.trim().replace(/\n/g, "\n  ")}`;
+    user = user.replace(end, entry + "\n" + end);
+  } else {
+    const entry = `${stamp} [${uid}] — ${comment.trim().replace(/\n/g, "\n  ")}`;
+    user = (user.trim() ? user.trim() + "\n\n" : "") + `${begin}\n${entry}\n${end}`;
+  }
+  return user;
+}
+
+// Crée le bouton cliquable « bulle de conversation » AgendaBIP
+function createConversationBubbleBtn(item, isEvent = false) {
+  const conv = parseAgendaBipConversation(item.notes || item.description);
+  const count = conv.entries.length;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "conversation-bubble";
+  btn.title = `Conversation de suivi${count > 0 ? ` · ${count} commentaire(s)` : ""}`;
+  btn.innerHTML = `💬${count > 0 ? `<span class="conversation-count">${count}</span>` : ""}`;
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openTaskConversationModal(item, isEvent);
+  });
+  return btn;
+}
+
 const CALENDAR_COLOR_PALETTE = {
   "Agenda_Privé_TZT": "#3b82f6",
   "REVEIL-RAPPEL TZT": "#10b981",
@@ -893,7 +1092,8 @@ function tryLaunchWebAuthFlow() {
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/tasks",
     "https://www.googleapis.com/auth/userinfo.email",
-    "https://www.googleapis.com/auth/drive.appdata"
+    "https://www.googleapis.com/auth/drive.appdata",
+    "https://www.googleapis.com/auth/drive.file"
   ].join(" ");
 
   const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUrl)}&scope=${encodeURIComponent(scopes)}&prompt=consent`;
@@ -964,7 +1164,8 @@ async function getFreshGoogleToken(interactive = false) {
         "https://www.googleapis.com/auth/calendar.events",
         "https://www.googleapis.com/auth/tasks",
         "https://www.googleapis.com/auth/userinfo.email",
-        "https://www.googleapis.com/auth/drive.appdata"
+        "https://www.googleapis.com/auth/drive.appdata",
+        "https://www.googleapis.com/auth/drive.file"
       ].join(" ");
 
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUrl)}&scope=${encodeURIComponent(scopes)}&prompt=consent`;
@@ -1118,6 +1319,7 @@ async function performGoogleDataSync(token, interactive = false, isRetry = false
                 if (pMatch) priority = pMatch[1].toUpperCase();
                 else if (list.title && list.title.toUpperCase() === "P0") priority = "P0";
 
+                const taskAttachments = parseAgendaBipAttachments(t.notes);
                 allTasks.push({
                   id: t.id,
                   title: t.title || "Tâche sans titre",
@@ -1129,6 +1331,7 @@ async function performGoogleDataSync(token, interactive = false, isRetry = false
                   status: t.status === "completed" ? "done" : "todo",
                   due: t.due ? t.due.slice(0, 10) : "",
                   notes: t.notes || "",
+                  attachments: taskAttachments,
                   priority
                 });
               });
@@ -1400,6 +1603,133 @@ function setupAgendaWidget() {
     return results;
   }
 
+  // Récupère la liste des événements masqués pour une date donnée
+  function getHiddenEventsForDate(dateStr) {
+    const enabled = getEnabledCalendars();
+    const results = [];
+
+    googleEventsList.forEach(ev => {
+      if (ev.dateStr === dateStr && enabled.includes(ev.calendarTitle)) {
+        if (isEventHidden(ev, dateStr)) {
+          results.push(ev);
+        }
+      }
+    });
+
+    Object.keys(agendaSettings.agendas || {}).forEach(agKey => {
+      const ag = agendaSettings.agendas[agKey];
+      if (ag && ag.enabled && enabled.includes(ag.name)) {
+        const localList = ag.events ? ag.events[dateStr] || [] : [];
+        localList.forEach(ev => {
+          if (isEventHidden(ev, dateStr)) {
+            results.push({
+              id: ev.id,
+              title: ev.title,
+              timeStr: ev.time || "Journée",
+              dateStr: dateStr,
+              calendarTitle: ag.name,
+              isLocal: true,
+              agKey: agKey,
+              rawEv: ev
+            });
+          }
+        });
+      }
+    });
+
+    return results;
+  }
+
+  // Rendu du volet dépliant discret pour les événements masqués (vue temporaire)
+  function renderHiddenEventsAccordion(targetContainer, hiddenEvents, dateKey) {
+    if (!targetContainer || !hiddenEvents || hiddenEvents.length === 0) return;
+
+    const details = document.createElement("details");
+    details.className = "agenda-hidden-events-accordion";
+
+    const summary = document.createElement("summary");
+    summary.className = "agenda-hidden-events-summary";
+    summary.innerHTML = `
+      <span class="agenda-hidden-summary-label">
+        <span class="agenda-hidden-icon">👁️‍🗨️</span>
+        <span>Événements masqués (${hiddenEvents.length})</span>
+      </span>
+      <span class="agenda-hidden-badge-temp" title="Affichage temporaire : ces événements restent masqués par défaut">Volet dépliant</span>
+    `;
+    details.appendChild(summary);
+
+    const listContainer = document.createElement("div");
+    listContainer.className = "agenda-hidden-events-list";
+
+    hiddenEvents.forEach(ev => {
+      const item = document.createElement("div");
+      item.className = "agenda-event-item agenda-event-hidden-item";
+
+      const calColor = CALENDAR_COLOR_PALETTE[ev.calendarTitle] || "#64748b";
+      item.style.borderLeftColor = calColor;
+
+      const timeSpan = document.createElement("span");
+      timeSpan.className = "agenda-event-time";
+      timeSpan.textContent = ev.timeStr || "Journée";
+      timeSpan.style.color = "#94a3b8";
+
+      const detailsBox = document.createElement("div");
+      detailsBox.className = "agenda-event-details";
+
+      const titleSpan = document.createElement("span");
+      titleSpan.className = "agenda-event-title";
+      titleSpan.textContent = ev.title;
+      titleSpan.title = `${ev.title} (Événement masqué)`;
+
+      if (ev.htmlLink) {
+        titleSpan.style.cursor = "pointer";
+        titleSpan.addEventListener("click", () => window.open(ev.htmlLink, "_blank"));
+      }
+
+      const calTag = document.createElement("span");
+      calTag.className = "agenda-event-cal-tag";
+      calTag.innerHTML = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${calColor};margin-right:3px;"></span>${ev.calendarTitle} <em style="font-size:9.5px;color:#94a3b8;">(masqué)</em>`;
+
+      detailsBox.appendChild(titleSpan);
+      detailsBox.appendChild(calTag);
+
+      item.appendChild(timeSpan);
+      item.appendChild(detailsBox);
+
+      // Bulle de conversation
+      item.appendChild(createConversationBubbleBtn(ev, true));
+
+      // Si masqué via l'agenda local (hiddenMap), permettre de le rétablir
+      const hiddenMap = getHiddenDays();
+      if (ev.id && hiddenMap[dateKey] && hiddenMap[dateKey].includes(ev.id)) {
+        const unhideBtn = document.createElement("button");
+        unhideBtn.type = "button";
+        unhideBtn.className = "btn-xs";
+        unhideBtn.style.padding = "2px 6px";
+        unhideBtn.style.fontSize = "9.5px";
+        unhideBtn.style.marginLeft = "auto";
+        unhideBtn.title = "Rétablir définitivement cet événement";
+        unhideBtn.textContent = "Rétablir";
+        unhideBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          hiddenMap[dateKey] = hiddenMap[dateKey].filter(id => id !== ev.id);
+          if (hiddenMap[dateKey].length === 0) delete hiddenMap[dateKey];
+          agendaSettings.hiddenDays = hiddenMap;
+          chrome.storage.local.set({ agendaSettings });
+          renderEvents();
+          if (typeof renderTwoMonthsEvents === "function") renderTwoMonthsEvents();
+          showToast(`Événement « ${ev.title} » rétabli pour ce jour.`);
+        });
+        item.appendChild(unhideBtn);
+      }
+
+      listContainer.appendChild(item);
+    });
+
+    details.appendChild(listContainer);
+    targetContainer.appendChild(details);
+  }
+
   // Configuration du Drag & Drop sur une cellule de date (Agenda) :
   // - Accepte une tâche glissée -> ouvre la modale de planification pour créer le rendez-vous Google Agenda
   // - Accepte un événement glissé -> le reporte à la nouvelle date et synchronise Google Calendar
@@ -1506,16 +1836,21 @@ function setupAgendaWidget() {
     showToast(`📅 Événement « ${evData.title} » déplacé au ${newDateKey} !`);
   }
 
-  // Fenêtre modale : Planifier une tâche dans Google Agenda
+  // Fenêtre modale : Planifier une tâche ou ajouter un rendez-vous dans Google Agenda
   function openScheduleTaskModal(taskData, targetDate) {
     if (!scheduleTaskModal) return;
-    pendingScheduleTaskId = taskData.id;
-    const task = tasksList.find(t => t.id === taskData.id) || taskData;
+    pendingScheduleTaskId = taskData ? taskData.id : null;
+    const task = taskData ? (tasksList.find(t => t.id === taskData.id) || taskData) : null;
 
-    if (scheduleTaskTitleInput) scheduleTaskTitleInput.value = task.title || "";
+    const modalTitle = document.getElementById("scheduleTaskModalTitle");
+    if (modalTitle) {
+      modalTitle.textContent = task ? "📅 Planifier la tâche dans Google Agenda" : "📅 Nouveau Rendez-vous Google Agenda";
+    }
+
+    if (scheduleTaskTitleInput) scheduleTaskTitleInput.value = task ? (task.title || "") : "";
     if (scheduleTaskDateInput) scheduleTaskDateInput.value = targetDate || toDateKey(selectedDate);
     if (scheduleTaskTimeInput) scheduleTaskTimeInput.value = "09:00";
-    if (scheduleTaskNotesInput) scheduleTaskNotesInput.value = task.notes || "";
+    if (scheduleTaskNotesInput) scheduleTaskNotesInput.value = task ? (task.notes || "") : "";
 
     if (scheduleTaskCalendarSelect) {
       scheduleTaskCalendarSelect.innerHTML = "";
@@ -1536,6 +1871,14 @@ function setupAgendaWidget() {
     }
 
     scheduleTaskModal.classList.remove("hidden");
+    if (scheduleTaskTitleInput) setTimeout(() => scheduleTaskTitleInput.focus(), 80);
+  }
+
+  // Clic sur le bouton "+" de l'en-tête de l'Agenda
+  if (addEventBtn) {
+    addEventBtn.addEventListener("click", () => {
+      openScheduleTaskModal(null, toDateKey(selectedDate));
+    });
   }
 
   function closeScheduleTaskModal() {
@@ -1617,7 +1960,22 @@ function setupAgendaWidget() {
         console.warn("Erreur réseau création événement Google Calendar:", err);
       }
 
-      showToast(`📅 Rendez-vous « ${title} » planifié pour le ${dateStr} !`);
+      // Enregistrement local fallback
+      const calName = (scheduleTaskCalendarSelect && scheduleTaskCalendarSelect.options[scheduleTaskCalendarSelect.selectedIndex]) ? scheduleTaskCalendarSelect.options[scheduleTaskCalendarSelect.selectedIndex].text : "Agenda local";
+      googleEventsList.push({
+        id: `local_${Date.now()}`,
+        calendarId: calendarId,
+        calendarTitle: calName,
+        title: title,
+        notes: notes,
+        htmlLink: "",
+        dateStr: dateStr,
+        timeStr: durationVal === "allDay" ? "Journée" : timeStr,
+        isAllDay: durationVal === "allDay"
+      });
+      chrome.storage.local.set({ googleEventsList });
+      renderCurrentView();
+      showToast(`📅 Rendez-vous « ${title} » enregistré pour le ${dateStr} !`);
     });
   }
 
@@ -1733,8 +2091,9 @@ function setupAgendaWidget() {
       monday.setDate(cur.getDate() - dayOfWeek);
       const sunday = new Date(monday);
       sunday.setDate(monday.getDate() + 6);
+      const weekNum = getIsoWeekNumber(monday);
 
-      monthTitle.textContent = `${monday.getDate()} ${MONTH_NAMES[monday.getMonth()].slice(0, 4)}. - ${sunday.getDate()} ${MONTH_NAMES[sunday.getMonth()].slice(0, 4)}. ${sunday.getFullYear()}`;
+      monthTitle.textContent = `Semaine ${weekNum} · ${monday.getDate()} ${MONTH_NAMES[monday.getMonth()].slice(0, 4)}. - ${sunday.getDate()} ${MONTH_NAMES[sunday.getMonth()].slice(0, 4)}. ${sunday.getFullYear()}`;
     } else if (currentView === "day") {
       monthTitle.textContent = selectedDate.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long" });
     } else if (currentView === "planning") {
@@ -1768,6 +2127,8 @@ function setupAgendaWidget() {
       if (t.due && t.status !== "done") activeDates.add(t.due);
     });
 
+    const allMonthCells = [];
+
     // Jours du mois précédent
     for (let i = firstDayIndex - 1; i >= 0; i--) {
       const dayNum = daysInPrevMonth - i;
@@ -1789,7 +2150,7 @@ function setupAgendaWidget() {
         viewDate = new Date(year, month - 1, 1);
         renderCurrentView();
       });
-      daysContainer.appendChild(cell);
+      allMonthCells.push({ cell, cellDate });
     }
 
     // Jours du mois courant
@@ -1814,7 +2175,7 @@ function setupAgendaWidget() {
         renderCalendar();
         renderEvents();
       });
-      daysContainer.appendChild(cell);
+      allMonthCells.push({ cell, cellDate });
     }
 
     // Jours du mois suivant
@@ -1839,7 +2200,25 @@ function setupAgendaWidget() {
         viewDate = new Date(year, month + 1, 1);
         renderCurrentView();
       });
-      daysContainer.appendChild(cell);
+      allMonthCells.push({ cell, cellDate });
+    }
+
+    // Insertion des cellules par rangées de 7 jours précédées de la colonne Numéro de Semaine (S)
+    for (let i = 0; i < allMonthCells.length; i += 7) {
+      const rowThurs = (allMonthCells[i + 3] && allMonthCells[i + 3].cellDate) || allMonthCells[i].cellDate;
+      const weekNum = getIsoWeekNumber(rowThurs);
+
+      const weekEl = document.createElement("div");
+      weekEl.className = "agenda-week-number";
+      weekEl.title = `Semaine ${weekNum}`;
+      weekEl.textContent = weekNum;
+      daysContainer.appendChild(weekEl);
+
+      for (let j = 0; j < 7; j++) {
+        if (allMonthCells[i + j]) {
+          daysContainer.appendChild(allMonthCells[i + j].cell);
+        }
+      }
     }
   }
 
@@ -1850,8 +2229,9 @@ function setupAgendaWidget() {
     const dayTasks = tasksList.filter(t => t.due === selKey);
 
     const options = { weekday: "short", day: "numeric", month: "short" };
+    const weekNum = getIsoWeekNumber(selectedDate);
     if (selectedDayText) {
-      selectedDayText.textContent = selectedDate.toLocaleDateString("fr-FR", options);
+      selectedDayText.textContent = `${selectedDate.toLocaleDateString("fr-FR", options)} · Sem. ${weekNum}`;
     }
     if (eventsCount) {
       eventsCount.textContent = `${dayEvents.length} RDV${dayTasks.length > 0 ? ` · ${dayTasks.length} Tâches` : ""}`;
@@ -1867,7 +2247,6 @@ function setupAgendaWidget() {
 
     if (dayEvents.length === 0 && dayTasks.length === 0) {
       eventsList.innerHTML = '<div class="agenda-empty-events">Aucun rendez-vous pour ce jour. Glissez une tâche ici pour la planifier !</div>';
-      return;
     }
 
     // Rendu des tâches planifiées pour ce jour
@@ -1884,6 +2263,8 @@ function setupAgendaWidget() {
           <span class="agenda-event-cal-tag"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#10b981;margin-right:3px;"></span>${task.groupId || "Tâches"}</span>
         </div>
       `;
+      // Bulle de conversation sur la tâche du jour
+      tItem.appendChild(createConversationBubbleBtn(task, false));
       eventsList.appendChild(tItem);
     });
 
@@ -1945,6 +2326,9 @@ function setupAgendaWidget() {
       const actionsBox = document.createElement("div");
       actionsBox.className = "agenda-event-actions";
 
+      // Bulle de conversation de suivi (AgendaBIP)
+      actionsBox.appendChild(createConversationBubbleBtn(ev, true));
+
       // Menu rapide contextuel bouton
       const moreBtn = document.createElement("button");
       moreBtn.type = "button";
@@ -1968,24 +2352,8 @@ function setupAgendaWidget() {
       eventsList.appendChild(item);
     });
 
-    // Bouton de réaffichage si événements masqués
-    const hiddenMap = getHiddenDays();
-    const hiddenCount = (hiddenMap[selKey] || []).length;
-    if (hiddenCount > 0) {
-      const unhideBtn = document.createElement("button");
-      unhideBtn.type = "button";
-      unhideBtn.className = "btn-xs";
-      unhideBtn.style.marginTop = "6px";
-      unhideBtn.textContent = `👁️ Réafficher les événements masqués (${hiddenCount})`;
-      unhideBtn.addEventListener("click", () => {
-        delete hiddenMap[selKey];
-        agendaSettings.hiddenDays = hiddenMap;
-        chrome.storage.local.set({ agendaSettings });
-        renderEvents();
-        showToast("Événements réaffichés pour ce jour.");
-      });
-      eventsList.appendChild(unhideBtn);
-    }
+    // Volet dépliant discret pour les événements masqués (temporaire)
+    renderHiddenEventsAccordion(eventsList, getHiddenEventsForDate(selKey), selKey);
   }
 
   // 1b. VUE 2 MOIS CÔTE À CÔTE
@@ -2106,8 +2474,9 @@ function setupAgendaWidget() {
     const dayTasks = tasksList.filter(t => t.due === selKey);
 
     const options = { weekday: "short", day: "numeric", month: "short" };
+    const weekNum = getIsoWeekNumber(selectedDate);
     if (twoMonthsSelectedDayText) {
-      twoMonthsSelectedDayText.textContent = selectedDate.toLocaleDateString("fr-FR", options);
+      twoMonthsSelectedDayText.textContent = `${selectedDate.toLocaleDateString("fr-FR", options)} · Sem. ${weekNum}`;
     }
     if (twoMonthsEventsCount) {
       twoMonthsEventsCount.textContent = `${dayEvents.length} RDV${dayTasks.length > 0 ? ` · ${dayTasks.length} Tâches` : ""}`;
@@ -2116,7 +2485,6 @@ function setupAgendaWidget() {
     twoMonthsEventsList.innerHTML = "";
     if (dayEvents.length === 0 && dayTasks.length === 0) {
       twoMonthsEventsList.innerHTML = '<div class="agenda-empty-events">Aucun rendez-vous pour ce jour. Glissez un événement pour le reporter ou une tâche pour la planifier !</div>';
-      return;
     }
 
     dayTasks.forEach(task => {
@@ -2131,6 +2499,7 @@ function setupAgendaWidget() {
           <span class="agenda-event-cal-tag"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#10b981;margin-right:3px;"></span>${task.groupId || "Tâches"}</span>
         </div>
       `;
+      tItem.appendChild(createConversationBubbleBtn(task, false));
       twoMonthsEventsList.appendChild(tItem);
     });
 
@@ -2190,6 +2559,9 @@ function setupAgendaWidget() {
       const actionsBox = document.createElement("div");
       actionsBox.className = "agenda-event-actions";
 
+      // Bulle de conversation de suivi (AgendaBIP)
+      actionsBox.appendChild(createConversationBubbleBtn(ev, true));
+
       const moreBtn = document.createElement("button");
       moreBtn.type = "button";
       moreBtn.className = "agenda-event-btn-action";
@@ -2208,6 +2580,9 @@ function setupAgendaWidget() {
 
       twoMonthsEventsList.appendChild(item);
     });
+
+    // Volet dépliant discret pour les événements masqués (temporaire)
+    renderHiddenEventsAccordion(twoMonthsEventsList, getHiddenEventsForDate(selKey), selKey);
   }
 
   // 2. VUE SEMAINE
@@ -2763,16 +3138,44 @@ function setupTasksWidget() {
   const kanbanContainer = document.getElementById("tasksKanbanContainer");
   const kanbanListTodo = document.getElementById("kanbanListTodo");
   const kanbanListInProgress = document.getElementById("kanbanListInProgress");
+  const kanbanListBlocked = document.getElementById("kanbanListBlocked");
   const kanbanListDone = document.getElementById("kanbanListDone");
   const kanbanCountTodo = document.getElementById("kanbanCountTodo");
   const kanbanCountInProgress = document.getElementById("kanbanCountInProgress");
+  const kanbanCountBlocked = document.getElementById("kanbanCountBlocked");
   const kanbanCountDone = document.getElementById("kanbanCountDone");
+  const kanbanColDone = document.getElementById("kanbanColDone");
+  const kanbanToggleDoneBtn = document.getElementById("kanbanToggleDoneBtn");
 
   if (kanbanToggleBtn) {
     kanbanToggleBtn.addEventListener("click", () => {
       tasksSettings.viewMode = tasksSettings.viewMode === "kanban" ? "list" : "kanban";
       chrome.storage.local.set({ tasksSettings });
       renderTasks();
+    });
+  }
+
+  // Dépliage / repliage de la colonne Terminé (repliée par défaut)
+  if (kanbanColDone) {
+    const doneHeader = kanbanColDone.querySelector(".kanban-column-header");
+    if (doneHeader) {
+      doneHeader.addEventListener("click", (e) => {
+        if (e.target.closest(".kanban-add-card-btn")) return;
+        kanbanColDone.classList.toggle("collapsed");
+        if (kanbanToggleDoneBtn) {
+          kanbanToggleDoneBtn.textContent = kanbanColDone.classList.contains("collapsed") ? "◧" : "◨";
+        }
+      });
+    }
+  }
+
+  if (kanbanToggleDoneBtn) {
+    kanbanToggleDoneBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (kanbanColDone) {
+        kanbanColDone.classList.toggle("collapsed");
+        kanbanToggleDoneBtn.textContent = kanbanColDone.classList.contains("collapsed") ? "◧" : "◨";
+      }
     });
   }
 
@@ -3339,12 +3742,15 @@ function renderTasks() {
 
     const todoCards = [];
     const inProgressCards = [];
+    const blockedCards = [];
     const doneCards = [];
 
     filteredTasks.forEach(task => {
       const st = (task.status || "todo").toLowerCase();
       if (st === "done" || st === "completed") {
         doneCards.push(task);
+      } else if (st === "blocked") {
+        blockedCards.push(task);
       } else if (st === "inprogress" || st === "in_progress") {
         inProgressCards.push(task);
       } else {
@@ -3354,11 +3760,13 @@ function renderTasks() {
 
     if (kanbanCountTodo) kanbanCountTodo.textContent = todoCards.length;
     if (kanbanCountInProgress) kanbanCountInProgress.textContent = inProgressCards.length;
+    if (kanbanCountBlocked) kanbanCountBlocked.textContent = blockedCards.length;
     if (kanbanCountDone) kanbanCountDone.textContent = doneCards.length;
 
     // Remplir colonnes
     setupKanbanColumn(kanbanListTodo, todoCards, "todo", subtasksCountMap);
     setupKanbanColumn(kanbanListInProgress, inProgressCards, "inprogress", subtasksCountMap);
+    setupKanbanColumn(kanbanListBlocked, blockedCards, "blocked", subtasksCountMap);
     setupKanbanColumn(kanbanListDone, doneCards, "done", subtasksCountMap);
   }
 
@@ -3393,7 +3801,7 @@ function renderTasks() {
         saveTasks();
         renderTasks();
         syncGoogleTaskStatus(draggedTaskObj);
-        showToast(`📋 « ${draggedTaskObj.title} » déplacée vers ${columnStatus === "done" ? "Terminé" : columnStatus === "inprogress" ? "En cours" : "À faire"}`);
+        showToast(`📋 « ${draggedTaskObj.title} » déplacée vers ${columnStatus === "done" ? "Terminé" : columnStatus === "blocked" ? "Bloqué" : columnStatus === "inprogress" ? "En cours" : "À faire"}`);
       }
     });
 
@@ -3414,7 +3822,8 @@ function renderTasks() {
     const todayStr = new Date().toISOString().slice(0, 10);
     const card = document.createElement("div");
     const isDone = task.status === "done" || task.status === "completed";
-    card.className = `kanban-card priority-${task.priority || "NONE"}${isDone ? " done-card" : ""}`;
+    const isBlocked = task.status === "blocked";
+    card.className = `kanban-card priority-${task.priority || "NONE"}${isDone ? " done-card" : ""}${isBlocked ? " blocked-card" : ""}`;
     card.draggable = true;
     card.dataset.taskId = task.id;
 
@@ -3506,11 +3915,25 @@ function renderTasks() {
       }
     });
 
+    // En-tête de la carte avec Titre + Bulle de conversation AgendaBIP
+    const headerRow = document.createElement("div");
+    headerRow.style.display = "flex";
+    headerRow.style.alignItems = "flex-start";
+    headerRow.style.justifyContent = "space-between";
+    headerRow.style.gap = "6px";
+
     const titleEl = document.createElement("div");
     titleEl.className = "kanban-card-title";
+    titleEl.style.flex = "1";
     titleEl.textContent = task.title;
     titleEl.title = `${task.title} — Double-clic pour ouvrir en lecture seule`;
     titleEl.addEventListener("dblclick", () => openTaskReader(task));
+
+    const bubbleBtn = createConversationBubbleBtn(task, false);
+
+    headerRow.appendChild(titleEl);
+    headerRow.appendChild(bubbleBtn);
+    card.appendChild(headerRow);
 
     const metaEl = document.createElement("div");
     metaEl.className = "kanban-card-meta";
@@ -3527,10 +3950,29 @@ function renderTasks() {
       metaEl.appendChild(pTag);
     }
 
+    if (isBlocked) {
+      const bTag = document.createElement("span");
+      bTag.className = "kanban-tag blocked";
+      bTag.textContent = "⛔ Bloqué";
+      metaEl.appendChild(bTag);
+    }
+
     const grpTag = document.createElement("span");
     grpTag.className = "kanban-tag";
     grpTag.textContent = task.groupId || "Général";
     metaEl.appendChild(grpTag);
+
+    // Indication du parent si la carte est elle-même une sous-tâche
+    if (task.parent) {
+      const pTask = tasksList.find(t => t.id === task.parent);
+      if (pTask) {
+        const parentTag = document.createElement("span");
+        parentTag.className = "kanban-tag parent-crumb";
+        parentTag.textContent = `↳ ${pTask.title}`;
+        parentTag.title = `Sous-tâche de « ${pTask.title} »`;
+        metaEl.appendChild(parentTag);
+      }
+    }
 
     if (task.due) {
       const dueTag = document.createElement("span");
@@ -3539,15 +3981,104 @@ function renderTasks() {
       metaEl.appendChild(dueTag);
     }
 
-    if (subCount > 0) {
-      const subTag = document.createElement("span");
-      subTag.className = "kanban-tag subtasks";
-      subTag.textContent = `↳ ${subCount} sous-tâche${subCount > 1 ? "s" : ""}`;
-      metaEl.appendChild(subTag);
-    }
-
-    card.appendChild(titleEl);
     card.appendChild(metaEl);
+
+    // Sous-tâches visibles dans la carte Kanban
+    const children = tasksList.filter(t => t.parent === task.id);
+    if (children.length > 0) {
+      const subBox = document.createElement("div");
+      subBox.className = "kanban-card-subtasks-box";
+
+      const isExpanded = expandedSubtasksSet.has(task.id);
+
+      const subHeader = document.createElement("div");
+      subHeader.className = "kanban-subtasks-header";
+      subHeader.innerHTML = `
+        <span><span class="kanban-subtasks-toggle-arrow">${isExpanded ? "▼" : "▶"}</span> ↳ ${children.length} sous-tâche${children.length > 1 ? "s" : ""}</span>
+        <span style="font-size: 9px; opacity: 0.7;">${children.filter(c => c.status === "done").length}/${children.length}</span>
+      `;
+
+      const subList = document.createElement("div");
+      subList.className = "kanban-subtasks-list";
+      if (!isExpanded) subList.style.display = "none";
+
+      subHeader.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (subList.style.display === "none") {
+          subList.style.display = "flex";
+          subHeader.querySelector(".kanban-subtasks-toggle-arrow").textContent = "▼";
+          expandedSubtasksSet.add(task.id);
+        } else {
+          subList.style.display = "none";
+          subHeader.querySelector(".kanban-subtasks-toggle-arrow").textContent = "▶";
+          expandedSubtasksSet.delete(task.id);
+        }
+      });
+
+      children.forEach(sub => {
+        const subRow = document.createElement("div");
+        subRow.className = "kanban-subtask-row";
+
+        const isSubDone = sub.status === "done" || sub.status === "completed";
+
+        const check = document.createElement("input");
+        check.type = "checkbox";
+        check.className = "kanban-subtask-check";
+        check.checked = isSubDone;
+        check.addEventListener("click", (e) => {
+          e.stopPropagation();
+          sub.status = check.checked ? "done" : "todo";
+          saveTasks();
+          renderTasks();
+          syncGoogleTaskStatus(sub);
+        });
+
+        const subTitle = document.createElement("span");
+        subTitle.className = `kanban-subtask-title${isSubDone ? " done" : ""}`;
+        subTitle.textContent = sub.title;
+        subTitle.title = sub.title;
+
+        // Badge de statut cliquable pour changer l'état de la sous-tâche
+        const statusBadge = document.createElement("span");
+        const subSt = (sub.status || "todo").toLowerCase();
+        statusBadge.className = `kanban-subtask-badge ${subSt}`;
+        statusBadge.textContent = subSt === "done" ? "Terminé" : subSt === "blocked" ? "Bloqué" : subSt === "inprogress" ? "En cours" : "À faire";
+        statusBadge.title = "Cliquer pour changer le statut de la sous-tâche";
+        statusBadge.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const cycle = ["todo", "inprogress", "blocked", "done"];
+          const nextIdx = (cycle.indexOf(subSt) + 1) % cycle.length;
+          sub.status = cycle[nextIdx];
+          saveTasks();
+          renderTasks();
+          syncGoogleTaskStatus(sub);
+        });
+
+        const promoteBtn = document.createElement("button");
+        promoteBtn.type = "button";
+        promoteBtn.className = "kanban-subtask-promote-btn";
+        promoteBtn.textContent = "⤴";
+        promoteBtn.title = "Détacher cette sous-tâche pour la remettre au niveau racine";
+        promoteBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          sub.parent = null;
+          saveTasks();
+          renderTasks();
+          syncGoogleTaskMove(sub, null);
+          showToast(`⤴ « ${sub.title} » rétablie au niveau principal !`);
+        });
+
+        subRow.appendChild(check);
+        subRow.appendChild(subTitle);
+        subRow.appendChild(statusBadge);
+        subRow.appendChild(promoteBtn);
+        subList.appendChild(subRow);
+      });
+
+      subBox.appendChild(subHeader);
+      subBox.appendChild(subList);
+      card.appendChild(subBox);
+    }
 
     return card;
   }
@@ -3771,6 +4302,10 @@ function renderTasks() {
     const actionsBox = document.createElement("div");
     actionsBox.className = "task-actions";
 
+    // Bulle de conversation de suivi (AgendaBIP)
+    const bubbleBtn = createConversationBubbleBtn(task, false);
+    actionsBox.appendChild(bubbleBtn);
+
     // Bouton Copier avec sous-tâches (📋)
     const copyBtn = document.createElement("button");
     copyBtn.type = "button";
@@ -3886,9 +4421,14 @@ function renderTasks() {
     return row;
   }
 
-  // GESTION DU DÉPÔT DE PIÈCE JOINTE
+  // GESTION DU DÉPÔT DE PIÈCE JOINTE (FORMAT STANDARD STRICT AGENDABIP)
   async function handleAttachFileToTask(task, file) {
     if (!file) return;
+    if (file.size > 20 * 1024 * 1024) {
+      showToast("Fichier trop volumineux (limité à 20 Mo comme dans AgendaBIP)");
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = async () => {
       const dataUrl = reader.result;
@@ -3904,23 +4444,19 @@ function renderTasks() {
       if (!Array.isArray(task.attachments)) task.attachments = [];
       task.attachments.push(att);
 
-      // Encodage dans la note au format standard AgendaBIP
-      const attachLine = `\n📎 Pièce jointe : ${file.name} (${Math.round(file.size / 1024)} Ko)`;
-      task.notes = (task.notes || "") + attachLine;
-
       saveTasks();
       renderTasks();
-      showToast(`📎 Pièce jointe « ${file.name} » attachée à la tâche !`);
+      showToast(`📎 « ${file.name} » attachée ! Téléversement Google Drive en cours...`);
 
-      // Upload Drive transparent si OAuth configuré
-      uploadAttachmentToDrive(task, file, dataUrl);
+      // Upload Drive transparent + synchronisation standard AgendaBIP
+      await uploadAttachmentToDrive(task, file, dataUrl);
     };
     reader.readAsDataURL(file);
   }
 
   function openAttachmentFile(att) {
-    if (att.driveUrl) {
-      window.open(att.driveUrl, "_blank");
+    if (att.driveUrl || att.url) {
+      window.open(att.driveUrl || att.url, "_blank");
       return;
     }
     if (att.dataUrl) {
@@ -3936,35 +4472,76 @@ function renderTasks() {
     }
   }
 
+  // Téléversement sur Google Drive et encodage strict au format AgendaBIP :
+  // [AgendaBIP_ATTACHMENTS_BEGIN]
+  // DRIVE|Nom_du_fichier|https://drive.google.com/file/d/.../view
+  // [AgendaBIP_ATTACHMENTS_END]
   async function uploadAttachmentToDrive(task, file, dataUrl) {
-    if (typeof DriveSync === "undefined" || !DriveSync.hasConfiguredOAuth || !DriveSync.hasConfiguredOAuth()) {
-      return;
-    }
     try {
-      const token = await DriveSync.getAuthToken(false);
-      if (!token) return;
+      const token = await getFreshGoogleToken(false);
+      if (!token) {
+        console.warn("Pas de jeton Google disponible pour téléverser sur Drive");
+        return;
+      }
 
-      const metadata = { name: file.name, mimeType: file.type };
+      const metadata = { name: file.name, mimeType: file.type || "application/octet-stream" };
       const form = new FormData();
       form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
       form.append("file", file);
 
-      const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink", {
+      const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: form
       });
+
       if (res.ok) {
         const d = await res.json();
-        if (d.webViewLink) {
-          const matchAtt = task.attachments.find(a => a.name === file.name);
-          if (matchAtt) matchAtt.driveUrl = d.webViewLink;
-          task.notes = (task.notes || "") + `\n🔗 Lien Drive : ${d.webViewLink}`;
-          saveTasks();
-          renderTasks();
+        const driveUrl = d.webViewLink || (`https://drive.google.com/file/d/${d.id}/view`);
+        const cleanName = file.name.replace(/[|\r\n]/g, " ");
+
+        // Encodage strict AgendaBIP
+        const entry = `DRIVE|${cleanName}|${driveUrl}`;
+        const begin = "[AgendaBIP_ATTACHMENTS_BEGIN]";
+        const end = "[AgendaBIP_ATTACHMENTS_END]";
+
+        let userNotes = task.notes || "";
+        if (userNotes.includes(begin) && userNotes.includes(end)) {
+          userNotes = userNotes.replace(end, `${entry}\n${end}`);
+        } else {
+          userNotes = (userNotes.trim() ? userNotes.trim() + "\n\n" : "") + `${begin}\n${entry}\n${end}`;
         }
+        task.notes = userNotes;
+
+        const matchAtt = task.attachments.find(a => a.name === file.name);
+        if (matchAtt) {
+          matchAtt.driveUrl = driveUrl;
+          matchAtt.url = driveUrl;
+        }
+
+        saveTasks();
+        renderTasks();
+
+        // Synchroniser immédiatement les notes avec Google Tasks (reconnu directement par AgendaBIP Android/Windows)
+        if (chrome.identity && task.rawGroupId && task.id) {
+          await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${encodeURIComponent(task.rawGroupId)}/tasks/${encodeURIComponent(task.id)}`, {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ id: task.id, notes: task.notes })
+          });
+          console.log(`Pièce jointe enregistrée au format AgendaBIP pour "${task.title}" : ${entry}`);
+        }
+
+        showToast(`📎 « ${file.name} » prête dans Google Drive et liée à la tâche !`);
+      } else {
+        console.warn("Échec upload Google Drive:", res.status);
       }
-    } catch (_) {}
+    } catch (err) {
+      console.warn("Erreur réseau uploadAttachmentToDrive:", err);
+    }
   }
 
   // COPIE DE L'ARBORESCENCE DANS LE PRESSE-PAPIERS
@@ -4198,6 +4775,156 @@ function renderTasks() {
   };
 
   refreshTasksDisplay();
+}
+
+// ==========================================================================
+// 💬 MODAL DE CONVERSATION DE SUIVI AGENDABIP (TÂCHES & ÉVÉNEMENTS)
+// ==========================================================================
+let currentConversationTarget = null;
+let currentConversationIsEvent = false;
+
+function openTaskConversationModal(item, isEvent = false) {
+  const modal = document.getElementById("taskConversationModal");
+  if (!modal) return;
+  currentConversationTarget = item;
+  currentConversationIsEvent = isEvent;
+
+  const typeBadge = document.getElementById("taskConversationTypeBadge");
+  if (typeBadge) typeBadge.textContent = isEvent ? "Événement Google Agenda" : "Tâche Google Tasks";
+
+  const titleEl = document.getElementById("taskConversationItemTitle");
+  if (titleEl) titleEl.textContent = item.title || (isEvent ? "Rendez-vous" : "Tâche");
+
+  renderTaskConversationHistory();
+
+  const input = document.getElementById("taskConversationInput");
+  if (input) input.value = "";
+  const statusEl = document.getElementById("taskConversationStatus");
+  if (statusEl) statusEl.textContent = "";
+
+  modal.classList.remove("hidden");
+  if (input) setTimeout(() => input.focus(), 80);
+}
+
+function renderTaskConversationHistory() {
+  const historyContainer = document.getElementById("taskConversationHistory");
+  if (!historyContainer || !currentConversationTarget) return;
+  historyContainer.innerHTML = "";
+
+  const notes = currentConversationTarget.notes || currentConversationTarget.description || "";
+  const conv = parseAgendaBipConversation(notes);
+
+  if (conv.entries.length === 0) {
+    historyContainer.innerHTML = `<div style="text-align: center; color: #64748b; font-size: 11px; padding: 18px 0; font-style: italic;">
+      Aucun commentaire de suivi pour le moment. Écrivez ci-dessous pour ajouter un message horodaté.
+    </div>`;
+    return;
+  }
+
+  conv.entries.forEach(entry => {
+    const art = document.createElement("article");
+    art.className = "task-conversation-entry";
+
+    const timeEl = document.createElement("time");
+    timeEl.textContent = `📅 ${entry.date}`;
+
+    const p = document.createElement("p");
+    let text = entry.comment || "";
+    let offset = 0;
+    for (const match of text.matchAll(/https?:\/\/[^\s<>"']+/g)) {
+      p.appendChild(document.createTextNode(text.slice(offset, match.index)));
+      const link = document.createElement("a");
+      link.textContent = match[0];
+      link.href = match[0];
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      p.appendChild(link);
+      offset = match.index + match[0].length;
+    }
+    p.appendChild(document.createTextNode(text.slice(offset)));
+
+    art.appendChild(timeEl);
+    art.appendChild(p);
+    historyContainer.appendChild(art);
+  });
+
+  historyContainer.scrollTop = historyContainer.scrollHeight;
+}
+
+// Initialisation des écouteurs de la modale de conversation
+const convModal = document.getElementById("taskConversationModal");
+const convCloseBtn = document.getElementById("taskConversationCloseBtn");
+const convForm = document.getElementById("taskConversationForm");
+
+if (convCloseBtn) {
+  convCloseBtn.addEventListener("click", () => {
+    if (convModal) convModal.classList.add("hidden");
+    currentConversationTarget = null;
+  });
+}
+
+if (convForm) {
+  convForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = document.getElementById("taskConversationInput");
+    const statusEl = document.getElementById("taskConversationStatus");
+    const comment = input ? input.value.trim() : "";
+    if (!comment || !currentConversationTarget) return;
+
+    if (statusEl) statusEl.textContent = "Enregistrement...";
+    const oldNotes = currentConversationTarget.notes || currentConversationTarget.description || "";
+    const updatedNotes = addAgendaBipFollowup(oldNotes, comment);
+
+    currentConversationTarget.notes = updatedNotes;
+    if (currentConversationIsEvent) {
+      currentConversationTarget.description = updatedNotes;
+    }
+
+    if (currentConversationIsEvent) {
+      chrome.storage.local.set({ googleEventsList });
+    } else {
+      chrome.storage.local.set({ tasksData: tasksList });
+    }
+
+    renderTaskConversationHistory();
+    if (input) input.value = "";
+    if (statusEl) statusEl.textContent = "✅ Commentaire ajouté ! Synchronisation en cours...";
+
+    try {
+      const token = await getFreshGoogleToken(false);
+      if (token) {
+        if (currentConversationIsEvent && currentConversationTarget.id && currentConversationTarget.calendarId) {
+          await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(currentConversationTarget.calendarId)}/events/${encodeURIComponent(currentConversationTarget.id)}`, {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ id: currentConversationTarget.id, description: updatedNotes })
+          });
+          if (statusEl) statusEl.textContent = "✅ Synchronisé avec Google Agenda !";
+        } else if (!currentConversationIsEvent && currentConversationTarget.id && currentConversationTarget.rawGroupId) {
+          await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${encodeURIComponent(currentConversationTarget.rawGroupId)}/tasks/${encodeURIComponent(currentConversationTarget.id)}`, {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ id: currentConversationTarget.id, notes: updatedNotes })
+          });
+          if (statusEl) statusEl.textContent = "✅ Synchronisé avec Google Tasks !";
+        }
+      }
+    } catch (err) {
+      console.warn("Erreur réseau suivi Google:", err);
+    }
+
+    if (currentConversationIsEvent) {
+      if (typeof renderCurrentView === "function") renderCurrentView();
+    } else {
+      if (typeof renderTasks === "function") renderTasks();
+    }
+  });
 }
 
 

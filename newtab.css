@@ -3245,7 +3245,7 @@ html, body {
 /* Grille mensuelle */
 .agenda-calendar-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: 20px repeat(7, 1fr);
   gap: 3px;
   text-align: center;
 }
@@ -3255,6 +3255,26 @@ html, body {
   font-weight: 700;
   color: #64748b;
   padding: 2px 0;
+}
+
+.agenda-weekday.week-col-header {
+  font-size: 9px;
+  color: #475569;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.agenda-week-number {
+  font-size: 9px;
+  color: #64748b;
+  font-weight: 600;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.35);
 }
 
 .agenda-days-container {
@@ -4696,7 +4716,59 @@ html, body {
 }
 .kanban-column-dot.todo { background: #38bdf8; box-shadow: 0 0 6px rgba(56, 189, 248, 0.6); }
 .kanban-column-dot.inprogress { background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.6); }
+.kanban-column-dot.blocked { background: #ef4444; box-shadow: 0 0 6px rgba(239, 68, 68, 0.6); }
 .kanban-column-dot.done { background: #10b981; box-shadow: 0 0 6px rgba(16, 185, 129, 0.6); }
+
+/* Colonne Kanban repliée (ex: Terminé replié par défaut) */
+.kanban-column.collapsed {
+  flex: 0 0 42px;
+  min-width: 42px;
+  max-width: 42px;
+  background: rgba(15, 23, 42, 0.6);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+.kanban-column.collapsed .kanban-column-header {
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 12px 4px;
+  height: 100%;
+  border-bottom: none;
+  gap: 12px;
+}
+.kanban-column.collapsed .kanban-column-title {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+  gap: 8px;
+  letter-spacing: 0.5px;
+}
+.kanban-column.collapsed .kanban-cards-list,
+.kanban-column.collapsed .kanban-add-card-btn {
+  display: none !important;
+}
+
+.kanban-column-toggle-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: #94a3b8;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  cursor: pointer;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+.kanban-column-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
 
 .kanban-count-badge {
   background: rgba(255, 255, 255, 0.1);
@@ -4836,6 +4908,194 @@ html, body {
   color: #cbd5e1;
 }
 
+.kanban-card.blocked-card {
+  border-left-color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.kanban-tag.blocked {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.kanban-tag.parent-crumb {
+  background: rgba(99, 102, 241, 0.2);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+}
+
+/* Sous-tâches visibles dans la carte Kanban */
+.kanban-card-subtasks-box {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kanban-subtasks-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #94a3b8;
+  cursor: pointer;
+  user-select: none;
+  padding: 1px 2px;
+  border-radius: 4px;
+}
+.kanban-subtasks-header:hover {
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.kanban-subtasks-toggle-arrow {
+  display: inline-block;
+  transition: transform 0.15s ease;
+  font-size: 9px;
+  margin-right: 4px;
+}
+
+.kanban-subtasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.kanban-subtask-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 10.5px;
+  transition: background-color 0.15s ease;
+}
+.kanban-subtask-row:hover {
+  background: rgba(15, 23, 42, 0.8);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.kanban-subtask-check {
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+  accent-color: #10b981;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.kanban-subtask-title {
+  flex: 1;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.kanban-subtask-title.done {
+  text-decoration: line-through;
+  color: #64748b;
+}
+
+.kanban-subtask-badge {
+  font-size: 8.5px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+.kanban-subtask-badge.todo { background: rgba(56, 189, 248, 0.2); color: #7dd3fc; }
+.kanban-subtask-badge.inprogress { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+.kanban-subtask-badge.blocked { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+.kanban-subtask-badge.done { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+
+.kanban-subtask-promote-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 2px;
+  line-height: 1;
+  opacity: 0.6;
+  transition: all 0.15s ease;
+}
+.kanban-subtask-promote-btn:hover {
+  opacity: 1;
+  color: #38bdf8;
+}
+
+/* Volet dépliant discret pour événements masqués */
+.agenda-hidden-events-accordion {
+  margin-top: 8px;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px dashed rgba(148, 163, 184, 0.25);
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 11px;
+}
+.agenda-hidden-events-accordion[open] {
+  background: rgba(15, 23, 42, 0.7);
+  border-color: rgba(148, 163, 184, 0.4);
+}
+.agenda-hidden-events-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  color: #94a3b8;
+  padding: 3px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  transition: color 0.15s ease;
+}
+.agenda-hidden-events-summary:hover {
+  color: #cbd5e1;
+}
+.agenda-hidden-summary-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.agenda-hidden-icon {
+  font-size: 12px;
+  opacity: 0.8;
+}
+.agenda-hidden-badge-temp {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  font-weight: 600;
+}
+.agenda-hidden-events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.18);
+}
+.agenda-event-item.agenda-event-hidden-item {
+  opacity: 0.72;
+  filter: grayscale(0.2);
+  background: rgba(30, 41, 59, 0.4);
+  border-left-style: dashed;
+}
+.agenda-event-item.agenda-event-hidden-item:hover {
+  opacity: 0.95;
+  filter: none;
+}
+
 /* ==========================================================================
    ↕️ RÉORDONNEMENT DES TÂCHES PAR GLISSER-DÉPOSER
    ========================================================================== */
@@ -4940,4 +5200,78 @@ html, body {
   border-radius: 12px;
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6), 0 0 20px rgba(59, 130, 246, 0.3);
   color: #f1f5f9;
+}
+
+/* ==========================================================================
+   💬 BULLES ET CONVERSATION DE SUIVI AGENDABIP
+   ========================================================================== */
+.conversation-bubble {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  border-radius: 6px;
+  color: #60a5fa;
+  font-size: 11px;
+  padding: 2px 6px;
+  cursor: pointer;
+  line-height: 1;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.conversation-bubble:hover {
+  background: rgba(37, 99, 235, 0.3);
+  border-color: #60a5fa;
+  color: #ffffff;
+  transform: scale(1.04);
+}
+.conversation-count {
+  font-size: 9px;
+  font-weight: 700;
+  margin-left: 3px;
+  background: #2563eb;
+  color: #ffffff;
+  padding: 0 4px;
+  border-radius: 8px;
+  line-height: 13px;
+}
+
+.task-conversation-modal-card {
+  width: 92%;
+  max-width: 520px;
+  background: #1e293b;
+  border: 1px solid #3b82f6;
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65), 0 0 24px rgba(59, 130, 246, 0.35);
+  color: #f1f5f9;
+}
+
+.task-conversation-entry {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 3px solid #3b82f6;
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.task-conversation-entry time {
+  font-size: 10px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+.task-conversation-entry p {
+  margin: 0;
+  font-size: 11.5px;
+  color: #e2e8f0;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.task-conversation-entry p a {
+  color: #60a5fa;
+  text-decoration: underline;
 }

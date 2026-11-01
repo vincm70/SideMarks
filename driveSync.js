@@ -76,7 +76,8 @@ const DriveSync = {
           "https://www.googleapis.com/auth/calendar.events",
           "https://www.googleapis.com/auth/tasks",
           "https://www.googleapis.com/auth/userinfo.email",
-          "https://www.googleapis.com/auth/drive.appdata"
+          "https://www.googleapis.com/auth/drive.appdata",
+          "https://www.googleapis.com/auth/drive.file"
         ].join(" ");
         const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUrl)}&scope=${encodeURIComponent(scopes)}&prompt=consent`;
 

@@ -285,6 +285,7 @@
             <!-- 1. VUE MOIS -->
             <div id="agendaMonthView" class="agenda-subview">
               <div class="agenda-calendar-grid">
+                <div class="agenda-weekday week-col-header" title="Numéro de semaine">S</div>
                 <div class="agenda-weekday">L</div>
                 <div class="agenda-weekday">M</div>
                 <div class="agenda-weekday">M</div>
@@ -435,7 +436,7 @@
             <!-- Vue Kanban par colonnes -->
             <div id="tasksKanbanContainer" class="tasks-kanban-container hidden">
               <!-- Colonne À faire -->
-              <div class="kanban-column" data-status="todo">
+              <div class="kanban-column" data-status="todo" id="kanbanColTodo">
                 <div class="kanban-column-header">
                   <div class="kanban-column-title">
                     <span class="kanban-column-dot todo"></span>
@@ -448,7 +449,7 @@
               </div>
 
               <!-- Colonne En cours -->
-              <div class="kanban-column" data-status="inprogress">
+              <div class="kanban-column" data-status="inprogress" id="kanbanColInProgress">
                 <div class="kanban-column-header">
                   <div class="kanban-column-title">
                     <span class="kanban-column-dot inprogress"></span>
@@ -460,15 +461,31 @@
                 <div class="kanban-cards-list" id="kanbanListInProgress" data-status="inprogress"></div>
               </div>
 
-              <!-- Colonne Terminé -->
-              <div class="kanban-column" data-status="done">
+              <!-- Colonne Bloqué -->
+              <div class="kanban-column" data-status="blocked" id="kanbanColBlocked">
                 <div class="kanban-column-header">
+                  <div class="kanban-column-title">
+                    <span class="kanban-column-dot blocked"></span>
+                    <span>Bloqué</span>
+                    <span class="kanban-count-badge" id="kanbanCountBlocked">0</span>
+                  </div>
+                  <button type="button" class="kanban-add-card-btn" data-status="blocked" title="Ajouter à Bloqué">+</button>
+                </div>
+                <div class="kanban-cards-list" id="kanbanListBlocked" data-status="blocked"></div>
+              </div>
+
+              <!-- Colonne Terminé (repliée par défaut) -->
+              <div class="kanban-column collapsed" data-status="done" id="kanbanColDone">
+                <div class="kanban-column-header" title="Cliquer pour déplier/replier les tâches terminées">
                   <div class="kanban-column-title">
                     <span class="kanban-column-dot done"></span>
                     <span>Terminé</span>
                     <span class="kanban-count-badge" id="kanbanCountDone">0</span>
                   </div>
-                  <button type="button" class="kanban-add-card-btn" data-status="done" title="Ajouter à Terminé">+</button>
+                  <div style="display: flex; align-items: center; gap: 4px;">
+                    <button type="button" class="kanban-add-card-btn" data-status="done" title="Ajouter à Terminé">+</button>
+                    <button type="button" class="kanban-column-toggle-btn" id="kanbanToggleDoneBtn" title="Déplier / Replier">◧</button>
+                  </div>
                 </div>
                 <div class="kanban-cards-list" id="kanbanListDone" data-status="done"></div>
               </div>
@@ -1054,6 +1071,32 @@
       </div>
     </div>
 
+    <!-- Modal Conversation de Suivi (AgendaBIP Follow-up Chat) -->
+    <div id="taskConversationModal" class="side-modal hidden">
+      <div class="side-modal-content task-conversation-modal-card">
+        <div class="side-modal-header">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="side-modal-title">💬 Conversation de suivi</span>
+            <span id="taskConversationTypeBadge" class="agenda-active-badge">Tâche</span>
+          </div>
+          <button type="button" id="taskConversationCloseBtn" class="close-btn">&times;</button>
+        </div>
+        <div class="task-conversation-body" style="padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;">
+          <h3 id="taskConversationItemTitle" class="task-conversation-item-title" style="margin: 0; font-size: 13.5px; color: #f8fafc; word-break: break-word;"></h3>
+          <div id="taskConversationHistory" class="task-conversation-history" style="max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px;"></div>
+          <form id="taskConversationForm" class="task-conversation-form" style="border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 10px; display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 11px; color: #94a3b8; font-weight: 600; display: block;">Ajouter un commentaire de suivi :</label>
+            <textarea id="taskConversationInput" class="form-textarea" rows="3" style="width: 100%; font-size: 12px; resize: vertical;" placeholder="Votre commentaire de suivi horodaté..." required></textarea>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span id="taskConversationStatus" style="font-size: 10.5px; color: #94a3b8;"></span>
+              <button type="submit" id="taskConversationSubmitBtn" class="btn btn-primary" style="padding: 6px 14px; font-weight: 600; font-size: 11.5px;">💬 Ajouter au suivi</button>
+            </div>
+            <p style="font-size: 9.5px; color: #64748b; margin: 2px 0 0 0;">Horodaté et synchronisé avec Google Tasks / Agenda, visible dans AgendaBIP Android et Windows.</p>
+          </form>
+        </div>
+      </div>
+    </div>
+
 
     <!-- Menu contextuel flottant pour événements d'agenda -->
     <div id="agendaContextMenu" class="agenda-context-menu hidden">
@@ -1103,7 +1146,7 @@
     <div id="scheduleTaskModal" class="side-modal hidden">
       <div class="side-modal-content schedule-task-modal-card">
         <div class="side-modal-header">
-          <span class="side-modal-title">📅 Planifier le Rendez-vous dans Google Agenda</span>
+          <span class="side-modal-title" id="scheduleTaskModalTitle">📅 Nouveau Rendez-vous Google Agenda</span>
           <button type="button" id="scheduleTaskCloseBtn" class="close-btn">&times;</button>
         </div>
         <div class="schedule-task-modal-body" style="padding: 12px 6px; display: flex; flex-direction: column; gap: 10px;">
