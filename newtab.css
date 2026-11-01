@@ -2588,7 +2588,7 @@ html, body {
 .calculator-widget {
   width: 240px;
   min-width: 220px;
-  max-width: 320px;
+  max-width: 800px;
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
@@ -2717,13 +2717,15 @@ html, body {
    📅 WIDGET AGENDA / CALENDRIER (STYLE AGENDA BIP & GOOGLE CALENDAR)
    ========================================================================== */
 .agenda-widget {
-  width: 270px;
+  width: 280px;
   min-width: 250px;
-  max-width: 380px;
+  max-width: 1400px;
+  min-height: 260px;
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  box-sizing: border-box;
 }
 
 .agenda-active-badge {
@@ -2813,6 +2815,35 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Mode large si le widget agenda est agrandi en largeur (>= 520px) */
+.agenda-widget.agenda-wide .agenda-body {
+  display: grid;
+  grid-template-columns: 290px 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+.agenda-widget.agenda-wide .agenda-month-nav {
+  grid-column: 1;
+  grid-row: 1;
+}
+.agenda-widget.agenda-wide .agenda-calendar-grid {
+  grid-column: 1;
+  grid-row: 2;
+}
+.agenda-widget.agenda-wide .agenda-events-section {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  border-top: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 0;
+  padding-left: 12px;
+  height: 100%;
 }
 
 .agenda-month-nav {
@@ -2940,6 +2971,9 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1;
+  min-height: 80px;
+  overflow: hidden;
 }
 
 .agenda-events-header {
@@ -2952,7 +2986,9 @@ html, body {
 }
 
 .agenda-events-list {
-  max-height: 90px;
+  flex: 1;
+  min-height: 80px;
+  max-height: none;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -3103,11 +3139,13 @@ html, body {
 .tasks-widget {
   width: 290px;
   min-width: 260px;
-  max-width: 440px;
+  max-width: 1400px;
+  min-height: 200px;
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  box-sizing: border-box;
 }
 
 .tasks-count-badge {
@@ -3216,7 +3254,9 @@ html, body {
 }
 
 .tasks-body {
-  max-height: 200px;
+  flex: 1;
+  min-height: 120px;
+  max-height: none;
   overflow-y: auto;
   padding-right: 2px;
 }
@@ -3225,6 +3265,13 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 5px;
+}
+
+/* Mode large si le widget tâches est agrandi en largeur (>= 580px) */
+.tasks-widget.tasks-wide .tasks-list-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
 }
 
 .task-row {

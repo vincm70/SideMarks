@@ -3128,8 +3128,11 @@ function setupWidgetResize(widgetEl, getSettings, saveSettings, minW = 140, minH
       const dx = moveEv.clientX - startX;
       const dy = moveEv.clientY - startY;
 
-      const newW = Math.max(minW, Math.min(650, startW + dx));
-      const newH = Math.max(minH, Math.min(500, startH + dy));
+      const maxAllowedW = Math.max(minW, Math.min(1600, window.innerWidth - 30));
+      const maxAllowedH = Math.max(minH, Math.min(1400, window.innerHeight - 30));
+
+      const newW = Math.max(minW, Math.min(maxAllowedW, startW + dx));
+      const newH = Math.max(minH, Math.min(maxAllowedH, startH + dy));
 
       applyWidgetDimensions(widgetEl, newW, newH);
     };
@@ -3174,6 +3177,12 @@ function applyWidgetDimensions(widgetEl, width, height) {
       const fontSize = Math.max(22, Math.min(64, Math.round(width * 0.17)));
       timeEl.style.fontSize = `${fontSize}px`;
     }
+  }
+  if (widgetEl.id === "agendaWidget") {
+    widgetEl.classList.toggle("agenda-wide", width >= 520);
+  }
+  if (widgetEl.id === "tasksWidget") {
+    widgetEl.classList.toggle("tasks-wide", width >= 580);
   }
 }
 
