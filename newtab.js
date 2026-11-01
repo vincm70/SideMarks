@@ -1021,6 +1021,45 @@ function groupByCategory() {
   showToast("Raccourcis regroupés par catégories (aucun sous un widget)");
 }
 
+// Fond d'écran
+async function loadWallpaper() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get("customWallpaper", (res) => {
+      if (res.customWallpaper) {
+        wallpaperBg.style.backgroundImage = `url("${res.customWallpaper}")`;
+      } else {
+        wallpaperBg.style.backgroundImage = `url("wallpaper.jpg")`;
+      }
+      resolve();
+    });
+  });
+}
+
+// Raccourcis rapides avec Drag & Drop et Clic Droit
+async function loadPills() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(["quickPills", "pillsVersion"], (res) => {
+      // Detection : si vide ou si ecrase par la liste de demo temporaire
+      const isGenericDemo = Array.isArray(res.quickPills) &&
+        res.quickPills.length <= 14 &&
+        res.quickPills.some((p) => p.title === "Wikipédia" || p.title === "LinkedIn" || p.title === "Reddit");
+
+      // Detection de l'ancienne grille eparpillee sur tout l'ecran (posY >= 66 ou 74.5)
+      const hasScatteredGrid = Array.isArray(res.quickPills) &&
+        res.quickPills.some((p) => typeof p.posY === "number" && (p.posY >= 66.0 || p.posY === 74.5));
+
+      if (Array.isArray(res.quickPills) && res.quickPills.length > 0 && !isGenericDemo && !hasScatteredGrid) {
+        quickPills = res.quickPills;
+      } else {
+        quickPills = JSON.parse(JSON.stringify(DEFAULT_PILLS));
+        chrome.storage.local.set({ quickPills, pillsVersion: "5.1" });
+      }
+      renderPills();
+      resolve();
+    });
+  });
+}
+
 function restoreOriginalPills() {
   pushPillsHistory();
   quickPills = JSON.parse(JSON.stringify(DEFAULT_PILLS));
