@@ -1,5 +1,7 @@
 # Packages et archives
 *.zip
+!SideMarksBridge.zip
+!companion/SideMarksBridge.zip
 *.tar.gz
 
 # Fichiers personnels & volumineux

@@ -12,11 +12,13 @@ SideMarks Bridge résout ce problème de façon propre et standard en enregistra
 
 ---
 
-## ⚡ Installation rapide (1 clic)
+## ⚡ Installation rapide (Sans avertissement Windows)
 
-1. Double-cliquez sur `install.bat`.
-2. Windows compile et enregistre automatiquement le protocole `sidemarks://` pour votre session utilisateur (aucun droit administrateur requis).
-3. C'est tout ! L'extension SideMarks peut maintenant communiquer avec votre Explorateur Windows.
+1. Téléchargez le pack `SideMarksBridge.zip`.
+2. Faites un clic droit sur le fichier ZIP téléchargé > **Extraire tout**.
+3. Ouvrez le dossier extrait et double-cliquez sur **`install.bat`**.
+4. Windows compile et enregistre automatiquement le protocole `sidemarks://` dans votre profil utilisateur (aucun droit administrateur requis, aucun écran SmartScreen).
+5. C'est tout ! L'extension SideMarks peut maintenant communiquer avec votre Explorateur Windows.
 
 ---
 

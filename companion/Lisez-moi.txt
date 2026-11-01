@@ -1,0 +1,19 @@
+============================================================
+  SideMarks Bridge - Compagnon Windows pour SideMarks
+============================================================
+
+SideMarks Bridge permet à l'extension Chrome SideMarks d'ouvrir
+vos dossiers locaux (dans l'Explorateur Windows) et vos applications
+(.exe) en un seul clic depuis vos raccourcis.
+
+--- INSTALLATION (30 secondes) ---
+1. Faites un clic droit sur ce dossier ZIP > "Extraire tout" (si ce n'est pas déjà fait).
+2. Double-cliquez sur "install.bat".
+3. C'est tout ! Windows va enregistrer le protocole "sidemarks://"
+   en toute sécurité sur votre session. Aucun droit administrateur requis.
+
+--- DÉSINSTALLATION ---
+Pour désinstaller à tout moment, double-cliquez sur "uninstall.bat".
+
+Open-source & sécurisé : le code source complet est dans "SideMarksBridge.cs".
+============================================================
