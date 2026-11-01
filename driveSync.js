@@ -91,7 +91,7 @@ const DriveSync = {
           "quickPills", "customWallpaper", "wallpaperSettings", "collapsedFolders",
           "notesData", "notesHtml", "notesContent", "notesSettings",
           "clockSettings", "pomodoroSettings", "recentSettings", "weatherSettings",
-          "dockShortcuts", "totalDesktopPages", "pillsSize"
+          "dockShortcuts", "totalDesktopPages", "pillsSize", "placedWidgets"
         ],
         (localRes) => {
           chrome.storage.sync.get(["settings", "notesData", "notesHtml", "notesContent"], (syncRes) => {
@@ -113,6 +113,7 @@ const DriveSync = {
               dockShortcuts: localRes.dockShortcuts || null,
               totalDesktopPages: localRes.totalDesktopPages || 1,
               pillsSize: localRes.pillsSize || "standard",
+              placedWidgets: localRes.placedWidgets || null,
               wallpaperSettings: localRes.wallpaperSettings || null,
               customWallpaper: localRes.customWallpaper || null,
               collapsedFolders: localRes.collapsedFolders || []
@@ -156,6 +157,7 @@ const DriveSync = {
       if (payload.dockShortcuts) localData.dockShortcuts = payload.dockShortcuts;
       if (payload.totalDesktopPages) localData.totalDesktopPages = payload.totalDesktopPages;
       if (payload.pillsSize) localData.pillsSize = payload.pillsSize;
+      if (payload.placedWidgets) localData.placedWidgets = payload.placedWidgets;
       if (payload.wallpaperSettings) localData.wallpaperSettings = payload.wallpaperSettings;
       if (payload.customWallpaper) localData.customWallpaper = payload.customWallpaper;
       if (payload.collapsedFolders) localData.collapsedFolders = payload.collapsedFolders;

@@ -2461,3 +2461,121 @@ html, body {
   color: #fff;
   border-color: #c084fc;
 }
+
+
+/* ========================================================
+   GALERIE DE WIDGETS MODULAIRE (STYLE SMARTPHONE / ANDROID)
+   ======================================================== */
+.gallery-cat-pill {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  color: #94a3b8;
+  font-size: 11.5px;
+  padding: 4px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.gallery-cat-pill:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+.gallery-cat-pill.active {
+  background: #2563eb;
+  border-color: #60a5fa;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+}
+
+.widget-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  transition: all 0.2s ease;
+}
+.widget-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(147, 197, 253, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+.widget-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.widget-card-icon {
+  font-size: 26px;
+  width: 44px;
+  height: 44px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.widget-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f1f5f9;
+  margin-bottom: 2px;
+}
+.widget-card-cat {
+  font-size: 10px;
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.2);
+  padding: 1px 6px;
+  border-radius: 4px;
+  display: inline-block;
+}
+.widget-card-desc {
+  font-size: 11.5px;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+.widget-card-add-btn {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  border: 1px solid #60a5fa;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+.widget-card-add-btn:hover {
+  background: #1d4ed8;
+  transform: scale(1.02);
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.5);
+}
+
+.widget-remove-from-page-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+.widget-remove-from-page-btn:hover {
+  background: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}

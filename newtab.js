@@ -553,6 +553,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupAllWidgetsDrag();
   setupAllWidgetsResize();
   setupWeatherControls();
+  setupWidgetGallery();
   const clearSelectionBtn = document.getElementById("clearSelectionBtn");
   if (clearSelectionBtn) {
     clearSelectionBtn.addEventListener("click", clearPillSelection);
@@ -642,33 +643,41 @@ function getVisibleObstacles() {
   const obstacles = [];
   if (!pillsContainer) return obstacles;
   const containerRect = pillsContainer.getBoundingClientRect();
-  const candidateIds = [
-    'clockWidget', 'weatherWidget', 'notesWidget', 'pomodoroWidget', 'recentWidget', 
-    'googleSearchForm', 'localShortcutsDock', 'liveEditToolbar', 'desktopPaginationBar'
-  ];
 
-  candidateIds.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) {
-      const style = window.getComputedStyle(el);
-      if (style.display === 'none' || style.visibility === 'hidden' || el.classList.contains('hidden') || el.style.display === 'none') {
-        return;
-      }
-      const r = el.getBoundingClientRect();
-      if (r.width > 15 && r.height > 15) {
-        // Marge de sécurité généreuse de 14px autour de chaque widget
-        obstacles.push({
-          id,
-          left: r.left - containerRect.left - 14,
-          top: r.top - containerRect.top - 14,
-          right: r.right - containerRect.left + 14,
-          bottom: r.bottom - containerRect.top + 14,
-          width: r.width + 28,
-          height: r.height + 28
-        });
-      }
+  // 1. Tous les widgets flottants du DOM (.floating-widget)
+  const floatingWidgets = Array.from(document.querySelectorAll('.floating-widget'));
+  
+  // 2. Éléments fixes d'interface (Barre Google, Dock Windows, Barre d'outils, Barre de pagination)
+  const systemElements = [
+    document.getElementById('googleSearchForm'),
+    document.getElementById('localShortcutsDock'),
+    document.getElementById('liveEditToolbar'),
+    document.getElementById('desktopPaginationBar')
+  ].filter(Boolean);
+
+  const allObstacleElements = [...floatingWidgets, ...systemElements];
+
+  allObstacleElements.forEach(el => {
+    if (!el) return;
+    const style = window.getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden' || el.classList.contains('hidden') || el.style.display === 'none') {
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    if (r.width > 15 && r.height > 15) {
+      // Marge de sécurité stricte de 16px tout autour de chaque obstacle
+      obstacles.push({
+        id: el.id || 'widget',
+        left: Math.round(r.left - containerRect.left - 16),
+        top: Math.round(r.top - containerRect.top - 16),
+        right: Math.round(r.right - containerRect.left + 16),
+        bottom: Math.round(r.bottom - containerRect.top + 16),
+        width: Math.round(r.width + 32),
+        height: Math.round(r.height + 32)
+      });
     }
   });
+
   return obstacles;
 }
 
@@ -681,7 +690,7 @@ function getObstacleCollision(x, y, w, h, obstacles) {
   return null;
 }
 
-// Alignement automatique des raccourcis (Strictement sans AUCUN raccourci masqué sous un widget)
+// Alignement automatique des raccourcis (Strictement 100% sans AUCUN raccourci masqué sous un widget)
 function alignPills(direction, silent = false) {
   if (!silent) pushPillsHistory();
   lastAlignmentDirection = direction;
@@ -704,10 +713,11 @@ function alignPills(direction, silent = false) {
   const gapX = pillsSize === "large" ? 14 : (pillsSize === "compact" ? 7 : 10);
   const gapY = pillsSize === "large" ? 10 : (pillsSize === "compact" ? 5 : 6);
 
-  // Récupérer la taille réelle de chaque raccourci du bureau courant
+  // Largeur réelle sécurisée : jamais sous-estimée pour éviter tout débordement sous un widget
   const sizes = currentPillEntries.map((entry, i) => {
     const el = pillElements[i];
-    const w = el && el.offsetWidth > 30 ? el.offsetWidth : Math.min(220, Math.max(75, (entry.item.title || "").length * (pillsSize === "large" ? 9 : 8) + (pillsSize === "large" ? 44 : 36)));
+    const estimatedW = Math.max(75, (entry.item.title || "").length * (pillsSize === "large" ? 9.5 : 8.5) + (pillsSize === "large" ? 48 : 40));
+    const w = el && el.offsetWidth > 30 ? Math.max(el.offsetWidth, estimatedW) : estimatedW;
     const h = el && el.offsetHeight > 20 ? el.offsetHeight : defaultH;
     return { w, h };
   });
@@ -716,7 +726,7 @@ function alignPills(direction, silent = false) {
 
   switch (direction) {
     case "left": {
-      // Colonnes sur le bord gauche en évitant STRICTEMENT tous les widgets
+      // Colonnes à gauche : de haut en bas, saute immédiatement au-delà de l'obstacle si collision
       const startX = 24;
       const startY = 28;
       const maxY = H - 55;
@@ -730,14 +740,15 @@ function alignPills(direction, silent = false) {
         const { w, h } = sizes[i];
 
         let loops = 0;
-        while (loops < 100) {
+        while (loops < 150) {
           loops++;
           const obs = getObstacleCollision(curX, curY, w, h, obstacles);
           if (!obs) break;
           // Sauter en dessous de l'obstacle
           curY = obs.bottom + gapY;
           if (curY + h > maxY) {
-            curX += (colMaxW > 0 ? colMaxW : w) + gapX;
+            // Dépasse le bas : sauter complètement à droite de l'obstacle
+            curX = Math.max(curX + (colMaxW > 0 ? colMaxW : w) + gapX, obs.right + gapX);
             curY = startY;
             colMaxW = 0;
           }
@@ -749,13 +760,13 @@ function alignPills(direction, silent = false) {
           curY = startY;
           colMaxW = 0;
           let loops2 = 0;
-          while (loops2 < 100) {
+          while (loops2 < 150) {
             loops2++;
             const obs = getObstacleCollision(curX, curY, w, h, obstacles);
             if (!obs) break;
             curY = obs.bottom + gapY;
             if (curY + h > maxY) {
-              curX += (colMaxW > 0 ? colMaxW : w) + gapX;
+              curX = Math.max(curX + (colMaxW > 0 ? colMaxW : w) + gapX, obs.right + gapX);
               curY = startY;
               colMaxW = 0;
             }
@@ -763,7 +774,7 @@ function alignPills(direction, silent = false) {
           }
         }
 
-        item.posX = Math.round((curX / W) * 1000) / 10;
+        item.posX = Math.round((Math.min(maxX - w, curX) / W) * 1000) / 10;
         item.posY = Math.round((curY / H) * 1000) / 10;
 
         curY += h + gapY;
@@ -775,7 +786,7 @@ function alignPills(direction, silent = false) {
     }
 
     case "top": {
-      // Rangées en haut en évitant STRICTEMENT tous les widgets
+      // Rangées en haut : de gauche à droite, saute à droite de l'obstacle
       const startX = 24;
       const startY = 24;
       const maxX = W - 30;
@@ -789,7 +800,7 @@ function alignPills(direction, silent = false) {
         const { w, h } = sizes[i];
 
         let loops = 0;
-        while (loops < 100) {
+        while (loops < 150) {
           loops++;
           const obs = getObstacleCollision(curX, curY, w, h, obstacles);
           if (!obs) break;
@@ -797,7 +808,7 @@ function alignPills(direction, silent = false) {
           curX = obs.right + gapX;
           if (curX + w > maxX) {
             curX = startX;
-            curY += rowMaxH + gapY;
+            curY = Math.max(curY + rowMaxH + gapY, obs.bottom + gapY);
             rowMaxH = defaultH;
           }
           if (curY + h > maxY) break;
@@ -808,14 +819,14 @@ function alignPills(direction, silent = false) {
           curY += rowMaxH + gapY;
           rowMaxH = defaultH;
           let loops2 = 0;
-          while (loops2 < 100) {
+          while (loops2 < 150) {
             loops2++;
             const obs = getObstacleCollision(curX, curY, w, h, obstacles);
             if (!obs) break;
             curX = obs.right + gapX;
             if (curX + w > maxX) {
               curX = startX;
-              curY += rowMaxH + gapY;
+              curY = Math.max(curY + rowMaxH + gapY, obs.bottom + gapY);
               rowMaxH = defaultH;
             }
             if (curY + h > maxY) break;
@@ -848,14 +859,14 @@ function alignPills(direction, silent = false) {
         let curX = curRight - w;
 
         let loops = 0;
-        while (loops < 100) {
+        while (loops < 150) {
           loops++;
           const obs = getObstacleCollision(curX, curY, w, h, obstacles);
           if (!obs) break;
-          // Sauter en dessous de l'obstacle
           curY = obs.bottom + gapY;
           if (curY + h > maxY) {
-            curRight = curX - gapX;
+            // Décaler vers la gauche au-delà de l'obstacle
+            curRight = Math.min(curRight - (colMaxW > 0 ? colMaxW : w) - gapX, obs.left - gapX);
             curY = startY;
             colMaxW = 0;
           }
@@ -869,13 +880,13 @@ function alignPills(direction, silent = false) {
           colMaxW = 0;
           curX = curRight - w;
           let loops2 = 0;
-          while (loops2 < 100) {
+          while (loops2 < 150) {
             loops2++;
             const obs = getObstacleCollision(curX, curY, w, h, obstacles);
             if (!obs) break;
             curY = obs.bottom + gapY;
             if (curY + h > maxY) {
-              curRight = curX - gapX;
+              curRight = Math.min(curRight - (colMaxW > 0 ? colMaxW : w) - gapX, obs.left - gapX);
               curY = startY;
               colMaxW = 0;
             }
@@ -896,20 +907,20 @@ function alignPills(direction, silent = false) {
     }
 
     case "bottom": {
-      // Rangées en bas en évitant STRICTEMENT le dock, la toolbar et les widgets
+      // Rangées en bas en évitant STRICTEMENT le dock, la pagination et les widgets
       const startX = 24;
       const maxX = W - 30;
       const minY = 30;
 
       let curX = startX;
-      let curY = Math.max(minY, H - 145);
+      let curY = Math.max(minY, H - 150);
       let rowMaxH = defaultH;
 
       currentPillEntries.forEach(({ item }, i) => {
         const { w, h } = sizes[i];
 
         let loops = 0;
-        while (loops < 100) {
+        while (loops < 150) {
           loops++;
           const obs = getObstacleCollision(curX, curY, w, h, obstacles);
           if (!obs) break;
@@ -917,7 +928,7 @@ function alignPills(direction, silent = false) {
           curX = obs.right + gapX;
           if (curX + w > maxX) {
             curX = startX;
-            curY -= (rowMaxH + gapY);
+            curY = Math.min(curY - (rowMaxH + gapY), obs.top - h - gapY);
             rowMaxH = defaultH;
           }
           if (curY < minY) break;
@@ -928,14 +939,14 @@ function alignPills(direction, silent = false) {
           curY -= (rowMaxH + gapY);
           rowMaxH = defaultH;
           let loops2 = 0;
-          while (loops2 < 100) {
+          while (loops2 < 150) {
             loops2++;
             const obs = getObstacleCollision(curX, curY, w, h, obstacles);
             if (!obs) break;
             curX = obs.right + gapX;
             if (curX + w > maxX) {
               curX = startX;
-              curY -= (rowMaxH + gapY);
+              curY = Math.min(curY - (rowMaxH + gapY), obs.top - h - gapY);
               rowMaxH = defaultH;
             }
             if (curY < minY) break;
@@ -1001,7 +1012,8 @@ function groupByCategory() {
   const sizeMap = new Map();
   currentPillEntries.forEach(({ item }, i) => {
     const el = pillElements[i];
-    const w = el && el.offsetWidth > 30 ? el.offsetWidth : Math.min(180, Math.max(75, (item.title || "").length * 8 + 36));
+    const estimatedW = Math.max(75, (item.title || "").length * 8.5 + 40);
+    const w = el && el.offsetWidth > 30 ? Math.max(el.offsetWidth, estimatedW) : estimatedW;
     const h = el && el.offsetHeight > 20 ? el.offsetHeight : 27;
     sizeMap.set(item, { w, h });
   });
@@ -1025,13 +1037,14 @@ function groupByCategory() {
       const { w, h } = sizeMap.get(item) || { w: 120, h: 27 };
 
       let loops = 0;
-      while (loops < 100) {
+      while (loops < 150) {
         loops++;
         const obs = getObstacleCollision(curX, curY, w, h, obstacles);
         if (!obs) break;
         curY = obs.bottom + gapY;
         if (curY + h > maxY) {
-          curX += (catMaxW > 0 ? catMaxW : w) + gapX;
+          // Sauter complètement à droite de l'obstacle
+          curX = Math.max(curX + (catMaxW > 0 ? catMaxW : w) + gapX, obs.right + gapX);
           curY = startY;
           catMaxW = 0;
         }
@@ -1043,13 +1056,13 @@ function groupByCategory() {
         curY = startY;
         catMaxW = 0;
         let loops2 = 0;
-        while (loops2 < 100) {
+        while (loops2 < 150) {
           loops2++;
           const obs = getObstacleCollision(curX, curY, w, h, obstacles);
           if (!obs) break;
           curY = obs.bottom + gapY;
           if (curY + h > maxY) {
-            curX += (catMaxW > 0 ? catMaxW : w) + gapX;
+            curX = Math.max(curX + (catMaxW > 0 ? catMaxW : w) + gapX, obs.right + gapX);
             curY = startY;
             catMaxW = 0;
           }
@@ -1070,8 +1083,6 @@ function groupByCategory() {
   savePills();
   showToast("Raccourcis regroupés par catégories (aucun sous un widget)");
 }
-
-
 
 function restoreOriginalPills() {
   pushPillsHistory();
@@ -5176,4 +5187,201 @@ function setupSwipeNavigation() {
       }
     }
   }, { passive: true });
+}
+
+
+// ========================================================
+// GALERIE DE WIDGETS MODULAIRE (STYLE SMARTPHONE / ANDROID)
+// ========================================================
+const WIDGET_CATALOG = [
+  {
+    type: "clock",
+    name: "Horloge Numérique",
+    category: "time",
+    icon: "⏰",
+    description: "Horloge dynamique grand format avec date, heure et jour en temps réel.",
+    apply: (targetPage) => {
+      clockSettings.enabled = true;
+      clockSettings.page = targetPage;
+      chrome.storage.local.set({ clockSettings });
+      updateAllWidgetsVisibility();
+    }
+  },
+  {
+    type: "weather",
+    name: "Météo en Direct",
+    category: "info",
+    icon: "🌤️",
+    description: "Conditions météo en direct, température et prévisions par géolocalisation ou ville.",
+    apply: (targetPage) => {
+      weatherSettings.enabled = true;
+      weatherSettings.page = targetPage;
+      chrome.storage.local.set({ weatherSettings });
+      updateAllWidgetsVisibility();
+    }
+  },
+  {
+    type: "notes",
+    name: "Bloc-notes (Notepad++)",
+    category: "notes",
+    icon: "📝",
+    description: "Bloc-notes multi-onglets avec onglets colorés, liens cliquables et sauvegarde Google Drive.",
+    apply: (targetPage) => {
+      notesSettings.enabled = true;
+      notesSettings.page = targetPage;
+      chrome.storage.local.set({ notesSettings });
+      updateAllWidgetsVisibility();
+    }
+  },
+  {
+    type: "pomodoro",
+    name: "Minuteur Pomodoro",
+    category: "time",
+    icon: "🍅",
+    description: "Minuteur de concentration (25 min travail / 5 min pause) avec notifications sonores.",
+    apply: (targetPage) => {
+      pomodoroSettings.enabled = true;
+      pomodoroSettings.page = targetPage;
+      chrome.storage.local.set({ pomodoroSettings });
+      updateAllWidgetsVisibility();
+    }
+  },
+  {
+    type: "recent",
+    name: "Derniers Liens Consultés",
+    category: "info",
+    icon: "🕒",
+    description: "Accès instantané à vos pages web et onglets récemment ou fréquemment consultés.",
+    apply: (targetPage) => {
+      recentSettings.enabled = true;
+      recentSettings.page = targetPage;
+      chrome.storage.local.set({ recentSettings });
+      updateAllWidgetsVisibility();
+    }
+  }
+];
+
+let activeGalleryCategory = "all";
+
+function setupWidgetGallery() {
+  const openBtn = document.getElementById("openWidgetGalleryBtn");
+  const modal = document.getElementById("widgetGalleryModal");
+  const closeBtn = document.getElementById("closeWidgetGalleryBtn");
+  const searchInput = document.getElementById("widgetGallerySearchInput");
+  const catPills = document.querySelectorAll(".gallery-cat-pill");
+
+  if (openBtn) {
+    openBtn.addEventListener("click", () => openWidgetGallery());
+  }
+
+  if (closeBtn && modal) {
+    closeBtn.addEventListener("click", () => modal.classList.add("hidden"));
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) modal.classList.add("hidden");
+    });
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener("input", () => renderWidgetGalleryCards());
+  }
+
+  catPills.forEach((pill) => {
+    pill.addEventListener("click", () => {
+      catPills.forEach(p => p.classList.remove("active"));
+      pill.classList.add("active");
+      activeGalleryCategory = pill.dataset.cat || "all";
+      renderWidgetGalleryCards();
+    });
+  });
+}
+
+function openWidgetGallery() {
+  const modal = document.getElementById("widgetGalleryModal");
+  const targetText = document.getElementById("galleryTargetDesktopText");
+  const searchInput = document.getElementById("widgetGallerySearchInput");
+
+  if (!modal) return;
+  if (targetText) {
+    targetText.textContent = `Ajouter un widget sur le Bureau ${currentDesktopPageIndex + 1}`;
+  }
+  if (searchInput) {
+    searchInput.value = "";
+  }
+  activeGalleryCategory = "all";
+  document.querySelectorAll(".gallery-cat-pill").forEach(p => {
+    p.classList.toggle("active", (p.dataset.cat || "all") === "all");
+  });
+
+  renderWidgetGalleryCards();
+  modal.classList.remove("hidden");
+}
+
+function renderWidgetGalleryCards() {
+  const grid = document.getElementById("widgetGalleryGrid");
+  const searchInput = document.getElementById("widgetGallerySearchInput");
+  if (!grid) return;
+  grid.innerHTML = "";
+
+  const query = (searchInput ? searchInput.value : "").trim().toLowerCase();
+
+  const filtered = WIDGET_CATALOG.filter((item) => {
+    const matchesCat = (activeGalleryCategory === "all" || item.category === activeGalleryCategory);
+    const matchesQuery = !query || item.name.toLowerCase().includes(query) || item.description.toLowerCase().includes(query);
+    return matchesCat && matchesQuery;
+  });
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; color: #94a3b8; padding: 30px;">Aucun widget trouvé pour « ${query} »</div>`;
+    return;
+  }
+
+  filtered.forEach((item) => {
+    const card = document.createElement("div");
+    card.className = "widget-card";
+
+    const topDiv = document.createElement("div");
+    const header = document.createElement("div");
+    header.className = "widget-card-header";
+
+    const icon = document.createElement("div");
+    icon.className = "widget-card-icon";
+    icon.textContent = item.icon;
+    header.appendChild(icon);
+
+    const titleDiv = document.createElement("div");
+    const title = document.createElement("div");
+    title.className = "widget-card-title";
+    title.textContent = item.name;
+    titleDiv.appendChild(title);
+
+    const catBadge = document.createElement("span");
+    catBadge.className = "widget-card-cat";
+    catBadge.textContent = item.category === "time" ? "Temps" : (item.category === "notes" ? "Bureautique" : "Infos");
+    titleDiv.appendChild(catBadge);
+
+    header.appendChild(titleDiv);
+    topDiv.appendChild(header);
+
+    const desc = document.createElement("div");
+    desc.className = "widget-card-desc";
+    desc.style.marginTop = "8px";
+    desc.textContent = item.description;
+    topDiv.appendChild(desc);
+
+    card.appendChild(topDiv);
+
+    const addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.className = "widget-card-add-btn";
+    addBtn.innerHTML = `<span>+ Poser sur le Bureau ${currentDesktopPageIndex + 1}</span>`;
+    addBtn.addEventListener("click", () => {
+      item.apply(currentDesktopPageIndex);
+      const modal = document.getElementById("widgetGalleryModal");
+      if (modal) modal.classList.add("hidden");
+      showToast(`Widget « ${item.name} » ajouté au Bureau ${currentDesktopPageIndex + 1} !`);
+    });
+
+    card.appendChild(addBtn);
+    grid.appendChild(card);
+  });
 }
