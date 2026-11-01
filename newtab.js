@@ -886,7 +886,7 @@ function tryLaunchWebAuthFlow() {
     return;
   }
 
-  const clientId = "266928074814-gfsj5gntbtjo54qi3c9qm852htabc4ve.apps.googleusercontent.com";
+  const clientId = "266928074814-tni93lcf3rhr9k96ce86a22kko8uo64s.apps.googleusercontent.com";
   const redirectUrl = chrome.identity.getRedirectURL();
   const scopes = [
     "https://www.googleapis.com/auth/calendar.readonly",
@@ -957,7 +957,7 @@ async function getFreshGoogleToken(interactive = false) {
     // Repli WebAuthFlow officiel
     return new Promise((resolve) => {
       if (!chrome.identity || !chrome.identity.launchWebAuthFlow) return resolve(null);
-      const clientId = "266928074814-gfsj5gntbtjo54qi3c9qm852htabc4ve.apps.googleusercontent.com";
+      const clientId = "266928074814-tni93lcf3rhr9k96ce86a22kko8uo64s.apps.googleusercontent.com";
       const redirectUrl = chrome.identity.getRedirectURL();
       const scopes = [
         "https://www.googleapis.com/auth/calendar.readonly",

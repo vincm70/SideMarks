@@ -27,7 +27,7 @@
     "https://formsubmit.co/*"
   ],
   "oauth2": {
-    "client_id": "266928074814-gfsj5gntbtjo54qi3c9qm852htabc4ve.apps.googleusercontent.com",
+    "client_id": "266928074814-tni93lcf3rhr9k96ce86a22kko8uo64s.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/calendar.readonly",
       "https://www.googleapis.com/auth/calendar.events",
