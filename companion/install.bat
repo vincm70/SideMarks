@@ -1,4 +1,5 @@
 @echo off
+setlocal
 chcp 65001 >nul
 title Installation de SideMarks Bridge
 
@@ -7,41 +8,42 @@ echo   Installation de SideMarks Bridge (Compagnon Windows)
 echo ========================================================
 echo.
 
-:: 1. Recherche du compilateur C# natif de Windows
-set CSC=""
-if exist "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" set CSC="C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
-if %CSC%=="" if exist "C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe" set CSC="C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe"
+set "CSC=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+if not exist "%CSC%" set "CSC=C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe"
 
-if %CSC%=="" (
-    echo [ERREUR] Le compilateur .NET Framework (csc.exe) n'a pas été trouvé.
+if not exist "%CSC%" (
+    echo [ERREUR] Le compilateur .NET Framework csc.exe est introuvable.
     pause
     exit /b 1
 )
 
-:: 2. Dossier de destination permanent dans AppData (aucun droit admin requis)
-set TARGET_DIR=%LOCALAPPDATA%\SideMarksBridge
-set TARGET_EXE=%TARGET_DIR%\SideMarksBridge.exe
-
-if not exist "%TARGET_DIR%" mkdir "%TARGET_DIR%"
-
-echo [1/2] Compilation locale du compagnon Windows...
-%CSC% /nologo /target:winexe /out:"%TARGET_EXE%" /reference:System.Windows.Forms.dll "%~dp0SideMarksBridge.cs"
+echo [1/3] Compilation du programme compagnon...
+"%CSC%" /nologo /target:winexe /out:"%~dp0SideMarksBridge.exe" /reference:System.Windows.Forms.dll "%~dp0SideMarksBridge.cs"
 
 if %ERRORLEVEL% neq 0 (
-    echo [ERREUR] La compilation a échoué.
+    echo [ERREUR] La compilation a echoue.
     pause
     exit /b 1
 )
 
-:: Débloquer les attributs au cas où
-powershell -NoProfile -Command "Unblock-File -Path '%TARGET_EXE%' 2>$null" >nul 2>&1
+echo [2/3] Installation dans votre profil utilisateur...
+set "TARGET_DIR=%LOCALAPPDATA%\SideMarksBridge"
+set "TARGET_EXE=%TARGET_DIR%\SideMarksBridge.exe"
 
-echo [2/2] Enregistrement du protocole sécurisé sidemarks:// dans Windows...
-"%TARGET_EXE%" --install
+if not exist "%TARGET_DIR%" mkdir "%TARGET_DIR%"
+copy /y "%~dp0SideMarksBridge.exe" "%TARGET_EXE%" >nul 2>&1
+
+set "INSTALL_EXE=%TARGET_EXE%"
+if not exist "%INSTALL_EXE%" set "INSTALL_EXE=%~dp0SideMarksBridge.exe"
+
+powershell -NoProfile -Command "Unblock-File -Path '%INSTALL_EXE%' 2>$null" >nul 2>&1
+
+echo [3/3] Enregistrement du protocole securise sidemarks:// dans Windows...
+"%INSTALL_EXE%" --install
 
 echo.
 echo ========================================================
-echo   SideMarks Bridge est installé avec succès !
-echo   Vous pouvez fermer cette fenêtre.
+echo   Installation terminee avec succes !
+echo   Vous pouvez fermer cette fenetre.
 echo ========================================================
 pause
