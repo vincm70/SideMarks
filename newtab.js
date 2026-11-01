@@ -305,6 +305,38 @@ let collapsedFolders = new Set();
 let totalBookmarksCount = 0;
 let currentSearchTerm = "";
 let currentSidebarTab = "bookmarks"; // 'bookmarks' | 'tabs'
+// ========================================================
+// SÉLECTION MULTIPLE & DÉPLACEMENT PAR BLOC (v5.3)
+// ========================================================
+let selectedPillIndices = new Set();
+
+function clearPillSelection() {
+  selectedPillIndices.clear();
+  updatePillSelectionVisuals();
+}
+
+function updatePillSelectionVisuals() {
+  document.querySelectorAll(".quick-pill").forEach(el => {
+    const idx = parseInt(el.dataset.index, 10);
+    if (selectedPillIndices.has(idx)) {
+      el.classList.add("selected-pill");
+    } else {
+      el.classList.remove("selected-pill");
+    }
+  });
+
+  const groupControls = document.getElementById("selectionGroupControls");
+  const countText = document.getElementById("selectedPillsCountText");
+  if (groupControls && countText) {
+    if (selectedPillIndices.size > 0 && isLiveEditMode) {
+      groupControls.classList.remove("hidden");
+      countText.textContent = `${selectedPillIndices.size} sélectionné(s)`;
+    } else {
+      groupControls.classList.add("hidden");
+    }
+  }
+}
+
 let isLiveEditMode = false;
 let pillsLayoutMode = "free"; // 'free' (partout sur l'écran) | 'top-bar' (ruban supérieur)
 
@@ -465,6 +497,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupAllWidgetsDrag();
   setupAllWidgetsResize();
   setupWeatherControls();
+  const clearSelectionBtn = document.getElementById("clearSelectionBtn");
+  if (clearSelectionBtn) {
+    clearSelectionBtn.addEventListener("click", clearPillSelection);
+  }
+  setupMarqueeSelection();
+  setupDockDragAndDrop();
   setupWidgetControls();
   setupToolbarDrag();
   setupEvents();
@@ -540,6 +578,46 @@ function updateUndoButton() {
   }
 }
 
+// ========================================================
+// DÉTECTION ET ÉVITEMENT DES WIDGETS LORS DE L'ALIGNEMENT
+// ========================================================
+function getVisibleObstacles() {
+  const obstacles = [];
+  if (!pillsContainer) return obstacles;
+  const containerRect = pillsContainer.getBoundingClientRect();
+  const candidateIds = [
+    'clockWidget', 'weatherWidget', 'notesWidget', 'pomodoroWidget', 'recentWidget', 
+    'googleSearchForm', 'localShortcutsDock', 'liveEditToolbar'
+  ];
+  candidateIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !el.classList.contains('hidden') && el.offsetParent !== null) {
+      const r = el.getBoundingClientRect();
+      if (r.width > 20 && r.height > 20) {
+        obstacles.push({
+          id,
+          left: r.left - containerRect.left - 12,
+          top: r.top - containerRect.top - 12,
+          right: r.right - containerRect.left + 12,
+          bottom: r.bottom - containerRect.top + 12,
+          width: r.width + 24,
+          height: r.height + 24
+        });
+      }
+    }
+  });
+  return obstacles;
+}
+
+function getObstacleCollision(x, y, w, h, obstacles) {
+  for (const o of obstacles) {
+    if (x < o.right && (x + w) > o.left && y < o.bottom && (y + h) > o.top) {
+      return o;
+    }
+  }
+  return null;
+}
+
 // Alignement automatique des raccourcis (collés les uns après les autres sans trous ni superposition)
 function alignPills(direction, silent = false) {
   if (!silent) pushPillsHistory();
@@ -569,7 +647,8 @@ function alignPills(direction, silent = false) {
 
   switch (direction) {
     case "left": {
-      // Colonnes sur le bord gauche : les icônes sont collées l'une sous l'autre
+      // Colonnes sur le bord gauche en évitant les widgets
+      const obstacles = getVisibleObstacles();
       const startX = 22;
       const startY = 28;
       const maxY = H - 45;
@@ -580,10 +659,36 @@ function alignPills(direction, silent = false) {
 
       quickPills.forEach((item, i) => {
         const { w, h } = sizes[i];
+
+        let obs = getObstacleCollision(curX, curY, w, h, obstacles);
+        let loops = 0;
+        while (obs && loops < 50) {
+          loops++;
+          curY = obs.bottom + gapY;
+          if (curY + h > maxY) {
+            curX += (colMaxW > 0 ? colMaxW : w) + gapX;
+            curY = startY;
+            colMaxW = 0;
+          }
+          obs = getObstacleCollision(curX, curY, w, h, obstacles);
+        }
+
         if (curY + h > maxY && curY > startY) {
           curX += colMaxW + gapX;
           curY = startY;
           colMaxW = 0;
+          obs = getObstacleCollision(curX, curY, w, h, obstacles);
+          loops = 0;
+          while (obs && loops < 50) {
+            loops++;
+            curY = obs.bottom + gapY;
+            if (curY + h > maxY) {
+              curX += (colMaxW > 0 ? colMaxW : w) + gapX;
+              curY = startY;
+              colMaxW = 0;
+            }
+            obs = getObstacleCollision(curX, curY, w, h, obstacles);
+          }
         }
 
         item.posX = Math.round((curX / W) * 1000) / 10;
@@ -593,15 +698,16 @@ function alignPills(direction, silent = false) {
         if (w > colMaxW) colMaxW = w;
       });
 
-      if (!silent) showToast("Raccourcis alignés en colonnes à gauche (collés l'un sous l'autre)");
+      if (!silent) showToast("Raccourcis alignés à gauche (aucun raccourci masqué)");
       break;
     }
 
     case "top": {
-      // Rangées en haut : les icônes se suivent l'une après l'autre
+      // Rangées en haut en sautant les widgets
+      const obstacles = getVisibleObstacles();
       const startX = 22;
       const startY = 24;
-      const maxX = W - 25; // Bord droit accessible jusqu'au volet latéral
+      const maxX = W - 25;
 
       let curX = startX;
       let curY = startY;
@@ -609,10 +715,36 @@ function alignPills(direction, silent = false) {
 
       quickPills.forEach((item, i) => {
         const { w, h } = sizes[i];
+
+        let obs = getObstacleCollision(curX, curY, w, h, obstacles);
+        let loops = 0;
+        while (obs && loops < 50) {
+          loops++;
+          curX = obs.right + gapX;
+          if (curX + w > maxX) {
+            curX = startX;
+            curY += rowMaxH + gapY;
+            rowMaxH = h;
+          }
+          obs = getObstacleCollision(curX, curY, w, h, obstacles);
+        }
+
         if (curX + w > maxX && curX > startX) {
           curX = startX;
           curY += rowMaxH + gapY;
           rowMaxH = h;
+          obs = getObstacleCollision(curX, curY, w, h, obstacles);
+          loops = 0;
+          while (obs && loops < 50) {
+            loops++;
+            curX = obs.right + gapX;
+            if (curX + w > maxX) {
+              curX = startX;
+              curY += rowMaxH + gapY;
+              rowMaxH = h;
+            }
+            obs = getObstacleCollision(curX, curY, w, h, obstacles);
+          }
         }
 
         item.posX = Math.round((curX / W) * 1000) / 10;
@@ -622,7 +754,7 @@ function alignPills(direction, silent = false) {
         if (h > rowMaxH) rowMaxH = h;
       });
 
-      if (!silent) showToast("Raccourcis alignés en haut (collés l'un après l'autre)");
+      if (!silent) showToast("Raccourcis alignés en haut (aucun raccourci masqué)");
       break;
     }
 
@@ -2678,16 +2810,52 @@ function renderPills() {
           openInNewTab(item.url);
         });
       } else {
-        // EN MODE ÉDITION (crayon) : Déplacement libre à la souris
+        // EN MODE ÉDITION (crayon) : Déplacement libre ou déplacement par bloc groupé
         a.addEventListener("pointerdown", (e) => {
           if (e.button !== 0) return;
           if (e.target.closest(".pill-action-badges") || e.target.closest(".pill-edit-badge") || e.target.closest(".pill-delete-badge") || e.target.closest(".pill-inline-input")) return;
 
+          // Sélection avec Ctrl ou Shift (bascule)
+          if (e.ctrlKey || e.metaKey || e.shiftKey) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (selectedPillIndices.has(index)) {
+              selectedPillIndices.delete(index);
+            } else {
+              selectedPillIndices.add(index);
+            }
+            updatePillSelectionVisuals();
+            return;
+          }
+
+          // Si on clique sur une pilule hors de la sélection courante :
+          if (!selectedPillIndices.has(index)) {
+            selectedPillIndices.clear();
+            selectedPillIndices.add(index);
+            updatePillSelectionVisuals();
+          }
+
           const preMoveSnapshot = JSON.stringify(quickPills);
           const containerRect = pillsContainer.getBoundingClientRect();
-          const pillRect = a.getBoundingClientRect();
-          const offsetX = e.clientX - pillRect.left;
-          const offsetY = e.clientY - pillRect.top;
+
+          // Récupérer la position initiale de TOUTES les pilules du bloc sélectionné
+          const movingGroup = [];
+          selectedPillIndices.forEach(idx => {
+            const el = pillsContainer.querySelector(`.quick-pill[data-index="${idx}"]`);
+            const pItem = quickPills[idx];
+            if (el && pItem) {
+              const r = el.getBoundingClientRect();
+              movingGroup.push({
+                index: idx,
+                item: pItem,
+                el,
+                startLeft: r.left - containerRect.left,
+                startTop: r.top - containerRect.top,
+                width: r.width,
+                height: r.height
+              });
+            }
+          });
 
           let hasMoved = false;
           const startX = e.clientX;
@@ -2696,27 +2864,22 @@ function renderPills() {
           const onPointerMove = (moveEv) => {
             const dx = moveEv.clientX - startX;
             const dy = moveEv.clientY - startY;
-            if (!hasMoved && Math.hypot(dx, dy) > 5) {
+            if (!hasMoved && Math.hypot(dx, dy) > 4) {
               hasMoved = true;
-              a.classList.add("dragging-free");
+              movingGroup.forEach(p => p.el.classList.add("dragging-free"));
               try { a.setPointerCapture(e.pointerId); } catch (err) {}
             }
             if (hasMoved) {
-              let newLeftPx = moveEv.clientX - containerRect.left - offsetX;
-              let newTopPx = moveEv.clientY - containerRect.top - offsetY;
-
-              // Magnétisme doux d'alignement avec les autres raccourcis
-              const snapped = computeSnap(newLeftPx, newTopPx, pillRect.width, pillRect.height, a, containerRect);
-              newLeftPx = snapped.left;
-              newTopPx = snapped.top;
-
-              const maxLeft = containerRect.width - pillRect.width - 10;
-              const maxTop = containerRect.height - pillRect.height - 10;
-              newLeftPx = Math.max(10, Math.min(newLeftPx, maxLeft));
-              newTopPx = Math.max(10, Math.min(newTopPx, maxTop));
-
-              a.style.left = `${newLeftPx}px`;
-              a.style.top = `${newTopPx}px`;
+              movingGroup.forEach(p => {
+                let newLeft = p.startLeft + dx;
+                let newTop = p.startTop + dy;
+                const maxL = containerRect.width - p.width - 10;
+                const maxT = containerRect.height - p.height - 10;
+                newLeft = Math.max(10, Math.min(newLeft, maxL));
+                newTop = Math.max(10, Math.min(newTop, maxT));
+                p.el.style.left = `${newLeft}px`;
+                p.el.style.top = `${newTop}px`;
+              });
             }
           };
 
@@ -2731,22 +2894,23 @@ function renderPills() {
                 pillsHistory.push(preMoveSnapshot);
                 updateUndoButton();
               }
-              a.classList.remove("dragging-free");
-              try { a.releasePointerCapture(e.pointerId); } catch (err) {}
-
-              const currentLeftPx = parseFloat(a.style.left);
-              const currentTopPx = parseFloat(a.style.top);
-              const pctX = Math.round((currentLeftPx / containerRect.width) * 1000) / 10;
-              const pctY = Math.round((currentTopPx / containerRect.height) * 1000) / 10;
-
-              item.posX = pctX;
-              item.posY = pctY;
-              a.style.left = `${pctX}%`;
-              a.style.top = `${pctY}%`;
+              movingGroup.forEach(p => {
+                p.el.classList.remove("dragging-free");
+                try { p.el.releasePointerCapture(e.pointerId); } catch (err) {}
+                const curL = parseFloat(p.el.style.left);
+                const curT = parseFloat(p.el.style.top);
+                const pctX = Math.round((curL / containerRect.width) * 1000) / 10;
+                const pctY = Math.round((curT / containerRect.height) * 1000) / 10;
+                p.item.posX = pctX;
+                p.item.posY = pctY;
+                p.el.style.left = `${pctX}%`;
+                p.el.style.top = `${pctY}%`;
+              });
               savePills();
+              if (movingGroup.length > 1) {
+                showToast(`Bloc de ${movingGroup.length} raccourcis déplacé !`);
+              }
             }
-            // Déplacement uniquement : si l'utilisateur clique sans déplacer, aucune modale ne s'ouvre !
-            // L'édition se fait exclusivement via le bouton Crayon ✏️ dédié.
           };
 
           window.addEventListener("pointermove", onPointerMove);
@@ -4108,4 +4272,178 @@ function triggerLocalShortcut(targetPath) {
   setTimeout(() => {
     try { iframe.remove(); } catch (e) {}
   }, 1500);
+}
+
+
+// ========================================================
+// SÉLECTION PAR RECTANGLE (LASSO EN MODE ÉDITION)
+// ========================================================
+function setupMarqueeSelection() {
+  const marquee = document.getElementById("selectionMarquee");
+  const area = document.querySelector(".main-content-area");
+  if (!marquee || !area) return;
+
+  area.addEventListener("pointerdown", (e) => {
+    if (!isLiveEditMode) return;
+    if (e.button !== 0) return;
+    if (
+      e.target.closest(".quick-pill") ||
+      e.target.closest(".floating-widget") ||
+      e.target.closest(".weather-widget") ||
+      e.target.closest("#liveEditToolbar") ||
+      e.target.closest("#googleSearchForm") ||
+      e.target.closest("#localShortcutsDock") ||
+      e.target.closest(".right-sidebar") ||
+      e.target.closest("button") ||
+      e.target.closest("input")
+    ) {
+      return;
+    }
+
+    if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
+      clearPillSelection();
+    }
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let isMarqueeActive = false;
+
+    const onPointerMove = (moveEv) => {
+      const dx = moveEv.clientX - startX;
+      const dy = moveEv.clientY - startY;
+
+      if (!isMarqueeActive && Math.hypot(dx, dy) > 5) {
+        isMarqueeActive = true;
+        marquee.style.display = "block";
+      }
+
+      if (isMarqueeActive) {
+        const left = Math.min(startX, moveEv.clientX);
+        const top = Math.min(startY, moveEv.clientY);
+        const width = Math.abs(dx);
+        const height = Math.abs(dy);
+
+        marquee.style.left = `${left}px`;
+        marquee.style.top = `${top}px`;
+        marquee.style.width = `${width}px`;
+        marquee.style.height = `${height}px`;
+
+        const marqueeRect = { left, top, right: left + width, bottom: top + height };
+
+        document.querySelectorAll(".quick-pill").forEach(el => {
+          const idx = parseInt(el.dataset.index, 10);
+          const r = el.getBoundingClientRect();
+          const intersects = (
+            r.left < marqueeRect.right &&
+            r.right > marqueeRect.left &&
+            r.top < marqueeRect.bottom &&
+            r.bottom > marqueeRect.top
+          );
+          if (intersects) {
+            selectedPillIndices.add(idx);
+          } else if (!e.ctrlKey && !e.shiftKey) {
+            selectedPillIndices.delete(idx);
+          }
+        });
+        updatePillSelectionVisuals();
+      }
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+
+      if (isMarqueeActive) {
+        marquee.style.display = "none";
+        isMarqueeActive = false;
+        if (selectedPillIndices.size > 0) {
+          showToast(`${selectedPillIndices.size} raccourci(s) sélectionné(s). Glissez-en un pour déplacer tout le bloc !`);
+        }
+      }
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
+  });
+}
+
+// ========================================================
+// GLISSER-DÉPOSER DE DOSSIER / LOGICIEL SUR LE DOCK WINDOWS
+// ========================================================
+function setupDockDragAndDrop() {
+  const dock = document.getElementById("localShortcutsDock");
+  if (!dock) return;
+
+  dock.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "copy";
+    dock.style.borderColor = "#38bdf8";
+    dock.style.boxShadow = "0 0 25px rgba(56, 189, 248, 0.5)";
+  });
+
+  dock.addEventListener("dragleave", (e) => {
+    e.preventDefault();
+    dock.style.borderColor = "";
+    dock.style.boxShadow = "";
+  });
+
+  dock.addEventListener("drop", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dock.style.borderColor = "";
+    dock.style.boxShadow = "";
+
+    // 1. Si un fichier / dossier est déposé depuis Windows Explorer
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      const rawName = file.name;
+      const isExe = rawName.toLowerCase().endsWith(".exe");
+      const cleanTitle = rawName.replace(/\.[^/.]+$/, "");
+      const icon = isExe ? "💻" : "📁";
+
+      // Chrome sandbox ne donne pas le chemin absolu direct, on demande confirmation ou saisie du chemin
+      const defaultPath = file.path || `C:\\Users\\Documents\\${rawName}`;
+      const userPath = prompt(
+        `Ajouter un raccourci système Windows : « ${cleanTitle} »\n\n` +
+        `Indiquez le chemin d'accès complet de ce ${isExe ? 'programme' : 'dossier'} :`,
+        file.path || rawName
+      );
+
+      if (userPath && userPath.trim()) {
+        addLocalShortcutDirectly(cleanTitle, userPath.trim(), icon);
+      }
+      return;
+    }
+
+    // 2. Si du texte / URL ou chemin est déposé
+    const textData = e.dataTransfer.getData("text/plain");
+    if (textData && textData.trim()) {
+      const pathStr = textData.trim().replace(/^"|"$/g, "");
+      const parts = pathStr.split(/[\\/]/).filter(Boolean);
+      const name = parts[parts.length - 1] || "Raccourci";
+      const isExe = pathStr.toLowerCase().endsWith(".exe");
+      addLocalShortcutDirectly(name.replace(/\.[^/.]+$/, ""), pathStr, isExe ? "💻" : "📁");
+    }
+  });
+}
+
+function addLocalShortcutDirectly(title, path, icon) {
+  chrome.storage.sync.get("experimentalLocalShortcuts", (res) => {
+    const config = res.experimentalLocalShortcuts || { enabled: true, shortcuts: [] };
+    config.enabled = true;
+    config.shortcuts = Array.isArray(config.shortcuts) ? config.shortcuts : [];
+    config.shortcuts.push({
+      id: "loc_" + Date.now(),
+      title,
+      path,
+      icon: icon || "📁"
+    });
+    chrome.storage.sync.set({ experimentalLocalShortcuts: config }, () => {
+      loadExperimentalLocalShortcuts();
+      showToast(`Raccourci « ${title} » ajouté au dock Windows !`);
+    });
+  });
 }

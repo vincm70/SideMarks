@@ -19,6 +19,8 @@
       <!-- Guides d'alignement magnétiques doux (Mode Édition) -->
       <div id="snapGuideH" class="snap-guide snap-guide-h hidden"></div>
       <div id="snapGuideV" class="snap-guide snap-guide-v hidden"></div>
+      <!-- Rectangle de sélection multiple (Lasso en mode édition) -->
+      <div id="selectionMarquee" class="selection-marquee"></div>
 
       <!-- Ruban supérieur des raccourcis rapides (Pilules) -->
       <nav class="top-shortcuts-bar" id="topShortcutsBar">
@@ -210,6 +212,11 @@
           <button type="button" id="alignBottomBtn" class="btn-xs" title="Aligner en rangées en bas">⬇️ Bas</button>
           <button type="button" id="groupByCategoryBtn" class="btn-xs" style="background: rgba(59, 130, 246, 0.25); border: 1px solid rgba(96, 165, 250, 0.5);" title="Regrouper les raccourcis par catégories">🗂️ Catégories</button>
           <button type="button" id="restoreOriginalPillsBtn" class="btn-xs" style="background: rgba(234, 179, 8, 0.25); border: 1px solid rgba(234, 179, 8, 0.5); color: #fef08a;" title="Restaurer tous vos 44 raccourcis personnels d'origine">🔄 Mes raccourcis</button>
+          <!-- Indicateur et actions de sélection groupée (Bloc) -->
+          <div id="selectionGroupControls" class="btn-group hidden" style="background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(96, 165, 250, 0.4); border-radius: 4px; padding: 1px 4px; align-items: center; gap: 4px;">
+            <span id="selectedPillsCountText" style="font-size: 11px; color: #93c5fd; font-weight: 600; padding: 0 4px; white-space: nowrap;">0 sélectionné(s)</span>
+            <button type="button" id="clearSelectionBtn" class="btn-xs" style="background: transparent; color: #cbd5e1; padding: 2px 5px;" title="Désélectionner tout">✕</button>
+          </div>
           <button type="button" id="liveAddPillBtn" class="btn-xs btn-xs-primary" title="Ajouter un nouveau raccourci (Nom, URL, Catégorie)">+ Ajouter</button>
           <button type="button" id="liveExitEditBtn" class="btn-xs" style="background:#10b981; color:#fff;" title="Quitter le mode édition">✓ Terminer</button>
         </div>

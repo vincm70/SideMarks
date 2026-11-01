@@ -2065,3 +2065,26 @@ html, body {
 .dock-item-icon {
   font-size: 14px;
 }
+
+
+/* ========================================================
+   SÉLECTION MULTIPLE & DÉPLACEMENT EN BLOC (v5.3)
+   ======================================================== */
+.pills-container.free-mode .quick-pill.selected-pill {
+  outline: 2px solid #60a5fa !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 16px rgba(96, 165, 250, 0.75), 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+  background: rgba(30, 58, 138, 0.95) !important;
+  border-color: #93c5fd !important;
+  z-index: 80 !important;
+}
+
+.selection-marquee {
+  position: fixed;
+  border: 1.5px dashed #60a5fa;
+  background: rgba(59, 130, 246, 0.2);
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 1200;
+  display: none;
+}
