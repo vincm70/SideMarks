@@ -15,7 +15,8 @@
     "identity",
     "alarms",
     "topSites",
-    "declarativeNetRequest"
+    "declarativeNetRequest",
+    "notifications"
   ],
   "host_permissions": [
     "https://api.open-meteo.com/*",

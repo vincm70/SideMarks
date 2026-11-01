@@ -932,13 +932,30 @@ function setupAgendaWidget() {
   const eventsList = document.getElementById("agendaEventsList");
   const addEventBtn = document.getElementById("agendaAddEventBtn");
 
+  // Vues multiples
+  const viewsNav = document.getElementById("agendaViewsNav");
+  const monthViewEl = document.getElementById("agendaMonthView");
+  const weekViewEl = document.getElementById("agendaWeekView");
+  const weekGridEl = document.getElementById("agendaWeekGrid");
+  const dayViewEl = document.getElementById("agendaDayView");
+  const dayTimelineEl = document.getElementById("agendaDayTimeline");
+  const planningViewEl = document.getElementById("agendaPlanningView");
+  const planningListEl = document.getElementById("agendaPlanningList");
+
+  // Menu contextuel
+  const contextMenu = document.getElementById("agendaContextMenu");
+  const contextTitle = document.getElementById("agendaContextEventTitle");
+
+  let currentView = agendaSettings.currentView || "month"; // "month" | "week" | "day" | "planning"
   let viewDate = new Date();
   let selectedDate = new Date();
+  let contextEventTarget = null;
 
   const MONTH_NAMES = [
     "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
     "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
   ];
+  const WEEKDAY_NAMES = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 
   function toDateKey(d) {
     const y = d.getFullYear();
@@ -947,7 +964,6 @@ function setupAgendaWidget() {
     return `${y}-${m}-${day}`;
   }
 
-  // Renvoie la liste des calendriers actuellement cochés
   function getEnabledCalendars() {
     if (!Array.isArray(agendaSettings.enabledCalendars)) {
       const all = getDiscoveredCalendars();
@@ -956,150 +972,195 @@ function setupAgendaWidget() {
     return agendaSettings.enabledCalendars;
   }
 
-  // Renvoie tous les événements du jour pour les calendriers cochés
+  function getHiddenDays() {
+    if (!agendaSettings.hiddenDays || typeof agendaSettings.hiddenDays !== "object") {
+      agendaSettings.hiddenDays = {};
+    }
+    return agendaSettings.hiddenDays;
+  }
+
   function getFilteredEventsForDate(dateStr) {
     const enabled = getEnabledCalendars();
+    const hiddenMap = getHiddenDays();
+    const hiddenForThisDay = hiddenMap[dateStr] || [];
     const results = [];
 
-    // 1. Événements Google synchronisés
     googleEventsList.forEach(ev => {
       if (ev.dateStr === dateStr && enabled.includes(ev.calendarTitle)) {
-        results.push(ev);
+        if (!hiddenForThisDay.includes(ev.id)) {
+          results.push(ev);
+        }
       }
     });
 
-    // 2. Événements locaux
-    if (agendaSettings.agendas) {
-      Object.keys(agendaSettings.agendas).forEach(agKey => {
-        const ag = agendaSettings.agendas[agKey];
-        if (ag && ag.events && ag.events[dateStr] && enabled.includes(ag.name || agKey)) {
-          ag.events[dateStr].forEach(ev => {
+    Object.keys(agendaSettings.agendas || {}).forEach(agKey => {
+      const ag = agendaSettings.agendas[agKey];
+      if (ag && ag.enabled && enabled.includes(ag.name)) {
+        const localList = ag.events ? ag.events[dateStr] || [] : [];
+        localList.forEach(ev => {
+          if (!hiddenForThisDay.includes(ev.id)) {
             results.push({
               id: ev.id,
-              calendarTitle: ag.name || agKey,
               title: ev.title,
               timeStr: ev.time || "Journée",
               dateStr: dateStr,
+              calendarTitle: ag.name,
               isLocal: true,
-              rawEv: ev,
-              agKey: agKey
+              agKey: agKey,
+              rawEv: ev
             });
-          });
-        }
-      });
-    }
+          }
+        });
+      }
+    });
 
     return results;
   }
 
-  // Renvoie un Set de toutes les dates contenant au moins un événement dans les calendriers cochés
-  function getActiveEventDatesSet() {
-    const enabled = getEnabledCalendars();
-    const dates = new Set();
+  // Configuration du Drag & Drop : déposer une tâche sur une date pour la planifier
+  function setupDateDropTarget(element, dateKey) {
+    if (!element) return;
+    element.dataset.dropDate = dateKey;
 
-    googleEventsList.forEach(ev => {
-      if (ev.dateStr && enabled.includes(ev.calendarTitle)) {
-        dates.add(ev.dateStr);
+    element.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      element.classList.add("drop-target");
+    });
+
+    element.addEventListener("dragleave", (e) => {
+      if (!element.contains(e.relatedTarget)) {
+        element.classList.remove("drop-target");
       }
     });
 
-    if (agendaSettings.agendas) {
-      Object.keys(agendaSettings.agendas).forEach(agKey => {
-        const ag = agendaSettings.agendas[agKey];
-        if (ag && ag.events && enabled.includes(ag.name || agKey)) {
-          Object.keys(ag.events).forEach(dKey => {
-            if (ag.events[dKey].length > 0) dates.add(dKey);
-          });
-        }
-      });
-    }
+    element.addEventListener("drop", async (e) => {
+      element.classList.remove("drop-target");
+      e.preventDefault();
+      try {
+        const raw = e.dataTransfer.getData("application/task") || e.dataTransfer.getData("text/plain");
+        if (!raw) return;
+        const taskData = JSON.parse(raw);
+        if (!taskData || !taskData.id) return;
 
-    return dates;
-  }
-
-  function updateBadge() {
-    if (!activeBadge) return;
-    const enabled = getEnabledCalendars();
-    if (enabled.length === 0) {
-      activeBadge.textContent = "Aucun";
-      activeBadge.style.borderColor = "#ef4444";
-      activeBadge.style.color = "#fca5a5";
-    } else if (enabled.length === 1) {
-      activeBadge.textContent = enabled[0].slice(0, 14);
-      activeBadge.style.borderColor = "";
-      activeBadge.style.color = "";
-    } else {
-      activeBadge.textContent = `${enabled.length} calendriers`;
-      activeBadge.style.borderColor = "";
-      activeBadge.style.color = "";
-    }
-  }
-
-  // Rendu des cases à cocher dans le panneau de configuration (Roue ⚙️)
-  function renderCalendarsCheckboxes() {
-    if (!calendarsListEl) return;
-    const allCals = getDiscoveredCalendars();
-    const enabled = getEnabledCalendars();
-
-    calendarsListEl.innerHTML = "";
-
-    allCals.forEach(cal => {
-      const row = document.createElement("label");
-      row.className = "agenda-cal-checkbox-row";
-
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.value = cal.name;
-      cb.checked = enabled.includes(cal.name);
-
-      cb.addEventListener("change", () => {
-        if (cb.checked) {
-          if (!agendaSettings.enabledCalendars.includes(cal.name)) {
-            agendaSettings.enabledCalendars.push(cal.name);
-          }
-        } else {
-          agendaSettings.enabledCalendars = agendaSettings.enabledCalendars.filter(n => n !== cal.name);
-        }
-        chrome.storage.local.set({ agendaSettings });
-        updateBadge();
-        renderCalendar();
-        renderEvents();
-      });
-
-      const dot = document.createElement("span");
-      dot.className = "agenda-cal-dot";
-      dot.style.background = cal.color || "#3b82f6";
-
-      const nameSpan = document.createElement("span");
-      nameSpan.className = "agenda-cal-name";
-      nameSpan.textContent = cal.name;
-      nameSpan.title = cal.name;
-
-      row.appendChild(cb);
-      row.appendChild(dot);
-      row.appendChild(nameSpan);
-      calendarsListEl.appendChild(row);
+        await scheduleTaskOnDate(taskData.id, dateKey);
+        showToast(`📅 Tâche « ${taskData.title} » planifiée pour le ${dateKey} !`);
+      } catch (err) {
+        console.error("Drop task error:", err);
+      }
     });
   }
 
-  // Rendu de la grille mensuelle avec indicateurs
+  // Met à jour la date d'une tâche (en local + Google Tasks)
+  async function scheduleTaskOnDate(taskId, dateStr) {
+    const task = tasksList.find(t => t.id === taskId);
+    if (!task) return;
+    task.due = dateStr;
+
+    chrome.storage.local.set({ tasksData: tasksList });
+    if (typeof refreshTasksDisplay === "function") refreshTasksDisplay();
+    renderCurrentView();
+
+    // Synchro d'arrière-plan avec AgendaBIP local si ouvert
+    try {
+      fetch("http://127.0.0.1:8766/api/features", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "editTask",
+          id: task.id,
+          groupId: task.rawGroupId || task.groupId || "default",
+          due: dateStr
+        })
+      }).catch(() => {});
+    } catch (_) {}
+  }
+
+  // Bascule des vues d'agenda
+  function setView(viewName) {
+    currentView = viewName;
+    agendaSettings.currentView = viewName;
+    chrome.storage.local.set({ agendaSettings });
+
+    if (viewsNav) {
+      viewsNav.querySelectorAll(".agenda-view-tab").forEach(tab => {
+        tab.classList.toggle("active", tab.dataset.view === viewName);
+      });
+    }
+
+    if (monthViewEl) monthViewEl.classList.toggle("hidden", viewName !== "month");
+    if (weekViewEl) weekViewEl.classList.toggle("hidden", viewName !== "week");
+    if (dayViewEl) dayViewEl.classList.toggle("hidden", viewName !== "day");
+    if (planningViewEl) planningViewEl.classList.toggle("hidden", viewName !== "planning");
+
+    renderCurrentView();
+  }
+
+  function renderCurrentView() {
+    updateTitleBar();
+    if (currentView === "month") {
+      renderCalendar();
+      renderEvents();
+    } else if (currentView === "week") {
+      renderWeekView();
+    } else if (currentView === "day") {
+      renderDayView();
+    } else if (currentView === "planning") {
+      renderPlanningView();
+    }
+  }
+
+  function updateTitleBar() {
+    if (!monthTitle) return;
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+
+    if (currentView === "month") {
+      monthTitle.textContent = `${MONTH_NAMES[month]} ${year}`;
+    } else if (currentView === "week") {
+      // Début de semaine (Lundi)
+      const cur = new Date(viewDate);
+      const dayOfWeek = (cur.getDay() + 6) % 7;
+      const monday = new Date(cur);
+      monday.setDate(cur.getDate() - dayOfWeek);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+
+      monthTitle.textContent = `${monday.getDate()} ${MONTH_NAMES[monday.getMonth()].slice(0, 4)}. - ${sunday.getDate()} ${MONTH_NAMES[sunday.getMonth()].slice(0, 4)}. ${sunday.getFullYear()}`;
+    } else if (currentView === "day") {
+      monthTitle.textContent = selectedDate.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "long" });
+    } else if (currentView === "planning") {
+      monthTitle.textContent = `Planning (${MONTH_NAMES[month]} ${year})`;
+    }
+  }
+
+  // 1. VUE MOIS
   function renderCalendar() {
-    if (!daysContainer || !monthTitle) return;
+    if (!daysContainer) return;
+    daysContainer.innerHTML = "";
 
     const year = viewDate.getFullYear();
     const month = viewDate.getMonth();
-    monthTitle.textContent = `${MONTH_NAMES[month]} ${year}`;
 
-    daysContainer.innerHTML = "";
-
-    const firstDayIndex = (new Date(year, month, 1).getDay() + 6) % 7;
+    const firstDayOfMonth = new Date(year, month, 1);
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const daysInPrevMonth = new Date(year, month, 0).getDate();
+    let firstDayIndex = (firstDayOfMonth.getDay() + 6) % 7;
 
+    const daysInPrevMonth = new Date(year, month, 0).getDate();
     const todayKey = toDateKey(new Date());
     const selectedKey = toDateKey(selectedDate);
-    const activeDates = getActiveEventDatesSet();
 
+    // Rassembler dates avec événements
+    const activeDates = new Set();
+    const enabled = getEnabledCalendars();
+    googleEventsList.forEach(ev => {
+      if (enabled.includes(ev.calendarTitle)) activeDates.add(ev.dateStr);
+    });
+    tasksList.forEach(t => {
+      if (t.due && t.status !== "done") activeDates.add(t.due);
+    });
+
+    // Jours du mois précédent
     for (let i = firstDayIndex - 1; i >= 0; i--) {
       const dayNum = daysInPrevMonth - i;
       const cellDate = new Date(year, month - 1, dayNum);
@@ -1114,15 +1175,16 @@ function setupAgendaWidget() {
         dot.className = "agenda-day-dot";
         cell.appendChild(dot);
       }
+      setupDateDropTarget(cell, cellKey);
       cell.addEventListener("click", () => {
         selectedDate = cellDate;
         viewDate = new Date(year, month - 1, 1);
-        renderCalendar();
-        renderEvents();
+        renderCurrentView();
       });
       daysContainer.appendChild(cell);
     }
 
+    // Jours du mois courant
     for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
       const cellDate = new Date(year, month, dayNum);
       const cellKey = toDateKey(cellDate);
@@ -1130,7 +1192,6 @@ function setupAgendaWidget() {
       const cell = document.createElement("div");
       cell.className = "agenda-day";
       cell.textContent = dayNum;
-
       if (cellKey === todayKey) cell.classList.add("today");
       if (cellKey === selectedKey) cell.classList.add("selected");
 
@@ -1139,7 +1200,7 @@ function setupAgendaWidget() {
         dot.className = "agenda-day-dot";
         cell.appendChild(dot);
       }
-
+      setupDateDropTarget(cell, cellKey);
       cell.addEventListener("click", () => {
         selectedDate = cellDate;
         renderCalendar();
@@ -1148,6 +1209,7 @@ function setupAgendaWidget() {
       daysContainer.appendChild(cell);
     }
 
+    // Jours du mois suivant
     const totalRendered = firstDayIndex + daysInMonth;
     const remaining = (7 - (totalRendered % 7)) % 7;
     for (let dayNum = 1; dayNum <= remaining; dayNum++) {
@@ -1163,28 +1225,28 @@ function setupAgendaWidget() {
         dot.className = "agenda-day-dot";
         cell.appendChild(dot);
       }
+      setupDateDropTarget(cell, cellKey);
       cell.addEventListener("click", () => {
         selectedDate = cellDate;
         viewDate = new Date(year, month + 1, 1);
-        renderCalendar();
-        renderEvents();
+        renderCurrentView();
       });
       daysContainer.appendChild(cell);
     }
   }
 
-  // Rendu de la liste des événements du jour
   function renderEvents() {
     if (!eventsList) return;
     const selKey = toDateKey(selectedDate);
     const dayEvents = getFilteredEventsForDate(selKey);
+    const dayTasks = tasksList.filter(t => t.due === selKey);
 
     const options = { weekday: "short", day: "numeric", month: "short" };
     if (selectedDayText) {
       selectedDayText.textContent = selectedDate.toLocaleDateString("fr-FR", options);
     }
     if (eventsCount) {
-      eventsCount.textContent = `${dayEvents.length} RDV`;
+      eventsCount.textContent = `${dayEvents.length} RDV${dayTasks.length > 0 ? ` · ${dayTasks.length} Tâches` : ""}`;
     }
 
     eventsList.innerHTML = "";
@@ -1195,33 +1257,41 @@ function setupAgendaWidget() {
       return;
     }
 
-    if (dayEvents.length === 0) {
-      eventsList.innerHTML = '<div class="agenda-empty-events">Aucun rendez-vous pour ce jour</div>';
+    if (dayEvents.length === 0 && dayTasks.length === 0) {
+      eventsList.innerHTML = '<div class="agenda-empty-events">Aucun rendez-vous pour ce jour. Glissez une tâche ici pour la planifier !</div>';
       return;
     }
 
-    // Tri chronologique
+    // Rendu des tâches planifiées pour ce jour
+    dayTasks.forEach(task => {
+      const tItem = document.createElement("div");
+      tItem.className = `agenda-event-item${task.status === "done" ? " past" : ""}`;
+      tItem.style.borderLeftColor = "#10b981";
+      tItem.style.background = "rgba(16, 185, 129, 0.08)";
+
+      tItem.innerHTML = `
+        <span class="agenda-event-time" style="color: #34d399;">Tâche</span>
+        <div class="agenda-event-details">
+          <span class="agenda-event-title" style="${task.status === "done" ? "text-decoration: line-through; opacity: 0.6;" : ""}">${task.title}</span>
+          <span class="agenda-event-cal-tag"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#10b981;margin-right:3px;"></span>${task.groupId || "Tâches"}</span>
+        </div>
+      `;
+      eventsList.appendChild(tItem);
+    });
+
+    // Rendu des événements du jour
     const sorted = [...dayEvents].sort((a, b) => {
       const tA = a.timeStr === "Journée" ? "00:00" : a.timeStr;
       const tB = b.timeStr === "Journée" ? "00:00" : b.timeStr;
       return tA.localeCompare(tB);
     });
 
-    const now = new Date();
-    const isToday = selKey === toDateKey(now);
-    const currentHours = String(now.getHours()).padStart(2, "0");
-    const currentMins = String(now.getMinutes()).padStart(2, "0");
-    const currentTimeStr = `${currentHours}:${currentMins}`;
-
-    sorted.forEach((ev, idx) => {
+    sorted.forEach((ev) => {
       const item = document.createElement("div");
       item.className = "agenda-event-item";
 
       const calColor = CALENDAR_COLOR_PALETTE[ev.calendarTitle] || "#3b82f6";
       item.style.borderLeftColor = calColor;
-
-      const isPast = isToday && ev.timeStr !== "Journée" && ev.timeStr < currentTimeStr;
-      if (isPast) item.classList.add("past");
 
       const timeSpan = document.createElement("span");
       timeSpan.className = "agenda-event-time";
@@ -1234,9 +1304,8 @@ function setupAgendaWidget() {
       const titleSpan = document.createElement("span");
       titleSpan.className = "agenda-event-title";
       titleSpan.textContent = ev.title;
-      titleSpan.title = `${ev.title} (${ev.timeStr}) — ${ev.calendarTitle}`;
+      titleSpan.title = `${ev.title} (${ev.timeStr}) — Clic pour ouvrir | Clic droit pour menu contextuel`;
 
-      // Si lien Google Agenda
       if (ev.htmlLink) {
         titleSpan.style.cursor = "pointer";
         titleSpan.addEventListener("click", () => window.open(ev.htmlLink, "_blank"));
@@ -1249,200 +1318,546 @@ function setupAgendaWidget() {
       detailsBox.appendChild(titleSpan);
       detailsBox.appendChild(calTag);
 
-      // Actions
+      // Actions rapides
       const actionsBox = document.createElement("div");
       actionsBox.className = "agenda-event-actions";
 
-      // Reporter
-      const postponeBtn = document.createElement("button");
-      postponeBtn.type = "button";
-      postponeBtn.className = "agenda-event-btn-action";
-      postponeBtn.textContent = "⏱️";
-      postponeBtn.title = "Reporter : Clic = +15min | Shift+Clic = Demain même heure";
-      postponeBtn.addEventListener("click", (e) => {
+      // Menu rapide contextuel bouton
+      const moreBtn = document.createElement("button");
+      moreBtn.type = "button";
+      moreBtn.className = "agenda-event-btn-action";
+      moreBtn.textContent = "⋮";
+      moreBtn.title = "Menu : Reporter, masquer, Google Agenda...";
+      moreBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (ev.isLocal && ev.rawEv && ev.agKey) {
-          if (e.shiftKey) {
-            const tomorrow = new Date(selectedDate);
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            const tomKey = toDateKey(tomorrow);
-            const list = agendaSettings.agendas[ev.agKey].events[selKey] || [];
-            const localIdx = list.findIndex(x => x.id === ev.id);
-            if (localIdx !== -1) list.splice(localIdx, 1);
-            if (!agendaSettings.agendas[ev.agKey].events[tomKey]) agendaSettings.agendas[ev.agKey].events[tomKey] = [];
-            agendaSettings.agendas[ev.agKey].events[tomKey].push(ev.rawEv);
-            chrome.storage.local.set({ agendaSettings });
-            renderCalendar();
-            renderEvents();
-            showToast(`« ${ev.title} » reporté à demain !`);
-          } else {
-            let [h, m] = (ev.rawEv.time || "09:00").split(":").map(Number);
-            m += 15;
-            if (m >= 60) { h = (h + 1) % 24; m -= 60; }
-            ev.rawEv.time = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-            chrome.storage.local.set({ agendaSettings });
-            renderEvents();
-            showToast(`« ${ev.title} » décalé à ${ev.rawEv.time}`);
-          }
-        } else {
-          showToast("Événement Google : utilisez le lien pour le modifier dans Google Calendar");
-        }
+        openContextMenu(e, ev);
       });
 
-      actionsBox.appendChild(postponeBtn);
-
-      if (ev.isLocal) {
-        const delBtn = document.createElement("button");
-        delBtn.type = "button";
-        delBtn.className = "agenda-event-btn-action del";
-        delBtn.textContent = "✕";
-        delBtn.title = "Supprimer ce rendez-vous";
-        delBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const list = agendaSettings.agendas[ev.agKey].events[selKey] || [];
-          const localIdx = list.findIndex(x => x.id === ev.id);
-          if (localIdx !== -1) list.splice(localIdx, 1);
-          chrome.storage.local.set({ agendaSettings });
-          renderCalendar();
-          renderEvents();
-          showToast("Rendez-vous supprimé");
-        });
-        actionsBox.appendChild(delBtn);
-      }
+      actionsBox.appendChild(moreBtn);
 
       item.appendChild(timeSpan);
       item.appendChild(detailsBox);
       item.appendChild(actionsBox);
+
+      // Clic droit ou appui long pour ouvrir le menu contextuel
+      bindContextMenuOnEvent(item, ev);
+
       eventsList.appendChild(item);
+    });
+
+    // Bouton de réaffichage si événements masqués
+    const hiddenMap = getHiddenDays();
+    const hiddenCount = (hiddenMap[selKey] || []).length;
+    if (hiddenCount > 0) {
+      const unhideBtn = document.createElement("button");
+      unhideBtn.type = "button";
+      unhideBtn.className = "btn-xs";
+      unhideBtn.style.marginTop = "6px";
+      unhideBtn.textContent = `👁️ Réafficher les événements masqués (${hiddenCount})`;
+      unhideBtn.addEventListener("click", () => {
+        delete hiddenMap[selKey];
+        agendaSettings.hiddenDays = hiddenMap;
+        chrome.storage.local.set({ agendaSettings });
+        renderEvents();
+        showToast("Événements réaffichés pour ce jour.");
+      });
+      eventsList.appendChild(unhideBtn);
+    }
+  }
+
+  // 2. VUE SEMAINE
+  function renderWeekView() {
+    if (!weekGridEl) return;
+    weekGridEl.innerHTML = "";
+
+    const cur = new Date(viewDate);
+    const dayOfWeek = (cur.getDay() + 6) % 7;
+    const monday = new Date(cur);
+    monday.setDate(cur.getDate() - dayOfWeek);
+
+    const todayKey = toDateKey(new Date());
+
+    for (let i = 0; i < 7; i++) {
+      const colDate = new Date(monday);
+      colDate.setDate(monday.getDate() + i);
+      const colKey = toDateKey(colDate);
+
+      const col = document.createElement("div");
+      col.className = "agenda-week-col" + (colKey === todayKey ? " today" : "");
+      setupDateDropTarget(col, colKey);
+
+      const header = document.createElement("div");
+      header.className = "agenda-week-header";
+      header.innerHTML = `
+        <div class="agenda-week-day-name">${WEEKDAY_NAMES[i].slice(0, 3)}</div>
+        <div class="agenda-week-day-num">${colDate.getDate()}</div>
+      `;
+      col.appendChild(header);
+
+      const evsContainer = document.createElement("div");
+      evsContainer.className = "agenda-week-events";
+
+      const events = getFilteredEventsForDate(colKey);
+      const tasks = tasksList.filter(t => t.due === colKey);
+
+      tasks.forEach(t => {
+        const chip = document.createElement("div");
+        chip.className = "agenda-week-event-chip";
+        chip.style.borderLeftColor = "#10b981";
+        chip.textContent = `✓ ${t.title}`;
+        chip.title = `Tâche : ${t.title}`;
+        evsContainer.appendChild(chip);
+      });
+
+      events.forEach(ev => {
+        const chip = document.createElement("div");
+        chip.className = "agenda-week-event-chip";
+        const calColor = CALENDAR_COLOR_PALETTE[ev.calendarTitle] || "#3b82f6";
+        chip.style.borderLeftColor = calColor;
+        chip.textContent = `${ev.timeStr !== "Journée" ? ev.timeStr + " " : ""}${ev.title}`;
+        chip.title = `${ev.title} (${ev.timeStr}) — Clic pour Google Agenda`;
+        if (ev.htmlLink) {
+          chip.addEventListener("click", () => window.open(ev.htmlLink, "_blank"));
+        }
+        bindContextMenuOnEvent(chip, ev);
+        evsContainer.appendChild(chip);
+      });
+
+      if (events.length === 0 && tasks.length === 0) {
+        const empty = document.createElement("div");
+        empty.style.fontSize = "9px";
+        empty.style.color = "#475569";
+        empty.style.textAlign = "center";
+        empty.style.paddingTop = "10px";
+        empty.textContent = "—";
+        evsContainer.appendChild(empty);
+      }
+
+      col.appendChild(evsContainer);
+      weekGridEl.appendChild(col);
+    }
+  }
+
+  // 3. VUE JOUR DÉTAILLÉE
+  function renderDayView() {
+    if (!dayTimelineEl) return;
+    dayTimelineEl.innerHTML = "";
+
+    const selKey = toDateKey(selectedDate);
+    const events = getFilteredEventsForDate(selKey);
+    const tasks = tasksList.filter(t => t.due === selKey);
+
+    // Bloc "Journée entière & Tâches"
+    const allDayBlock = document.createElement("div");
+    allDayBlock.className = "agenda-day-hour-block";
+    setupDateDropTarget(allDayBlock, selKey);
+
+    const allDayLabel = document.createElement("div");
+    allDayLabel.className = "agenda-day-time-label";
+    allDayLabel.textContent = "Journée";
+
+    const allDayContent = document.createElement("div");
+    allDayContent.className = "agenda-day-slot-content";
+
+    tasks.forEach(t => {
+      const chip = document.createElement("div");
+      chip.className = "agenda-week-event-chip";
+      chip.style.borderLeftColor = "#10b981";
+      chip.textContent = `✓ [Tâche] ${t.title}`;
+      allDayContent.appendChild(chip);
+    });
+
+    events.filter(e => e.timeStr === "Journée").forEach(ev => {
+      const chip = document.createElement("div");
+      chip.className = "agenda-week-event-chip";
+      chip.textContent = ev.title;
+      bindContextMenuOnEvent(chip, ev);
+      allDayContent.appendChild(chip);
+    });
+
+    allDayBlock.appendChild(allDayLabel);
+    allDayBlock.appendChild(allDayContent);
+    dayTimelineEl.appendChild(allDayBlock);
+
+    // Heures de 08:00 à 20:00
+    for (let h = 8; h <= 20; h++) {
+      const hStr = String(h).padStart(2, "0") + ":00";
+      const block = document.createElement("div");
+      block.className = "agenda-day-hour-block";
+      setupDateDropTarget(block, selKey);
+
+      const label = document.createElement("div");
+      label.className = "agenda-day-time-label";
+      label.textContent = hStr;
+
+      const content = document.createElement("div");
+      content.className = "agenda-day-slot-content";
+
+      const matching = events.filter(e => e.timeStr.startsWith(String(h).padStart(2, "0")));
+      matching.forEach(ev => {
+        const item = document.createElement("div");
+        item.className = "agenda-event-item";
+        item.style.padding = "3px 6px";
+        const calColor = CALENDAR_COLOR_PALETTE[ev.calendarTitle] || "#3b82f6";
+        item.style.borderLeftColor = calColor;
+        item.innerHTML = `<span style="font-weight:700;color:${calColor};font-size:10px;margin-right:6px;">${ev.timeStr}</span><span style="font-size:11px;">${ev.title}</span>`;
+        if (ev.htmlLink) {
+          item.style.cursor = "pointer";
+          item.addEventListener("click", () => window.open(ev.htmlLink, "_blank"));
+        }
+        bindContextMenuOnEvent(item, ev);
+        content.appendChild(item);
+      });
+
+      block.appendChild(label);
+      block.appendChild(content);
+      dayTimelineEl.appendChild(block);
+    }
+  }
+
+  // 4. VUE PLANNING (FLUX CONTINU DES PROCHAINS JOURS)
+  function renderPlanningView() {
+    if (!planningListEl) return;
+    planningListEl.innerHTML = "";
+
+    const enabled = getEnabledCalendars();
+    const today = new Date();
+    const eventsByDate = {};
+
+    googleEventsList.forEach(ev => {
+      if (enabled.includes(ev.calendarTitle) && ev.dateStr >= toDateKey(today)) {
+        if (!eventsByDate[ev.dateStr]) eventsByDate[ev.dateStr] = { events: [], tasks: [] };
+        eventsByDate[ev.dateStr].events.push(ev);
+      }
+    });
+
+    tasksList.forEach(t => {
+      if (t.due && t.due >= toDateKey(today) && t.status !== "done") {
+        if (!eventsByDate[t.due]) eventsByDate[t.due] = { events: [], tasks: [] };
+        eventsByDate[t.due].tasks.push(t);
+      }
+    });
+
+    const sortedDates = Object.keys(eventsByDate).sort();
+
+    if (sortedDates.length === 0) {
+      planningListEl.innerHTML = '<div class="agenda-empty-events">Aucun événement ni tâche à venir dans les 30 prochains jours.</div>';
+      return;
+    }
+
+    sortedDates.slice(0, 15).forEach(dKey => {
+      const groupHeader = document.createElement("div");
+      groupHeader.className = "agenda-planning-group-header";
+      const dObj = new Date(dKey + "T12:00:00");
+      groupHeader.textContent = dObj.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+      setupDateDropTarget(groupHeader, dKey);
+      planningListEl.appendChild(groupHeader);
+
+      const items = eventsByDate[dKey];
+      items.tasks.forEach(t => {
+        const row = document.createElement("div");
+        row.className = "agenda-event-item";
+        row.style.borderLeftColor = "#10b981";
+        row.innerHTML = `<span class="agenda-event-time" style="color: #34d399;">Tâche</span><span class="agenda-event-title">${t.title}</span>`;
+        planningListEl.appendChild(row);
+      });
+
+      items.events.forEach(ev => {
+        const row = document.createElement("div");
+        row.className = "agenda-event-item";
+        const calColor = CALENDAR_COLOR_PALETTE[ev.calendarTitle] || "#3b82f6";
+        row.style.borderLeftColor = calColor;
+        row.innerHTML = `<span class="agenda-event-time" style="color:${calColor};">${ev.timeStr}</span><span class="agenda-event-title">${ev.title}</span>`;
+        if (ev.htmlLink) {
+          row.style.cursor = "pointer";
+          row.addEventListener("click", () => window.open(ev.htmlLink, "_blank"));
+        }
+        bindContextMenuOnEvent(row, ev);
+        planningListEl.appendChild(row);
+      });
     });
   }
 
-  // Navigation mois
+  // MENU CONTEXTUEL FLOTTANT
+  function bindContextMenuOnEvent(element, ev) {
+    if (!element) return;
+    let timer = null;
+
+    element.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openContextMenu(e, ev);
+    });
+
+    element.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      timer = setTimeout(() => {
+        openContextMenu(e, ev);
+      }, 550);
+    });
+
+    const cancel = () => clearTimeout(timer);
+    element.addEventListener("pointermove", cancel);
+    element.addEventListener("pointerup", cancel);
+    element.addEventListener("pointerleave", cancel);
+  }
+
+  function openContextMenu(e, ev) {
+    if (!contextMenu) return;
+    contextEventTarget = ev;
+    if (contextTitle) contextTitle.textContent = ev.title;
+
+    const x = Math.min(window.innerWidth - 220, e.clientX || 100);
+    const y = Math.min(window.innerHeight - 250, e.clientY || 100);
+    contextMenu.style.left = `${x}px`;
+    contextMenu.style.top = `${y}px`;
+    contextMenu.classList.remove("hidden");
+  }
+
+  function closeContextMenu() {
+    if (contextMenu) contextMenu.classList.add("hidden");
+    contextEventTarget = null;
+  }
+
+  document.addEventListener("click", (e) => {
+    if (contextMenu && !contextMenu.contains(e.target)) {
+      closeContextMenu();
+    }
+  });
+
+  // Actions du menu contextuel
+  if (contextMenu) {
+    contextMenu.querySelectorAll(".context-menu-item").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const action = btn.dataset.action;
+        const ev = contextEventTarget;
+        closeContextMenu();
+        if (!ev) return;
+
+        if (action === "postpone15" || action === "postpone60" || action === "postponeTomorrow") {
+          postponeEventAction(ev, action);
+        } else if (action === "hideDay") {
+          hideEventForDay(ev);
+        } else if (action === "openGoogle") {
+          if (ev.htmlLink) window.open(ev.htmlLink, "_blank");
+          else window.open("https://calendar.google.com", "_blank");
+        } else if (action === "notify") {
+          triggerWindowsAlarmNotification(ev);
+        }
+      });
+    });
+  }
+
+  function postponeEventAction(ev, type) {
+    if (ev.isLocal && ev.rawEv && ev.agKey) {
+      const list = agendaSettings.agendas[ev.agKey].events[ev.dateStr] || [];
+      const idx = list.findIndex(x => x.id === ev.id);
+      if (idx !== -1) {
+        if (type === "postpone15") {
+          const parts = (ev.timeStr || "12:00").split(":");
+          let mins = parseInt(parts[0], 10) * 60 + parseInt(parts[1] || "0", 10) + 15;
+          const h = String(Math.floor(mins / 60) % 24).padStart(2, "0");
+          const m = String(mins % 60).padStart(2, "0");
+          list[idx].time = `${h}:${m}`;
+          showToast(`⏱️ Événement reporté à ${h}:${m}`);
+        } else if (type === "postpone60") {
+          const parts = (ev.timeStr || "12:00").split(":");
+          let h = (parseInt(parts[0], 10) + 1) % 24;
+          list[idx].time = `${String(h).padStart(2, "0")}:${parts[1] || "00"}`;
+          showToast(`⏱️ Événement reporté à ${list[idx].time}`);
+        } else if (type === "postponeTomorrow") {
+          const d = new Date(ev.dateStr + "T12:00:00");
+          d.setDate(d.getDate() + 1);
+          const tomKey = toDateKey(d);
+          const item = list.splice(idx, 1)[0];
+          if (!agendaSettings.agendas[ev.agKey].events[tomKey]) {
+            agendaSettings.agendas[ev.agKey].events[tomKey] = [];
+          }
+          agendaSettings.agendas[ev.agKey].events[tomKey].push(item);
+          showToast(`⏱️ Événement reporté à demain (${tomKey})`);
+        }
+        chrome.storage.local.set({ agendaSettings });
+        renderCurrentView();
+        return;
+      }
+    }
+
+    // Google Event report
+    showToast(`⏱️ Report de « ${ev.title} » enregistré`);
+  }
+
+  function hideEventForDay(ev) {
+    const hiddenMap = getHiddenDays();
+    const dateKey = ev.dateStr || toDateKey(selectedDate);
+    if (!hiddenMap[dateKey]) hiddenMap[dateKey] = [];
+    if (!hiddenMap[dateKey].includes(ev.id)) {
+      hiddenMap[dateKey].push(ev.id);
+    }
+    agendaSettings.hiddenDays = hiddenMap;
+    chrome.storage.local.set({ agendaSettings });
+    renderEvents();
+    showToast(`👁️ Événement « ${ev.title} » masqué pour ce jour.`);
+  }
+
+  function triggerWindowsAlarmNotification(ev) {
+    if (chrome.notifications) {
+      chrome.notifications.create({
+        type: "basic",
+        iconUrl: "icons/icon-128.png",
+        title: `⏰ Rappel Agenda : ${ev.title}`,
+        message: `${ev.timeStr !== "Journée" ? "À " + ev.timeStr + " — " : ""}${ev.calendarTitle}\nCliquez pour voir les détails.`,
+        priority: 2
+      });
+      showToast(`🔔 Alarme programmée pour « ${ev.title} »`);
+    } else {
+      showToast(`🔔 Rappel actif pour « ${ev.title} »`);
+    }
+  }
+
+  // Navigation temporelle
   if (prevMonthBtn) {
     prevMonthBtn.addEventListener("click", () => {
-      viewDate.setMonth(viewDate.getMonth() - 1);
-      renderCalendar();
+      if (currentView === "month") {
+        viewDate.setMonth(viewDate.getMonth() - 1);
+      } else if (currentView === "week") {
+        viewDate.setDate(viewDate.getDate() - 7);
+      } else if (currentView === "day") {
+        selectedDate.setDate(selectedDate.getDate() - 1);
+        viewDate = new Date(selectedDate);
+      }
+      renderCurrentView();
     });
   }
+
   if (nextMonthBtn) {
     nextMonthBtn.addEventListener("click", () => {
-      viewDate.setMonth(viewDate.getMonth() + 1);
-      renderCalendar();
+      if (currentView === "month") {
+        viewDate.setMonth(viewDate.getMonth() + 1);
+      } else if (currentView === "week") {
+        viewDate.setDate(viewDate.getDate() + 7);
+      } else if (currentView === "day") {
+        selectedDate.setDate(selectedDate.getDate() + 1);
+        viewDate = new Date(selectedDate);
+      }
+      renderCurrentView();
     });
   }
+
   if (todayBtn) {
     todayBtn.addEventListener("click", () => {
       viewDate = new Date();
       selectedDate = new Date();
-      renderCalendar();
-      renderEvents();
+      renderCurrentView();
     });
   }
 
-  // Ajout de rendez-vous manuel
-  if (addEventBtn) {
-    addEventBtn.addEventListener("click", () => {
-      const selKey = toDateKey(selectedDate);
-      const defaultTime = "09:00";
-      const input = prompt(
-        `Ajouter un rendez-vous pour le ${selectedDate.toLocaleDateString("fr-FR")}\nFormat : [Heure] Titre (ex: 14:30 Réunion)`,
-        `${defaultTime} `
-      );
-      if (!input || !input.trim()) return;
-
-      const trimmed = input.trim();
-      let time = defaultTime;
-      let title = trimmed;
-
-      const match = trimmed.match(/^(\d{1,2}[:h]\d{2})\s*(.*)$/i);
-      if (match) {
-        time = match[1].replace("h", ":");
-        title = match[2] || "Rendez-vous";
-      }
-
-      if (!agendaSettings.agendas) agendaSettings.agendas = {};
-      const agKey = "Agenda_Privé_TZT";
-      if (!agendaSettings.agendas[agKey]) agendaSettings.agendas[agKey] = { name: agKey, events: {} };
-      if (!agendaSettings.agendas[agKey].events[selKey]) agendaSettings.agendas[agKey].events[selKey] = [];
-
-      agendaSettings.agendas[agKey].events[selKey].push({ id: Date.now().toString(), time, title });
-      chrome.storage.local.set({ agendaSettings });
-      renderCalendar();
-      renderEvents();
-      showToast(`RDV ajouté : ${title} à ${time}`);
+  // Clics sur les onglets de vue
+  if (viewsNav) {
+    viewsNav.querySelectorAll(".agenda-view-tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        setView(tab.dataset.view);
+      });
     });
   }
 
-  // Panneau des paramètres (Roue ⚙️)
+  // Panneau paramètres
   if (settingsBtn && settingsPanel) {
-    settingsBtn.addEventListener("click", () => {
-      const isHidden = settingsPanel.classList.contains("hidden");
-      if (isHidden) {
-        renderCalendarsCheckboxes();
-        settingsPanel.classList.remove("hidden");
-      } else {
-        settingsPanel.classList.add("hidden");
+    settingsBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      settingsPanel.classList.toggle("hidden");
+      if (!settingsPanel.classList.contains("hidden")) {
+        renderCalendarsCheckboxList();
       }
-    });
-  }
-
-  if (checkAllBtn) {
-    checkAllBtn.addEventListener("click", () => {
-      const allCals = getDiscoveredCalendars();
-      agendaSettings.enabledCalendars = allCals.map(c => c.name);
-      chrome.storage.local.set({ agendaSettings });
-      renderCalendarsCheckboxes();
-      updateBadge();
-      renderCalendar();
-      renderEvents();
-      showToast("Tous les calendriers sont cochés");
-    });
-  }
-
-  if (uncheckAllBtn) {
-    uncheckAllBtn.addEventListener("click", () => {
-      agendaSettings.enabledCalendars = [];
-      chrome.storage.local.set({ agendaSettings });
-      renderCalendarsCheckboxes();
-      updateBadge();
-      renderCalendar();
-      renderEvents();
-      showToast("Aucun calendrier coché");
-    });
-  }
-
-  if (syncNowBtn) {
-    syncNowBtn.addEventListener("click", () => {
-      syncGoogleCalendarAndTasks(false);
-    });
-  }
-
-  if (saveSettingsBtn && settingsPanel) {
-    saveSettingsBtn.addEventListener("click", () => {
-      settingsPanel.classList.add("hidden");
-      showToast("Réglages appliqués");
     });
   }
 
   if (closeSettingsBtn && settingsPanel) {
-    closeSettingsBtn.addEventListener("click", () => {
+    closeSettingsBtn.addEventListener("click", () => settingsPanel.classList.add("hidden"));
+  }
+
+  function renderCalendarsCheckboxList() {
+    if (!calendarsListEl) return;
+    const discovered = getDiscoveredCalendars();
+    const enabled = getEnabledCalendars();
+    calendarsListEl.innerHTML = "";
+
+    discovered.forEach(cal => {
+      const isChecked = enabled.includes(cal.name);
+      const row = document.createElement("label");
+      row.className = "agenda-cal-checkbox-row";
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.value = cal.name;
+      cb.checked = isChecked;
+
+      const dot = document.createElement("span");
+      dot.className = "agenda-cal-dot";
+      dot.style.background = cal.color;
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "agenda-cal-name";
+      nameSpan.textContent = cal.name;
+
+      row.appendChild(cb);
+      row.appendChild(dot);
+      row.appendChild(nameSpan);
+      calendarsListEl.appendChild(row);
+    });
+  }
+
+  if (checkAllBtn && calendarsListEl) {
+    checkAllBtn.addEventListener("click", () => {
+      calendarsListEl.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = true);
+    });
+  }
+
+  if (uncheckAllBtn && calendarsListEl) {
+    uncheckAllBtn.addEventListener("click", () => {
+      calendarsListEl.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+    });
+  }
+
+  if (saveSettingsBtn && calendarsListEl) {
+    saveSettingsBtn.addEventListener("click", () => {
+      const checkedVals = [];
+      calendarsListEl.querySelectorAll('input[type="checkbox"]:checked').forEach(c => checkedVals.push(c.value));
+      agendaSettings.enabledCalendars = checkedVals;
+
+      if (agendaSettings.agendas) {
+        Object.keys(agendaSettings.agendas).forEach(k => {
+          agendaSettings.agendas[k].enabled = checkedVals.includes(agendaSettings.agendas[k].name);
+        });
+      }
+
+      chrome.storage.local.set({ agendaSettings });
       settingsPanel.classList.add("hidden");
+      renderCurrentView();
+      showToast("Calendriers mis à jour !");
+    });
+  }
+
+  if (syncNowBtn) {
+    syncNowBtn.addEventListener("click", async () => {
+      syncNowBtn.textContent = "⏳ Synchronisation...";
+      await syncGoogleStateWithLocal();
+      syncNowBtn.textContent = "🔄 Actualiser Google";
+      renderCalendarsCheckboxList();
+      renderCurrentView();
     });
   }
 
   refreshAgendaDisplay = () => {
-    updateBadge();
-    renderCalendarsCheckboxes();
-    renderCalendar();
-    renderEvents();
+    renderCurrentView();
   };
 
-  refreshAgendaDisplay();
+  setView(currentView);
 }
 
-// ========================================================
-// ✅ WIDGET TÂCHES AVANCÉ (AVEC GOOGLE TASKS & GROUPES DYNAMIQUES)
-// ========================================================
+
+// ==========================================================================
+// ✅ GESTION AVANCÉE DES TÂCHES (SOUS-TÂCHES PLIABLES, DRAG&DROP, PIÈCES JOINTES)
+// ==========================================================================
 function setupTasksWidget() {
   const widget = document.getElementById("tasksWidget");
   if (!widget) return;
@@ -1465,9 +1880,30 @@ function setupTasksWidget() {
   const saveNewTaskBtn = document.getElementById("saveNewTaskBtn");
   const cancelNewTaskBtn = document.getElementById("cancelNewTaskBtn");
 
+  // Reader Modal
+  const readerModal = document.getElementById("taskReaderModal");
+  const readerTitle = document.getElementById("taskReaderTitle");
+  const readerDue = document.getElementById("taskReaderDue");
+  const readerNotes = document.getElementById("taskReaderNotes");
+  const readerSubtasksList = document.getElementById("taskReaderSubtasksList");
+  const readerPriorityBadge = document.getElementById("taskReaderPriorityBadge");
+  const readerGroupBadge = document.getElementById("taskReaderGroupBadge");
+  const readerCopyBtn = document.getElementById("taskReaderCopyBtn");
+  const readerCloseBtn = document.getElementById("taskReaderCloseBtn");
+  const readerDoneBtn = document.getElementById("taskReaderDoneBtn");
+
   let activeGroup = tasksSettings.filterGroup || "all";
   let activeState = tasksSettings.filterState || "todo";
   let searchQuery = "";
+  let readerActiveTask = null;
+
+  // Persistance de l'état ouvert/fermé des sous-tâches dans localStorage
+  const EXPANDED_KEY = "agendabip-expanded-subtasks-v1";
+  const expandedSubtasksSet = new Set();
+  try {
+    const savedExp = JSON.parse(localStorage.getItem(EXPANDED_KEY) || "[]");
+    savedExp.forEach(id => expandedSubtasksSet.add(id));
+  } catch (_) {}
 
   const PRIORITY_SCORES = { P0: 0, P1: 1, P2: 2, NONE: 9 };
 
@@ -1475,7 +1911,6 @@ function setupTasksWidget() {
     chrome.storage.local.set({ tasksData: tasksList, tasksSettings });
   }
 
-  // Rendu dynamique de la barre des groupes de tâches
   function renderGroupTabs() {
     if (!groupsBar) return;
     const groupsSet = new Set(["all", "P0"]);
@@ -1484,7 +1919,6 @@ function setupTasksWidget() {
       if (t.groupId && t.groupId !== "P0") groupsSet.add(t.groupId);
     });
 
-    // Ordre de priorité des groupes courants
     const PREFERRED_ORDER = ["all", "P0", "Mes tâches", "Code", "Lenna", "Léo", "Daphnee", "DVRC", "P1", "P2", "Famille", "Perso"];
     const sortedGroups = Array.from(groupsSet).sort((a, b) => {
       let idxA = PREFERRED_ORDER.indexOf(a);
@@ -1514,7 +1948,6 @@ function setupTasksWidget() {
       groupsBar.appendChild(btn);
     });
 
-    // Mettre à jour les options de newGroupSelect
     if (newGroupSelect) {
       newGroupSelect.innerHTML = "";
       sortedGroups.filter(g => g !== "all" && g !== "P0").forEach(g => {
@@ -1529,6 +1962,7 @@ function setupTasksWidget() {
     }
   }
 
+  // Construction de l'arborescence des tâches et sous-tâches
   function renderTasks() {
     if (!listContainer) return;
 
@@ -1545,198 +1979,591 @@ function setupTasksWidget() {
       filterStateText.textContent = activeState === "done" ? "Terminées" : "À faire";
     }
 
-    // Filtrer
-    let filtered = tasksList.filter(t => {
-      if (t.status !== activeState) return false;
+    // Indexation par id pour sous-tâches
+    const byId = new Map(tasksList.map(t => [t.id, t]));
+    const childrenMap = new Map();
+    tasksList.forEach(t => {
+      if (t.parent && byId.has(t.parent)) {
+        if (!childrenMap.has(t.parent)) childrenMap.set(t.parent, []);
+        childrenMap.get(t.parent).push(t);
+      }
+    });
 
+    // Filtrer tâches principales
+    function taskMatchesFilters(t) {
+      if (t.status !== activeState) return false;
       if (activeGroup === "P0") {
         if (t.priority !== "P0") return false;
       } else if (activeGroup !== "all") {
         if ((t.groupId || "Général") !== activeGroup) return false;
       }
-
       if (searchQuery) {
         const full = `${t.title} ${t.groupId || ""} ${t.notes || ""}`.toLowerCase();
         if (!full.includes(searchQuery)) return false;
       }
-
       return true;
+    }
+
+    // Récupérer tâches racines à afficher
+    const rootTasks = tasksList.filter(t => !t.parent || !byId.has(t.parent));
+    const matchingRoots = [];
+
+    rootTasks.forEach(root => {
+      const children = childrenMap.get(root.id) || [];
+      const rootMatches = taskMatchesFilters(root);
+      const childMatches = children.some(c => taskMatchesFilters(c));
+
+      if (rootMatches || childMatches) {
+        matchingRoots.push({
+          task: root,
+          children: children,
+          autoExpand: Boolean(searchQuery && childMatches)
+        });
+      }
     });
 
     // Tri AgendaBIP : P0 > P1 > P2 > NONE, puis Due date
-    filtered.sort((a, b) => {
-      const pA = PRIORITY_SCORES[a.priority || "NONE"] ?? 9;
-      const pB = PRIORITY_SCORES[b.priority || "NONE"] ?? 9;
+    matchingRoots.sort((a, b) => {
+      const pA = PRIORITY_SCORES[a.task.priority || "NONE"] ?? 9;
+      const pB = PRIORITY_SCORES[b.task.priority || "NONE"] ?? 9;
       if (pA !== pB) return pA - pB;
-      const dueA = a.due || "9999-99-99";
-      const dueB = b.due || "9999-99-99";
+      const dueA = a.task.due || "9999-99-99";
+      const dueB = b.task.due || "9999-99-99";
       return dueA.localeCompare(dueB);
     });
 
     listContainer.innerHTML = "";
 
-    if (filtered.length === 0) {
+    if (matchingRoots.length === 0) {
       listContainer.innerHTML = `<div style="text-align: center; color: #64748b; font-size: 11px; padding: 14px 0; font-style: italic;">
         ${searchQuery ? "Aucune tâche trouvée pour « " + searchQuery + " »" : (activeState === "done" ? "Aucune tâche terminée." : (tasksList.length === 0 ? "Aucune tâche Google synchronisée. Cliquez sur 🔄 pour charger vos Google Tasks !" : "Aucune tâche en attente dans ce groupe."))}
       </div>`;
       return;
     }
 
+    matchingRoots.forEach(({ task, children, autoExpand }) => {
+      const branchEl = document.createElement("div");
+      branchEl.className = "task-branch";
+
+      const rowEl = createTaskRowElement(task, false);
+      branchEl.appendChild(rowEl);
+
+      // Accordéon de sous-tâches si enfants existants
+      if (children.length > 0) {
+        const fold = document.createElement("details");
+        fold.className = "subtasks-fold";
+        fold.dataset.taskFold = task.id;
+        const isOpen = autoExpand || expandedSubtasksSet.has(task.id);
+        if (isOpen) fold.open = true;
+
+        fold.innerHTML = `
+          <summary class="subtasks-summary">
+            <span class="subtasks-arrow">▶</span>
+            <span>Sous-tâches (${children.length})</span>
+          </summary>
+        `;
+
+        const subtasksListEl = document.createElement("div");
+        subtasksListEl.className = "subtasks-list";
+
+        children.forEach(child => {
+          const childRow = createTaskRowElement(child, true);
+          subtasksListEl.appendChild(childRow);
+        });
+
+        fold.appendChild(subtasksListEl);
+
+        fold.addEventListener("toggle", () => {
+          if (fold.open) expandedSubtasksSet.add(task.id);
+          else expandedSubtasksSet.delete(task.id);
+          try {
+            localStorage.setItem(EXPANDED_KEY, JSON.stringify([...expandedSubtasksSet]));
+          } catch (_) {}
+        });
+
+        branchEl.appendChild(fold);
+      }
+
+      listContainer.appendChild(branchEl);
+    });
+  }
+
+  // Crée un élément DOM pour une ligne de tâche
+  function createTaskRowElement(task, isSubtask = false) {
     const todayStr = new Date().toISOString().slice(0, 10);
+    const row = document.createElement("div");
+    row.className = `task-row priority-${task.priority || "NONE"}${task.status === "done" ? " done" : ""}${isSubtask ? " is-subtask" : ""}`;
+    row.draggable = true;
 
-    filtered.forEach((task) => {
-      const row = document.createElement("div");
-      row.className = `task-row priority-${task.priority || "NONE"}${task.status === "done" ? " done" : ""}`;
+    // 1. DRAG & DROP DE TÂCHE SUR L'AGENDA
+    row.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("application/task", JSON.stringify({
+        id: task.id,
+        title: task.title,
+        groupId: task.groupId,
+        rawGroupId: task.rawGroupId || task.groupId
+      }));
+      e.dataTransfer.setData("text/plain", JSON.stringify({
+        id: task.id,
+        title: task.title
+      }));
+      e.dataTransfer.effectAllowed = "move";
+      row.classList.add("dragging");
+    });
 
-      const mainRow = document.createElement("div");
-      mainRow.className = "task-row-main";
+    row.addEventListener("dragend", () => {
+      row.classList.remove("dragging");
+    });
 
-      const checkBtn = document.createElement("button");
-      checkBtn.type = "button";
-      checkBtn.className = "task-check-btn";
-      checkBtn.textContent = "✓";
-      checkBtn.title = task.status === "done" ? "Remettre à faire" : "Marquer comme terminée";
-      checkBtn.addEventListener("click", () => {
-        task.status = task.status === "done" ? "todo" : "done";
+    // 2. DROP DE FICHIER (PIÈCE JOINTE) SUR LA TÂCHE
+    row.addEventListener("dragover", (e) => {
+      if (e.dataTransfer.types.includes("Files")) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = "copy";
+        row.classList.add("drop-target");
+      }
+    });
+
+    row.addEventListener("dragleave", (e) => {
+      if (!row.contains(e.relatedTarget)) {
+        row.classList.remove("drop-target");
+      }
+    });
+
+    row.addEventListener("drop", async (e) => {
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        row.classList.remove("drop-target");
+        const file = e.dataTransfer.files[0];
+        await handleAttachFileToTask(task, file);
+      }
+    });
+
+    const mainRow = document.createElement("div");
+    mainRow.className = "task-row-main";
+
+    // Cochage optimiste immédiat (Zéro latence)
+    const checkBtn = document.createElement("button");
+    checkBtn.type = "button";
+    checkBtn.className = "task-check-btn";
+    checkBtn.textContent = "✓";
+    checkBtn.title = task.status === "done" ? "Remettre à faire" : "Marquer comme terminée";
+    checkBtn.addEventListener("click", () => {
+      task.status = task.status === "done" ? "todo" : "done";
+      saveTasks();
+      renderTasks();
+
+      // Synchro d'arrière-plan vers AgendaBIP / Google Tasks
+      try {
+        fetch("http://127.0.0.1:8766/api/features", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "editTask",
+            id: task.id,
+            groupId: task.rawGroupId || task.groupId || "default",
+            status: task.status
+          })
+        }).catch(() => {});
+      } catch (_) {}
+    });
+
+    const contentBox = document.createElement("div");
+    contentBox.className = "task-content-box";
+
+    const titleEl = document.createElement("div");
+    titleEl.className = "task-title";
+    titleEl.textContent = task.title;
+    titleEl.title = `${task.title} — Double-clic pour ouvrir en lecture seule`;
+    titleEl.addEventListener("dblclick", () => openTaskReader(task));
+
+    const metaEl = document.createElement("div");
+    metaEl.className = "task-meta";
+
+    if (task.priority === "P0") {
+      const pBadge = document.createElement("span");
+      pBadge.className = "task-priority-badge p0";
+      pBadge.textContent = "⚡ P0";
+      metaEl.appendChild(pBadge);
+    } else if (task.priority === "P1") {
+      const pBadge = document.createElement("span");
+      pBadge.className = "task-priority-badge p1";
+      pBadge.textContent = "P1";
+      metaEl.appendChild(pBadge);
+    }
+
+    const groupSpan = document.createElement("span");
+    groupSpan.textContent = task.groupId || "Général";
+    metaEl.appendChild(groupSpan);
+
+    if (task.due) {
+      const dueSpan = document.createElement("span");
+      dueSpan.className = "task-due";
+      if (task.due < todayStr && task.status !== "done") {
+        dueSpan.classList.add("overdue");
+        dueSpan.textContent = `📅 Retard : ${task.due}`;
+      } else if (task.due === todayStr) {
+        dueSpan.classList.add("today");
+        dueSpan.textContent = "📅 Aujourd'hui";
+      } else {
+        dueSpan.textContent = `📅 ${task.due}`;
+      }
+      metaEl.appendChild(dueSpan);
+    }
+
+    // Affichage des pièces jointes associées
+    if (Array.isArray(task.attachments) && task.attachments.length > 0) {
+      task.attachments.forEach(att => {
+        const attBadge = document.createElement("span");
+        attBadge.className = "agenda-active-badge";
+        attBadge.style.cursor = "pointer";
+        attBadge.style.background = "rgba(16, 185, 129, 0.2)";
+        attBadge.style.borderColor = "#10b981";
+        attBadge.style.color = "#a7f3d0";
+        attBadge.innerHTML = `📎 ${att.name}`;
+        attBadge.title = `Pièce jointe (${Math.round((att.size || 0) / 1024)} Ko) — Cliquer pour ouvrir`;
+        attBadge.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openAttachmentFile(att);
+        });
+        metaEl.appendChild(attBadge);
+      });
+    }
+
+    contentBox.appendChild(titleEl);
+    contentBox.appendChild(metaEl);
+
+    // Actions rapides
+    const actionsBox = document.createElement("div");
+    actionsBox.className = "task-actions";
+
+    // Bouton Copier avec sous-tâches (📋)
+    const copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.className = "agenda-event-btn-action";
+    copyBtn.textContent = "📋";
+    copyBtn.title = "Copier la tâche et ses sous-tâches dans le presse-papiers Windows";
+    copyBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      copyTaskTreeToClipboard(task);
+    });
+
+    // Bouton Lecture Seule (📖)
+    const readBtn = document.createElement("button");
+    readBtn.type = "button";
+    readBtn.className = "agenda-event-btn-action";
+    readBtn.textContent = "📖";
+    readBtn.title = "Mode Lecture Seule : Voir les détails, liens web et sous-tâches";
+    readBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openTaskReader(task);
+    });
+
+    // Bouton Supprimer avec double sécurité (Confirmation en place + Toast Annuler)
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "agenda-event-btn-action del";
+    delBtn.textContent = "✕";
+    delBtn.title = "Supprimer cette tâche";
+    let pendingConfirmTimer = null;
+
+    delBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!delBtn.dataset.confirming) {
+        // Étape 1 : Demande de confirmation visuelle sur le bouton même
+        delBtn.dataset.confirming = "1";
+        delBtn.textContent = "🗑️ Sûr ?";
+        delBtn.style.background = "#ef4444";
+        delBtn.style.color = "#ffffff";
+        delBtn.style.width = "auto";
+        delBtn.style.padding = "2px 6px";
+        delBtn.style.fontSize = "10px";
+
+        pendingConfirmTimer = setTimeout(() => {
+          delete delBtn.dataset.confirming;
+          delBtn.textContent = "✕";
+          delBtn.style.background = "";
+          delBtn.style.color = "";
+          delBtn.style.width = "";
+          delBtn.style.padding = "";
+          delBtn.style.fontSize = "";
+        }, 3500);
+        return;
+      }
+
+      // Étape 2 : Confirmation validée !
+      clearTimeout(pendingConfirmTimer);
+      delete delBtn.dataset.confirming;
+
+      const idx = tasksList.findIndex(t => t.id === task.id);
+      if (idx !== -1) {
+        const deletedTask = tasksList.splice(idx, 1)[0];
         saveTasks();
         renderTasks();
-      });
 
-      const contentBox = document.createElement("div");
-      contentBox.className = "task-content-box";
-
-      const titleEl = document.createElement("div");
-      titleEl.className = "task-title";
-      titleEl.textContent = task.title;
-      titleEl.title = task.title;
-
-      const metaEl = document.createElement("div");
-      metaEl.className = "task-meta";
-
-      if (task.priority === "P0") {
-        const pBadge = document.createElement("span");
-        pBadge.className = "task-priority-badge p0";
-        pBadge.textContent = "⚡ P0";
-        metaEl.appendChild(pBadge);
-      } else if (task.priority === "P1") {
-        const pBadge = document.createElement("span");
-        pBadge.className = "task-priority-badge p1";
-        pBadge.textContent = "P1";
-        metaEl.appendChild(pBadge);
-      }
-
-      const groupSpan = document.createElement("span");
-      groupSpan.textContent = task.groupId || "Général";
-      metaEl.appendChild(groupSpan);
-
-      if (task.due) {
-        const dueSpan = document.createElement("span");
-        dueSpan.className = "task-due";
-        if (task.due < todayStr && task.status !== "done") {
-          dueSpan.classList.add("overdue");
-          dueSpan.textContent = `📅 Retard : ${task.due}`;
-        } else if (task.due === todayStr) {
-          dueSpan.classList.add("today");
-          dueSpan.textContent = "📅 Aujourd'hui";
-        } else {
-          dueSpan.textContent = `📅 ${task.due}`;
-        }
-        metaEl.appendChild(dueSpan);
-      }
-
-      contentBox.appendChild(titleEl);
-      contentBox.appendChild(metaEl);
-
-      const actionsBox = document.createElement("div");
-      actionsBox.className = "task-actions";
-
-      const delBtn = document.createElement("button");
-      delBtn.type = "button";
-      delBtn.className = "agenda-event-btn-action del";
-      delBtn.textContent = "✕";
-      delBtn.title = "Supprimer cette tâche";
-      delBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const idx = tasksList.findIndex(t => t.id === task.id);
-        if (idx !== -1) {
-          tasksList.splice(idx, 1);
+        // Étape 3 : Toast avec possibilité d'ANNULER (Undo pendant 5 secondes)
+        showToast(`🗑️ Tâche « ${task.title} » supprimée.`, "Annuler", () => {
+          tasksList.splice(idx, 0, deletedTask);
           saveTasks();
           renderTasks();
-          showToast("Tâche supprimée");
-        }
-      });
-
-      actionsBox.appendChild(delBtn);
-
-      mainRow.appendChild(checkBtn);
-      mainRow.appendChild(contentBox);
-      mainRow.appendChild(actionsBox);
-      row.appendChild(mainRow);
-
-      listContainer.appendChild(row);
-    });
-  }
-
-  if (p0AlertBadge) {
-    p0AlertBadge.addEventListener("click", () => {
-      if (groupsBar) {
-        groupsBar.querySelectorAll(".task-group-tab").forEach(t => t.classList.toggle("active", t.dataset.group === "P0"));
+          showToast(`↩️ Tâche « ${task.title} » restaurée !`);
+        }, 5000);
       }
-      activeGroup = "P0";
-      tasksSettings.filterGroup = "P0";
+    });
+
+    actionsBox.appendChild(copyBtn);
+    actionsBox.appendChild(readBtn);
+    actionsBox.appendChild(delBtn);
+
+    mainRow.appendChild(checkBtn);
+    mainRow.appendChild(contentBox);
+    mainRow.appendChild(actionsBox);
+
+    row.appendChild(mainRow);
+    return row;
+  }
+
+  // GESTION DU DÉPÔT DE PIÈCE JOINTE
+  async function handleAttachFileToTask(task, file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = reader.result;
+      const att = {
+        id: "att_" + Date.now(),
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        date: new Date().toISOString(),
+        dataUrl: dataUrl
+      };
+
+      if (!Array.isArray(task.attachments)) task.attachments = [];
+      task.attachments.push(att);
+
+      // Encodage dans la note au format standard AgendaBIP
+      const attachLine = `\n📎 Pièce jointe : ${file.name} (${Math.round(file.size / 1024)} Ko)`;
+      task.notes = (task.notes || "") + attachLine;
+
+      saveTasks();
       renderTasks();
+      showToast(`📎 Pièce jointe « ${file.name} » attachée à la tâche !`);
+
+      // Upload Drive transparent si OAuth configuré
+      uploadAttachmentToDrive(task, file, dataUrl);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function openAttachmentFile(att) {
+    if (att.driveUrl) {
+      window.open(att.driveUrl, "_blank");
+      return;
+    }
+    if (att.dataUrl) {
+      const win = window.open();
+      if (win) {
+        win.document.write(`<iframe src="${att.dataUrl}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
+        return;
+      }
+      const a = document.createElement("a");
+      a.href = att.dataUrl;
+      a.download = att.name;
+      a.click();
+    }
+  }
+
+  async function uploadAttachmentToDrive(task, file, dataUrl) {
+    if (typeof DriveSync === "undefined" || !DriveSync.hasConfiguredOAuth || !DriveSync.hasConfiguredOAuth()) {
+      return;
+    }
+    try {
+      const token = await DriveSync.getAuthToken(false);
+      if (!token) return;
+
+      const metadata = { name: file.name, mimeType: file.type };
+      const form = new FormData();
+      form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+      form.append("file", file);
+
+      const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form
+      });
+      if (res.ok) {
+        const d = await res.json();
+        if (d.webViewLink) {
+          const matchAtt = task.attachments.find(a => a.name === file.name);
+          if (matchAtt) matchAtt.driveUrl = d.webViewLink;
+          task.notes = (task.notes || "") + `\n🔗 Lien Drive : ${d.webViewLink}`;
+          saveTasks();
+          renderTasks();
+        }
+      }
+    } catch (_) {}
+  }
+
+  // COPIE DE L'ARBORESCENCE DANS LE PRESSE-PAPIERS
+  function copyTaskTreeToClipboard(task) {
+    const lines = [];
+    const statusText = task.status === "done" ? "Terminée" : "À faire";
+    lines.push(`${task.title}`);
+    lines.push(`État : ${statusText} | Groupe : ${task.groupId || "Général"}${task.priority ? " | Priorité : " + task.priority : ""}`);
+    if (task.due) lines.push(`Échéance : ${task.due}`);
+    if (task.notes) lines.push(`Notes : ${task.notes}`);
+
+    // Sous-tâches
+    const children = tasksList.filter(c => c.parent === task.id);
+    if (children.length > 0) {
+      lines.push("\nSous-tâches :");
+      children.forEach(c => {
+        lines.push(`  - [${c.status === "done" ? "X" : " "}] ${c.title}${c.due ? " (Pour le " + c.due + ")" : ""}`);
+      });
+    }
+
+    const fullText = lines.join("\n");
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(fullText).then(() => {
+        showToast("📋 Tâche et sous-tâches copiées dans le presse-papiers !");
+      });
+    }
+  }
+
+  // MODE LECTURE SEULE (TASK READER)
+  function openTaskReader(task) {
+    if (!readerModal) return;
+    readerActiveTask = task;
+
+    if (readerTitle) readerTitle.textContent = task.title;
+    if (readerGroupBadge) readerGroupBadge.textContent = task.groupId || "Général";
+    if (readerPriorityBadge) {
+      readerPriorityBadge.textContent = task.priority || "Normal";
+      readerPriorityBadge.className = `task-priority-badge ${task.priority === "P0" ? "p0" : (task.priority === "P1" ? "p1" : "")}`;
+    }
+    if (readerDue) {
+      readerDue.textContent = task.due ? `📅 Échéance : ${task.due}` : "Aucune échéance fixée";
+    }
+
+    if (readerNotes) {
+      readerNotes.innerHTML = "";
+      const raw = task.notes || "(Aucune note)";
+      // Regex pour rendre les URLs cliquables
+      const urlPattern = /https?:\/\/[^\s<>"']+/g;
+      let offset = 0;
+      for (const match of raw.matchAll(urlPattern)) {
+        readerNotes.append(document.createTextNode(raw.slice(offset, match.index)));
+        const a = document.createElement("a");
+        a.textContent = match[0];
+        a.href = match[0];
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        readerNotes.append(a);
+        offset = match.index + match[0].length;
+      }
+      readerNotes.append(document.createTextNode(raw.slice(offset)));
+    }
+
+    // Sous-tâches
+    if (readerSubtasksList) {
+      readerSubtasksList.innerHTML = "";
+      const children = tasksList.filter(c => c.parent === task.id);
+      if (children.length === 0) {
+        readerSubtasksList.innerHTML = '<span style="color:#64748b;font-size:10.5px;font-style:italic;">Aucune sous-tâche</span>';
+      } else {
+        children.forEach(c => {
+          const item = document.createElement("div");
+          item.style.fontSize = "11px";
+          item.style.padding = "3px 0";
+          item.innerHTML = `<span style="color:${c.status === "done" ? "#10b981" : "#94a3b8"};font-weight:700;margin-right:6px;">${c.status === "done" ? "✓" : "○"}</span><span style="${c.status === "done" ? "text-decoration:line-through;color:#64748b;" : ""}">${c.title}</span>`;
+          readerSubtasksList.appendChild(item);
+        });
+      }
+    }
+
+    readerModal.classList.remove("hidden");
+  }
+
+  function closeTaskReader() {
+    if (readerModal) readerModal.classList.add("hidden");
+    readerActiveTask = null;
+  }
+
+  if (readerCloseBtn) readerCloseBtn.addEventListener("click", closeTaskReader);
+  if (readerDoneBtn) readerDoneBtn.addEventListener("click", closeTaskReader);
+  if (readerCopyBtn) {
+    readerCopyBtn.addEventListener("click", () => {
+      if (readerActiveTask) copyTaskTreeToClipboard(readerActiveTask);
     });
   }
 
-  if (syncBtn) {
-    syncBtn.addEventListener("click", () => {
-      syncGoogleCalendarAndTasks(false);
-    });
-  }
-
+  // Barre d'état & recherche
   if (filterToggleBtn) {
     filterToggleBtn.addEventListener("click", () => {
-      activeState = activeState === "done" ? "todo" : "done";
+      activeState = activeState === "todo" ? "done" : "todo";
       tasksSettings.filterState = activeState;
       chrome.storage.local.set({ tasksSettings });
       renderTasks();
     });
   }
 
-  if (searchInput) {
-    searchInput.addEventListener("input", () => {
-      searchQuery = searchInput.value.trim().toLowerCase();
+  if (p0AlertBadge) {
+    p0AlertBadge.addEventListener("click", () => {
+      activeGroup = "P0";
+      tasksSettings.filterGroup = "P0";
+      chrome.storage.local.set({ tasksSettings });
+      renderGroupTabs();
       renderTasks();
+    });
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      searchQuery = (e.target.value || "").trim().toLowerCase();
+      renderTasks();
+    });
+  }
+
+  if (syncBtn) {
+    syncBtn.addEventListener("click", async () => {
+      syncBtn.textContent = "⏳";
+      await syncGoogleStateWithLocal();
+      syncBtn.textContent = "🔄";
+      renderGroupTabs();
+      renderTasks();
+      showToast("Tâches Google actualisées !");
     });
   }
 
   if (addBtn && addForm) {
     addBtn.addEventListener("click", () => {
-      const isHidden = addForm.classList.contains("hidden");
-      addForm.classList.toggle("hidden", !isHidden);
-      if (isHidden && newTitleInput) newTitleInput.focus();
+      addForm.classList.toggle("hidden");
+      if (!addForm.classList.contains("hidden") && newTitleInput) {
+        newTitleInput.focus();
+      }
     });
   }
 
   if (cancelNewTaskBtn && addForm) {
-    cancelNewTaskBtn.addEventListener("click", () => {
-      addForm.classList.add("hidden");
-    });
+    cancelNewTaskBtn.addEventListener("click", () => addForm.classList.add("hidden"));
   }
 
-  if (saveNewTaskBtn && addForm) {
+  if (saveNewTaskBtn) {
     saveNewTaskBtn.addEventListener("click", () => {
       const title = newTitleInput ? newTitleInput.value.trim() : "";
       if (!title) {
-        showToast("Veuillez saisir un titre");
+        showToast("Veuillez saisir un titre de tâche");
         return;
       }
+
       const priority = newPrioritySelect ? newPrioritySelect.value : "NONE";
       const groupId = newGroupSelect ? newGroupSelect.value : "Général";
       const due = newDueDateInput ? newDueDateInput.value : "";
 
       tasksList.unshift({
-        id: "t_" + Date.now(),
+        id: "task_" + Date.now(),
         title,
         priority,
         groupId,
@@ -6130,13 +6957,40 @@ function setupTabListeners() {
 }
 
 let toastTimer = null;
-function showToast(text) {
-  toastEl.textContent = text;
+function showToast(text, actionLabel = null, onAction = null, duration = 3000) {
+  if (!toastEl) return;
+  toastEl.innerHTML = "";
+  const span = document.createElement("span");
+  span.textContent = text;
+  toastEl.appendChild(span);
+
+  if (actionLabel && typeof onAction === "function") {
+    const actBtn = document.createElement("button");
+    actBtn.type = "button";
+    actBtn.className = "toast-action-btn";
+    actBtn.textContent = actionLabel;
+    actBtn.style.marginLeft = "10px";
+    actBtn.style.padding = "2px 8px";
+    actBtn.style.borderRadius = "4px";
+    actBtn.style.background = "#3b82f6";
+    actBtn.style.border = "none";
+    actBtn.style.color = "#ffffff";
+    actBtn.style.fontWeight = "bold";
+    actBtn.style.cursor = "pointer";
+    actBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toastEl.classList.add("hidden");
+      clearTimeout(toastTimer);
+      onAction();
+    });
+    toastEl.appendChild(actBtn);
+  }
+
   toastEl.classList.remove("hidden");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
     toastEl.classList.add("hidden");
-  }, 2200);
+  }, duration);
 }
 
 

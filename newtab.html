@@ -211,36 +211,67 @@
             </div>
           </div>
 
+          <!-- Sélecteur de vue (Mois, Semaine, Jour, Planning) -->
+          <div class="agenda-views-nav" id="agendaViewsNav">
+            <button type="button" class="agenda-view-tab active" data-view="month" title="Vue mensuelle">Mois</button>
+            <button type="button" class="agenda-view-tab" data-view="week" title="Vue semaine">Semaine</button>
+            <button type="button" class="agenda-view-tab" data-view="day" title="Vue jour détaillée">Jour</button>
+            <button type="button" class="agenda-view-tab" data-view="planning" title="Vue planning chronologique">Planning</button>
+          </div>
+
           <!-- Corps de l'Agenda -->
           <div class="agenda-body">
-            <!-- Navigation mensuelle -->
+            <!-- Barre de navigation temporelle commune -->
             <div class="agenda-month-nav">
-              <button type="button" id="agendaPrevMonthBtn" class="agenda-nav-btn" title="Mois précédent">‹</button>
+              <button type="button" id="agendaPrevMonthBtn" class="agenda-nav-btn" title="Période précédente">‹</button>
               <span id="agendaMonthTitle" class="agenda-month-title">Novembre 2026</span>
               <button type="button" id="agendaTodayBtn" class="agenda-today-btn" title="Aujourd'hui">Aujourd'hui</button>
-              <button type="button" id="agendaNextMonthBtn" class="agenda-nav-btn" title="Mois suivant">›</button>
+              <button type="button" id="agendaNextMonthBtn" class="agenda-nav-btn" title="Période suivante">›</button>
             </div>
 
-            <!-- Grille du calendrier mensuel -->
-            <div class="agenda-calendar-grid">
-              <div class="agenda-weekday">L</div>
-              <div class="agenda-weekday">M</div>
-              <div class="agenda-weekday">M</div>
-              <div class="agenda-weekday">J</div>
-              <div class="agenda-weekday">V</div>
-              <div class="agenda-weekday">S</div>
-              <div class="agenda-weekday">D</div>
-              <div id="agendaDaysContainer" class="agenda-days-container"></div>
-            </div>
-
-            <!-- Liste des rendez-vous / événements du jour -->
-            <div class="agenda-events-section">
-              <div class="agenda-events-header">
-                <span id="agendaSelectedDayText" class="agenda-selected-day-text">Rendez-vous</span>
-                <span id="agendaEventsCount" class="agenda-events-count">0 RDV</span>
+            <!-- 1. VUE MOIS -->
+            <div id="agendaMonthView" class="agenda-subview">
+              <div class="agenda-calendar-grid">
+                <div class="agenda-weekday">L</div>
+                <div class="agenda-weekday">M</div>
+                <div class="agenda-weekday">M</div>
+                <div class="agenda-weekday">J</div>
+                <div class="agenda-weekday">V</div>
+                <div class="agenda-weekday">S</div>
+                <div class="agenda-weekday">D</div>
+                <div id="agendaDaysContainer" class="agenda-days-container"></div>
               </div>
-              <div id="agendaEventsList" class="agenda-events-list">
-                <!-- Rempli dynamiquement -->
+
+              <!-- Liste des rendez-vous / événements du jour -->
+              <div class="agenda-events-section">
+                <div class="agenda-events-header">
+                  <span id="agendaSelectedDayText" class="agenda-selected-day-text">Rendez-vous</span>
+                  <span id="agendaEventsCount" class="agenda-events-count">0 RDV</span>
+                </div>
+                <div id="agendaEventsList" class="agenda-events-list">
+                  <!-- Rempli dynamiquement -->
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. VUE SEMAINE -->
+            <div id="agendaWeekView" class="agenda-subview hidden">
+              <div class="agenda-week-grid" id="agendaWeekGrid">
+                <!-- 7 colonnes pour les 7 jours de la semaine (avec zone de drop pour tâches) -->
+              </div>
+            </div>
+
+            <!-- 3. VUE JOUR -->
+            <div id="agendaDayView" class="agenda-subview hidden">
+              <div class="agenda-day-timeline" id="agendaDayTimeline">
+                <!-- Détail horaire du jour sélectionné -->
+              </div>
+            </div>
+
+            <!-- 4. VUE PLANNING -->
+            <div id="agendaPlanningView" class="agenda-subview hidden">
+              <div class="agenda-planning-list" id="agendaPlanningList">
+                <!-- Flux continu des prochains événements et tâches -->
               </div>
             </div>
           </div>
@@ -822,5 +853,47 @@
   <script src="i18n.js"></script>
   <script src="driveSync.js"></script>
   <script src="newtab.js"></script>
+
+    <!-- Modal Lecture Seule de Tâche & Sous-tâches (AgendaBIP Task Reader) -->
+    <div id="taskReaderModal" class="side-modal hidden">
+      <div class="side-modal-content task-reader-modal-card">
+        <div class="side-modal-header">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="side-modal-title">📖 Fiche Tâche</span>
+            <span id="taskReaderPriorityBadge" class="task-priority-badge"></span>
+            <span id="taskReaderGroupBadge" class="agenda-active-badge"></span>
+          </div>
+          <button type="button" id="taskReaderCloseBtn" class="close-btn">&times;</button>
+        </div>
+        <div class="task-reader-body">
+          <h2 id="taskReaderTitle" class="task-reader-title"></h2>
+          <div id="taskReaderDue" class="task-reader-due"></div>
+          <div class="task-reader-section-title">Description & Notes</div>
+          <div id="taskReaderNotes" class="task-reader-notes"></div>
+          <div id="taskReaderSubtasksSection" class="task-reader-subtasks-section">
+            <div class="task-reader-section-title">Arborescence des Sous-tâches</div>
+            <div id="taskReaderSubtasksList" class="task-reader-subtasks-list"></div>
+          </div>
+        </div>
+        <div class="side-modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+          <button type="button" id="taskReaderCopyBtn" class="btn-xs btn-xs-primary">📋 Copier avec sous-tâches</button>
+          <button type="button" id="taskReaderDoneBtn" class="btn-xs">Fermer</button>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Menu contextuel flottant pour événements d'agenda -->
+    <div id="agendaContextMenu" class="agenda-context-menu hidden">
+      <div class="context-menu-title" id="agendaContextEventTitle">Événement</div>
+      <button type="button" class="context-menu-item" data-action="postpone15">⏱️ Reporter de 15 minutes</button>
+      <button type="button" class="context-menu-item" data-action="postpone60">⏱️ Reporter de 1 heure</button>
+      <button type="button" class="context-menu-item" data-action="postponeTomorrow">⏱️ Reporter à demain même heure</button>
+      <div class="context-menu-divider"></div>
+      <button type="button" class="context-menu-item" data-action="hideDay">👁️ Masquer pour ce jour</button>
+      <button type="button" class="context-menu-item" data-action="openGoogle">📅 Ouvrir dans Google Agenda</button>
+      <button type="button" class="context-menu-item" data-action="notify">🔔 Programmer alerte Windows</button>
+    </div>
+
 </body>
 </html>

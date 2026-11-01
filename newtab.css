@@ -3527,3 +3527,379 @@ html, body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+
+/* ==========================================================================
+   📅 VUES MULTIPLES DE L'AGENDA (Mois, Semaine, Jour, Planning)
+   ========================================================================== */
+.agenda-views-nav {
+  display: flex;
+  gap: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.agenda-view-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+.agenda-view-tab:hover {
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.agenda-view-tab.active {
+  background: #3b82f6;
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: 0 1px 4px rgba(59, 130, 246, 0.4);
+}
+
+.agenda-subview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.agenda-subview.hidden {
+  display: none !important;
+}
+
+/* Zone de Drop pour la planification de tâches par glisser-déposer */
+.drop-target {
+  background: rgba(59, 130, 246, 0.45) !important;
+  border: 2px dashed #60a5fa !important;
+  box-shadow: 0 0 12px rgba(96, 165, 250, 0.8) !important;
+  transform: scale(1.08) !important;
+  z-index: 50;
+  transition: all 0.15s ease;
+}
+
+/* 2. Vue Semaine */
+.agenda-week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  flex: 1;
+  min-height: 180px;
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+.agenda-week-col {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  min-width: 48px;
+  min-height: 140px;
+  padding: 4px;
+  gap: 4px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.agenda-week-col.today {
+  border-color: rgba(59, 130, 246, 0.7);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.agenda-week-header {
+  text-align: center;
+  font-size: 10px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.agenda-week-day-name {
+  color: #64748b;
+  font-weight: 700;
+}
+
+.agenda-week-day-num {
+  font-weight: 700;
+  color: #cbd5e1;
+}
+
+.agenda-week-col.today .agenda-week-day-num {
+  color: #60a5fa;
+}
+
+.agenda-week-events {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.agenda-week-event-chip {
+  font-size: 9.5px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-left: 2px solid #3b82f6;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.agenda-week-event-chip:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* 3. Vue Jour détaillée */
+.agenda-day-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.agenda-day-hour-block {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 4px 0;
+  min-height: 32px;
+  align-items: flex-start;
+}
+
+.agenda-day-time-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  width: 42px;
+  flex-shrink: 0;
+}
+
+.agenda-day-slot-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+
+/* 4. Vue Planning chronologique */
+.agenda-planning-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.agenda-planning-group-header {
+  font-size: 10px;
+  font-weight: 700;
+  color: #93c5fd;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 2px;
+  margin-top: 4px;
+}
+
+/* ==========================================================================
+   🌳 SOUS-TÂCHES ACCORDÉON PLIABLES / DÉPLIABLES (<details class="subtasks-fold">)
+   ========================================================================== */
+.subtasks-fold {
+  margin-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 3px;
+}
+
+.subtasks-summary {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: #94a3b8;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+  transition: color 0.15s ease;
+  list-style: none;
+}
+.subtasks-summary::-webkit-details-marker {
+  display: none;
+}
+.subtasks-summary:hover {
+  color: #60a5fa;
+}
+
+.subtasks-arrow {
+  font-size: 8px;
+  transition: transform 0.2s ease;
+  display: inline-block;
+}
+.subtasks-fold[open] > .subtasks-summary .subtasks-arrow {
+  transform: rotate(90deg);
+}
+
+.subtasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 14px;
+  margin-top: 4px;
+  border-left: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Glisser-déposer de tâche (drag feedback) */
+.task-row.dragging {
+  opacity: 0.4;
+  border-style: dashed;
+}
+
+/* ==========================================================================
+   📖 MODAL TASK READER (Lecture Seule de Tâche & Notes avec Liens)
+   ========================================================================== */
+.task-reader-modal-card {
+  max-width: 480px;
+  width: 90vw;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.task-reader-body {
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-reader-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f8fafc;
+  margin: 0;
+}
+
+.task-reader-due {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.task-reader-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: #60a5fa;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 3px;
+  margin-top: 4px;
+}
+
+.task-reader-notes {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: #cbd5e1;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.task-reader-notes a {
+  color: #60a5fa;
+  text-decoration: underline;
+}
+.task-reader-notes a:hover {
+  color: #93c5fd;
+}
+
+.task-reader-subtasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ==========================================================================
+   ⏱️ MENU CONTEXTUEL FLOTTANT DES ÉVÉNEMENTS
+   ========================================================================== */
+.agenda-context-menu {
+  position: fixed;
+  z-index: 100000;
+  background: rgba(15, 23, 42, 0.96);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+  padding: 5px 0;
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  animation: fadeIn 0.12s ease-out;
+}
+
+.agenda-context-menu.hidden {
+  display: none !important;
+}
+
+.context-menu-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #93c5fd;
+  padding: 5px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.context-menu-item {
+  background: transparent;
+  border: none;
+  color: #cbd5e1;
+  font-size: 11px;
+  padding: 6px 12px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.context-menu-item:hover {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.context-menu-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 3px 0;
+}
