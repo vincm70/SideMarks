@@ -1003,23 +1003,25 @@ async function performGoogleDataSync(token, interactive = false) {
               const tData = await tRes.json();
               pageToken = tData.nextPageToken || "";
               (tData.items || []).forEach(t => {
-              let priority = "NONE";
-              const pMatch = (t.notes || "").match(/(?:priorité|priority)[^P0-4]*(P[0-4])/i);
-              if (pMatch) priority = pMatch[1].toUpperCase();
-              else if (list.title.toUpperCase() === "P0") priority = "P0";
+                let priority = "NONE";
+                const pMatch = (t.notes || "").match(/(?:priorité|priority)[^P0-4]*(P[0-4])/i);
+                if (pMatch) priority = pMatch[1].toUpperCase();
+                else if (list.title.toUpperCase() === "P0") priority = "P0";
 
-              allTasks.push({
-                id: t.id,
-                title: t.title || "Tâche sans titre",
-                groupId: list.title || "Général",
-                rawGroupId: list.id,
-                parent: t.parent || null,
-                status: t.status === "completed" ? "done" : "todo",
-                due: t.due ? t.due.slice(0, 10) : "",
-                notes: t.notes || "",
-                priority
+                allTasks.push({
+                  id: t.id,
+                  title: t.title || "Tâche sans titre",
+                  groupId: list.title || "Général",
+                  rawGroupId: list.id,
+                  parent: t.parent || null,
+                  position: t.position || "",
+                  orderIndex: allTasks.length,
+                  status: t.status === "completed" ? "done" : "todo",
+                  due: t.due ? t.due.slice(0, 10) : "",
+                  notes: t.notes || "",
+                  priority
+                });
               });
-            });
             } else {
               break;
             }
@@ -2303,6 +2305,22 @@ function renderTasks() {
         const noteSubs = extractSubtasksFromNotes(root);
         if (noteSubs.length > 0) children = noteSubs;
       }
+
+      // Trier les sous-tâches selon l'ordre strict de Google Tasks (position ou index de la liste)
+      children.sort((cA, cB) => {
+        if (cA.position && cB.position) {
+          return cA.position.localeCompare(cB.position);
+        }
+        const idxA = (typeof cA.orderIndex === "number") ? cA.orderIndex : 999999;
+        const idxB = (typeof cB.orderIndex === "number") ? cB.orderIndex : 999999;
+        if (idxA !== idxB) return idxA - idxB;
+
+        const rawA = tasksList.indexOf(cA);
+        const rawB = tasksList.indexOf(cB);
+        if (rawA !== -1 && rawB !== -1) return rawA - rawB;
+        return 0;
+      });
+
       const rootMatches = taskMatchesFilters(root);
       const childMatches = children.some(c => taskMatchesFilters(c));
 
@@ -2315,14 +2333,22 @@ function renderTasks() {
       }
     });
 
-    // Tri AgendaBIP : P0 > P1 > P2 > NONE, puis Due date
+    // Ordre strict identique à Google Tasks (position lexicographique ou ordre d'origine de la liste)
     matchingRoots.sort((a, b) => {
-      const pA = PRIORITY_SCORES[a.task.priority || "NONE"] ?? 9;
-      const pB = PRIORITY_SCORES[b.task.priority || "NONE"] ?? 9;
-      if (pA !== pB) return pA - pB;
-      const dueA = a.task.due || "9999-99-99";
-      const dueB = b.task.due || "9999-99-99";
-      return dueA.localeCompare(dueB);
+      // 1. Si les deux tâches ont le champ position de l'API Google Tasks
+      if (a.task.position && b.task.position) {
+        return a.task.position.localeCompare(b.task.position);
+      }
+      // 2. Par ordre d'index d'origine Google Tasks
+      const idxA = (typeof a.task.orderIndex === "number") ? a.task.orderIndex : 999999;
+      const idxB = (typeof b.task.orderIndex === "number") ? b.task.orderIndex : 999999;
+      if (idxA !== idxB) return idxA - idxB;
+
+      // 3. Ordre d'origine dans tasksList
+      const rawA = tasksList.indexOf(a.task);
+      const rawB = tasksList.indexOf(b.task);
+      if (rawA !== -1 && rawB !== -1) return rawA - rawB;
+      return 0;
     });
 
     listContainer.innerHTML = "";
@@ -2341,14 +2367,14 @@ function renderTasks() {
       const rowEl = createTaskRowElement(task, false);
       branchEl.appendChild(rowEl);
 
-      // Accordéon de sous-tâches si enfants existants
+      // Accordéon de sous-tâches sous leur tâche parente : REPLIÉ PAR DÉFAUT
       if (children.length > 0) {
         const fold = document.createElement("details");
         fold.className = "subtasks-fold";
         fold.dataset.taskFold = task.id;
-        const isClosedExplicitly = (localStorage.getItem("agendabip-closed-subtasks-v1") || "").includes(task.id);
-        const isOpen = autoExpand || expandedSubtasksSet.has(task.id) || !isClosedExplicitly;
-        if (isOpen) fold.open = true;
+        // Replié par défaut : ouvert uniquement si l'utilisateur l'a expressément déplié ou recherche active
+        const isOpen = Boolean(autoExpand || expandedSubtasksSet.has(task.id));
+        fold.open = isOpen;
 
         const doneCount = children.filter(c => c.status === "done").length;
 
