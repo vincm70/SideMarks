@@ -5029,18 +5029,23 @@ function openTaskConversationDialog(task, kind = 'task') {
             continue;
           }
 
-          // Cas 1 : Pièce jointe / lien formalisé "📎 Nom : URL/Chemin"
-          const attachMatch = trimmed.match(/^📎\s*(.*?)\s*:\s*(\S.*)$/);
+          // Cas 1 : Ligne de pièce jointe explicite ou préfixée (ex: "📎 Nom : C:\...", "Dossier : C:\...", "Lien : https://...")
+          const attachMatch = trimmed.match(/^(?:📎\s*)?(.*?)\s*:\s*([a-zA-Z]:\\[^*?"<>|\r\n]+|https?:\/\/[^\s<>"']+|file:\/\/\/[^\r\n]+|\\\\[^\\/:*?"<>|\r\n]+\\[^*?"<>|\r\n]+)$/i)
+            || trimmed.match(/^📎\s*(.*?)\s*:\s*(\S.*)$/);
+
           if (attachMatch) {
-            const attName = attachMatch[1] || 'Pièce jointe';
-            const attTarget = attachMatch[2].trim();
+            const attName = (attachMatch[1] || 'Document / Dossier').trim();
+            let attTarget = attachMatch[2].trim().replace(/^["']|["']$/g, '');
             const isLocal = /^[a-zA-Z]:\\|^\\\\|^file:\/\/\//i.test(attTarget);
 
             const p = document.createElement('p');
             p.className = 'task-attachment-item';
 
             if (isLocal) {
-              const cleanLocalPath = attTarget.replace(/^file:\/\/\//, '');
+              let cleanLocalPath = attTarget.replace(/^file:\/\/\//, '');
+              if (cleanLocalPath.includes('/') && !cleanLocalPath.includes('\\')) {
+                cleanLocalPath = decodeURIComponent(cleanLocalPath).replace(/\//g, '\\');
+              }
               const link = document.createElement('a');
               link.href = '#';
               link.className = 'task-local-link';
@@ -5067,9 +5072,36 @@ function openTaskConversationDialog(task, kind = 'task') {
             continue;
           }
 
-          // Cas 2 : Ligne de texte avec détection d'URL web et de chemins locaux Windows
+          // Cas 2 : La ligne entière est un chemin local (avec ou sans guillemets, ex: "C:\..." ou C:\...)
+          const fullPathMatch = trimmed.match(/^"([a-zA-Z]:\\[^"*?<>|\r\n]+)"$|^'([a-zA-Z]:\\[^'*?<>|\r\n]+)'$|^([a-zA-Z]:\\[^*?"<>|\r\n]+)$|^file:\/\/\/(.+)$/i);
+          if (fullPathMatch) {
+            let cleanLocalPath = (fullPathMatch[1] || fullPathMatch[2] || fullPathMatch[3] || fullPathMatch[4]).trim();
+            if (cleanLocalPath.startsWith('file:///')) {
+              cleanLocalPath = decodeURIComponent(cleanLocalPath.replace(/^file:\/\/\//, '')).replace(/\//g, '\\');
+            }
+            const folderName = cleanLocalPath.replace(/\\$/, '').split('\\').pop() || 'Dossier';
+            const p = document.createElement('p');
+            p.className = 'task-attachment-item';
+            const link = document.createElement('a');
+            link.href = '#';
+            link.className = 'task-local-link';
+            link.title = `Ouvrir avec SideMarksBridge :\n${cleanLocalPath}`;
+            link.textContent = `📁 ${folderName} : ${cleanLocalPath}`;
+            link.onclick = (e) => {
+              e.preventDefault();
+              if (typeof triggerLocalShortcut === 'function') {
+                triggerLocalShortcut(cleanLocalPath);
+                if (typeof showToast === 'function') showToast(`Ouverture locale : ${folderName}`);
+              }
+            };
+            p.appendChild(link);
+            article.appendChild(p);
+            continue;
+          }
+
+          // Cas 3 : Ligne de texte mixte avec URLs et chemins locaux (support complet des espaces)
           const p = document.createElement('p');
-          const regex = /(https?:\/\/[^\s<>"']+|file:\/\/\/[^\s<>"']+|[a-zA-Z]:\\(?:[^\s\\/:*?"<>|\r\n]+\\)*[^\s\\/:*?"<>|\r\n]+)/g;
+          const regex = /(https?:\/\/[^\s<>"']+|file:\/\/\/[^\s<>"']+|["']([a-zA-Z]:\\[^"'\r\n*?<>|]+)["']|([a-zA-Z]:\\(?:[^\\/:*?"<>|\r\n]+\\)*[^*?"<>|\r\n]+?)(?=[.,;!?]?(?:$|["'<>]))|([a-zA-Z]:\\(?:[^\s\\/:*?"<>|\r\n]+\\)*[^\s\\/:*?"<>|\r\n]+))/gi;
           let offset = 0;
           let match;
 
@@ -5078,10 +5110,14 @@ function openTaskConversationDialog(task, kind = 'task') {
               p.appendChild(document.createTextNode(line.slice(offset, match.index)));
             }
             const matchStr = match[0];
-            const isLocal = /^[a-zA-Z]:\\|^file:\/\/\//i.test(matchStr);
+            const isLocal = Boolean(match[2] || match[3] || match[4] || /^[a-zA-Z]:\\|^file:\/\/\//i.test(matchStr));
 
             if (isLocal) {
-              const cleanLocalPath = matchStr.replace(/^file:\/\/\//, '');
+              let cleanLocalPath = (match[2] || match[3] || match[4] || matchStr).trim();
+              cleanLocalPath = cleanLocalPath.replace(/^file:\/\/\//, '').replace(/[.,;!?]+$/, '');
+              if (cleanLocalPath.includes('/') && !cleanLocalPath.includes('\\')) {
+                cleanLocalPath = decodeURIComponent(cleanLocalPath).replace(/\//g, '\\');
+              }
               const link = document.createElement('a');
               link.href = '#';
               link.className = 'task-local-link';
@@ -5164,14 +5200,17 @@ function openTaskConversationDialog(task, kind = 'task') {
     if (uploading || saving) return;
     const inputVal = prompt('Lien web HTTP(S) ou chemin local Windows (ex: C:\\MonDossier ou C:\\Documents\\rapport.pdf) :');
     if (!inputVal) return;
-    const val = inputVal.trim();
+    let val = inputVal.trim().replace(/^["']|["']$/g, '').trim();
     const isHttp = /^https?:\/\/[^\s]+$/i.test(val);
     const isLocal = /^[a-zA-Z]:\\|^\\\\|^file:\/\/\//i.test(val);
     if (!isHttp && !isLocal) {
       status.textContent = 'Lien HTTP(S) ou chemin local Windows (C:\\...) requis.';
       return;
     }
-    const cleanPath = val.replace(/^file:\/\/\//, '');
+    let cleanPath = val.replace(/^file:\/\/\//, '');
+    if (cleanPath.includes('/') && !cleanPath.includes('\\')) {
+      cleanPath = decodeURIComponent(cleanPath).replace(/\//g, '\\');
+    }
     let label = 'Lien web';
     if (isLocal) {
       const parts = cleanPath.replace(/\\$/, '').split('\\');
