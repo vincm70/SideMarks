@@ -3388,7 +3388,7 @@ function setupTasksWidget() {
       btn.className = "task-group-tab" + (activeGroup === g ? " active" : "") + (g === "P0" ? " p0-tab" : "");
       btn.dataset.group = g;
       btn.textContent = g === "all" ? "Toutes" : (g === "P0" ? "⚡ P0" : g);
-      btn.title = (g === "all" ? "Toutes" : g) + " (Clic gauche: filtrer, Clic droit: exporter ZIP pour analyse IA)";
+      btn.title = (g === "all" ? "Toutes" : g) + " (Clic: filtrer, Clic droit: exporter ZIP, Glissez une tâche ici pour changer de groupe)";
       btn.draggable = true;
 
       btn.addEventListener("contextmenu", (e) => {
@@ -3423,13 +3423,22 @@ function setupTasksWidget() {
         draggedGroup = null;
         btn.classList.remove("dragging");
         groupsBar.querySelectorAll(".task-group-tab").forEach(t => {
-          t.classList.remove("drag-over-left", "drag-over-right");
+          t.classList.remove("drag-over-left", "drag-over-right", "drop-task-target");
         });
       });
 
       btn.addEventListener("dragover", (e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
+
+        // Cas 1 : Glisser une tâche sur un onglet de groupe pour changer sa catégorie
+        if (draggedTaskObj || e.dataTransfer.types.includes("application/task")) {
+          if (g === "all") return;
+          btn.classList.add("drop-task-target");
+          return;
+        }
+
+        // Cas 2 : Réorganisation de l'ordre des onglets
         if (!draggedGroup || draggedGroup === g) return;
         const rect = btn.getBoundingClientRect();
         const isLeft = e.clientX < (rect.left + rect.width / 2);
@@ -3443,14 +3452,75 @@ function setupTasksWidget() {
       });
 
       btn.addEventListener("dragleave", () => {
-        btn.classList.remove("drag-over-left", "drag-over-right");
+        btn.classList.remove("drag-over-left", "drag-over-right", "drop-task-target");
       });
 
       btn.addEventListener("drop", (e) => {
         e.preventDefault();
-        btn.classList.remove("drag-over-left", "drag-over-right");
-        if (!draggedGroup || draggedGroup === g) return;
+        btn.classList.remove("drag-over-left", "drag-over-right", "drop-task-target");
 
+        // Cas 1 : Déplacement d'une tâche vers ce groupe
+        let targetTask = draggedTaskObj;
+        if (!targetTask) {
+          const appTask = e.dataTransfer.getData("application/task");
+          if (appTask) {
+            try {
+              const parsed = JSON.parse(appTask);
+              targetTask = tasksList.find(t => t.id === parsed.id);
+            } catch (_) {}
+          }
+        }
+
+        if (targetTask) {
+          if (g === "all") {
+            if (typeof showToast === "function") showToast("ℹ️ Déposez la tâche sur un groupe précis (ex: DVRC, Code, Perso...)");
+            return;
+          }
+
+          if (g === "P0") {
+            if (targetTask.priority === "P0") {
+              if (typeof showToast === "function") showToast(`« ${targetTask.title} » est déjà en priorité P0.`);
+              return;
+            }
+            targetTask.priority = "P0";
+            saveTasks();
+            renderTasks();
+            renderGroupTabs();
+            if (typeof showToast === "function") showToast(`⚡ Tâche « ${targetTask.title} » passée en priorité P0 !`);
+            return;
+          }
+
+          // Déplacement vers un groupe standard
+          const currentGroup = targetTask.groupId || "Général";
+          if (currentGroup === g) {
+            if (typeof showToast === "function") showToast(`« ${targetTask.title} » appartient déjà au groupe « ${g} »`);
+            return;
+          }
+
+          targetTask.groupId = g;
+          // Déplacer également ses sous-tâches
+          tasksList.filter(st => st.parent === targetTask.id).forEach(st => {
+            st.groupId = g;
+          });
+
+          // Mettre à jour rawGroupId si une tâche du groupe cible en possède un
+          const sibling = tasksList.find(t => t.groupId === g && t.rawGroupId);
+          if (sibling) {
+            targetTask.rawGroupId = sibling.rawGroupId;
+          }
+
+          saveTasks();
+          renderGroupTabs();
+          renderTasks();
+
+          if (typeof showToast === "function") {
+            showToast(`📁 Tâche « ${targetTask.title} » déplacée de « ${currentGroup} » vers « ${g} » !`);
+          }
+          return;
+        }
+
+        // Cas 2 : Réorganisation de l'ordre des onglets de groupe
+        if (!draggedGroup || draggedGroup === g) return;
         const rect = btn.getBoundingClientRect();
         const dropBefore = e.clientX < (rect.left + rect.width / 2);
 
@@ -3917,9 +3987,13 @@ function renderTasks() {
 
     card.addEventListener("dragend", () => {
       card.classList.remove("dragging");
-      document.querySelectorAll(".drop-card-above, .drop-card-below, .drop-as-subtask-target, .drop-target-col").forEach(el => {
-        el.classList.remove("drop-card-above", "drop-card-below", "drop-as-subtask-target", "drop-target-col");
+      document.querySelectorAll(".drop-card-above, .drop-card-below, .drop-as-subtask-target, .drop-target-col, .drop-task-target").forEach(el => {
+        el.classList.remove("drop-card-above", "drop-card-below", "drop-as-subtask-target", "drop-target-col", "drop-task-target");
       });
+      setTimeout(() => {
+        draggedTaskId = null;
+        draggedTaskObj = null;
+      }, 60);
     });
 
     card.addEventListener("dragover", (e) => {
@@ -4192,9 +4266,13 @@ function renderTasks() {
 
     row.addEventListener("dragend", () => {
       row.classList.remove("dragging");
-      document.querySelectorAll(".drop-insert-above, .drop-insert-below, .drop-as-subtask-target").forEach(el => {
-        el.classList.remove("drop-insert-above", "drop-insert-below", "drop-as-subtask-target");
+      document.querySelectorAll(".drop-insert-above, .drop-insert-below, .drop-as-subtask-target, .drop-task-target").forEach(el => {
+        el.classList.remove("drop-insert-above", "drop-insert-below", "drop-as-subtask-target", "drop-task-target");
       });
+      setTimeout(() => {
+        draggedTaskId = null;
+        draggedTaskObj = null;
+      }, 60);
     });
 
     row.addEventListener("dragover", (e) => {

@@ -3651,6 +3651,14 @@ html, body {
 .task-group-tab.drag-over-right {
   border-right: 3px solid #38bdf8 !important;
 }
+.task-group-tab.drop-task-target {
+  background: rgba(14, 165, 233, 0.45) !important;
+  border-color: #38bdf8 !important;
+  color: #fff !important;
+  transform: scale(1.12);
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.8) !important;
+  z-index: 10;
+}
 
 .task-group-tab {
   background: rgba(255, 255, 255, 0.06);
