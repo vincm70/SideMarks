@@ -4015,10 +4015,14 @@ function renderTasks() {
       metaEl.appendChild(bTag);
     }
 
-    const grpTag = document.createElement("span");
-    grpTag.className = "kanban-tag";
-    grpTag.textContent = task.groupId || "Général";
-    metaEl.appendChild(grpTag);
+    // Étiquette de groupe (ex: DVRC, Code...) : affichée uniquement dans "Toutes" ou "P0".
+    // Quand on est dans l'onglet spécifique du groupe, le tag est masqué pour une vue plus compacte.
+    if (activeGroup === "all" || activeGroup === "P0") {
+      const grpTag = document.createElement("span");
+      grpTag.className = "kanban-tag";
+      grpTag.textContent = task.groupId || "Général";
+      metaEl.appendChild(grpTag);
+    }
 
     // Indication du parent si la carte est elle-même une sous-tâche
     if (task.parent) {
@@ -4039,7 +4043,9 @@ function renderTasks() {
       metaEl.appendChild(dueTag);
     }
 
-    card.appendChild(metaEl);
+    if (metaEl.children.length > 0) {
+      card.appendChild(metaEl);
+    }
 
     // Sous-tâches visibles dans la carte Kanban
     const children = tasksList.filter(t => t.parent === task.id);
@@ -4315,9 +4321,13 @@ function renderTasks() {
       metaEl.appendChild(pBadge);
     }
 
-    const groupSpan = document.createElement("span");
-    groupSpan.textContent = task.groupId || "Général";
-    metaEl.appendChild(groupSpan);
+    // Étiquette de groupe : affichée uniquement dans la vue globale "Toutes" ou "P0"
+    if (activeGroup === "all" || activeGroup === "P0") {
+      const groupSpan = document.createElement("span");
+      groupSpan.className = "task-group-badge";
+      groupSpan.textContent = task.groupId || "Général";
+      metaEl.appendChild(groupSpan);
+    }
 
     if (task.due) {
       const dueSpan = document.createElement("span");
@@ -4354,7 +4364,9 @@ function renderTasks() {
     }
 
     contentBox.appendChild(titleEl);
-    contentBox.appendChild(metaEl);
+    if (metaEl.children.length > 0) {
+      contentBox.appendChild(metaEl);
+    }
 
     // Actions rapides
     const actionsBox = document.createElement("div");
