@@ -638,10 +638,6 @@ function getIsoWeekNumber(d) {
   return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
 }
 
-// Parseur des conversations de suivi standard AgendaBIP (V2 et V1)
-function parseAgendaBipConversation(notes) {
-  const source = String(notes || "").replace(/\r\n/g, "\n");
-  const entries = [];
 // Constantes et gestion des métadonnées AgendaBIP
 const AGENDA_INFO = "──────── ℹ INFORMATIONS ────────";
 const AGENDA_INFO_END = "──────── FIN DES INFORMATIONS ────────";
@@ -745,7 +741,9 @@ function taskConversation(task) {
     return { entries: [], error: true, raw: source };
   }
 }
-const parseAgendaBipConversation = taskConversation;
+function parseAgendaBipConversation(notes) {
+  return taskConversation(notes);
+}
 
 // Ajoute un commentaire de suivi au format AgendaBIP standard (Android & Windows V2)
 function addAgendaBipFollowup(notes, comment, now = new Date()) {
@@ -818,7 +816,6 @@ function createConversationBubbleBtn(item, isEvent = false) {
     openTaskConversationDialog(item, isEvent ? "event" : "task");
   });
   return btn;
-}
 }
 
 const CALENDAR_COLOR_PALETTE = {
@@ -5141,49 +5138,53 @@ function openTaskConversationModal(item, isEvent = false) {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  if (window.I18N && typeof I18N.init === "function") {
-    await I18N.init();
-  }
-  await loadThemeSettings();
-  await loadPillsLayoutMode();
-  await loadWallpaper();
-  await loadPillsSize();
-  setupPillsSizeSelector();
-  await loadSearchEngine();
-  setupSearchEngineSelector();
-  await loadPills();
-  await loadCollapsedState();
-  await refreshBookmarks();
-  await refreshOpenTabs();
-  await loadWeatherSettings();
-  await loadAllWidgetsSettings();
-  initClockWidget();
-  setupNotesWidget();
-  setupPomodoroWidget();
-  setupRecentWidget();
-  setupCalculatorWidget();
-  setupAgendaWidget();
-  setupTasksWidget();
-  // Synchronisation silencieuse immédiate au démarrage si le serveur local est actif
-  syncGoogleCalendarAndTasks(false);
-  setupAllWidgetsDrag();
-  setupAllWidgetsResize();
-  setupWeatherControls();
-  setupWidgetGallery();
-  const clearSelectionBtn = document.getElementById("clearSelectionBtn");
-  if (clearSelectionBtn) {
-    clearSelectionBtn.addEventListener("click", clearPillSelection);
-  }
-  setupMarqueeSelection();
-  setupDockDragAndDrop();
-  initMultiDesktop();
-  setupWidgetControls();
-  if (typeof setupWidgetDesktopsModal === "function") setupWidgetDesktopsModal();
-  setupToolbarDrag();
-  setupEvents();
-  setupBookmarkListeners();
-  setupTabListeners();
-  await loadExperimentalLocalShortcuts();
+  try {
+    if (window.I18N && typeof I18N.init === "function") {
+      await I18N.init();
+    }
+  } catch (err) { console.warn("I18N init error:", err); }
+
+  try { await loadThemeSettings(); } catch (err) { console.warn(err); }
+  try { await loadPillsLayoutMode(); } catch (err) { console.warn(err); }
+  try { await loadWallpaper(); } catch (err) { console.warn(err); }
+  try { await loadPillsSize(); } catch (err) { console.warn(err); }
+  try { setupPillsSizeSelector(); } catch (err) { console.warn(err); }
+  try { await loadSearchEngine(); } catch (err) { console.warn(err); }
+  try { setupSearchEngineSelector(); } catch (err) { console.warn(err); }
+  try { await loadPills(); } catch (err) { console.warn(err); }
+  try { await loadCollapsedState(); } catch (err) { console.warn(err); }
+  try { await refreshBookmarks(); } catch (err) { console.warn(err); }
+  try { await refreshOpenTabs(); } catch (err) { console.warn(err); }
+  try { await loadWeatherSettings(); } catch (err) { console.warn(err); }
+  try { await loadAllWidgetsSettings(); } catch (err) { console.warn(err); }
+  try { initClockWidget(); } catch (err) { console.warn(err); }
+  try { setupNotesWidget(); } catch (err) { console.warn(err); }
+  try { setupPomodoroWidget(); } catch (err) { console.warn(err); }
+  try { setupRecentWidget(); } catch (err) { console.warn(err); }
+  try { setupCalculatorWidget(); } catch (err) { console.warn(err); }
+  try { setupAgendaWidget(); } catch (err) { console.warn(err); }
+  try { setupTasksWidget(); } catch (err) { console.warn(err); }
+  try { syncGoogleCalendarAndTasks(false); } catch (err) { console.warn(err); }
+  try { setupAllWidgetsDrag(); } catch (err) { console.warn(err); }
+  try { setupAllWidgetsResize(); } catch (err) { console.warn(err); }
+  try { setupWeatherControls(); } catch (err) { console.warn(err); }
+  try { setupWidgetGallery(); } catch (err) { console.warn(err); }
+  try {
+    const clearSelectionBtn = document.getElementById("clearSelectionBtn");
+    if (clearSelectionBtn) {
+      clearSelectionBtn.addEventListener("click", clearPillSelection);
+    }
+  } catch (err) { console.warn(err); }
+  try { setupMarqueeSelection(); } catch (err) { console.warn(err); }
+  try { setupDockDragAndDrop(); } catch (err) { console.warn(err); }
+  try { initMultiDesktop(); } catch (err) { console.warn(err); }
+  try { setupWidgetControls(); } catch (err) { console.warn(err); }
+  try { if (typeof setupWidgetDesktopsModal === "function") setupWidgetDesktopsModal(); } catch (err) { console.warn(err); }
+  try { setupToolbarDrag(); } catch (err) { console.warn(err); }
+  try { setupEvents(); } catch (err) { console.warn(err); }
+  try { setupBookmarkListeners(); } catch (err) { console.warn(err); }
+  try { setupTabListeners(); } catch (err) { console.warn(err); }
+  try { await loadExperimentalLocalShortcuts(); } catch (err) { console.warn(err); }
 });
 
 // Disposition des raccourcis (Mode Libre avec alignements intelligents collés)
