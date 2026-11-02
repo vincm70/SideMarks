@@ -3614,6 +3614,30 @@ html, body {
   color: #fff;
 }
 
+.tasks-groups-add-btn {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 8px;
+  color: #34d399;
+  font-size: 13px;
+  font-weight: 700;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+.tasks-groups-add-btn:hover {
+  background: rgba(16, 185, 129, 0.38);
+  border-color: #10b981;
+  color: #ffffff;
+  transform: scale(1.08);
+}
+
 .tasks-groups-wrap-btn {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.12);

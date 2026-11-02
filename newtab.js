@@ -3744,9 +3744,203 @@ function setupTasksWidget() {
 
   let draggedGroup = null;
 
+  // Menu contextuel et gestion des Groupes de Tâches (Ajout & Renommage)
+  const groupContextMenu = document.getElementById("groupContextMenu");
+  const groupContextTitle = document.getElementById("groupContextTitle");
+  let activeContextGroup = null;
+
+  function openGroupContextMenu(e, groupName) {
+    if (!groupContextMenu || !groupName) return;
+    e.preventDefault();
+    e.stopPropagation();
+    activeContextGroup = groupName;
+    if (groupContextTitle) {
+      groupContextTitle.textContent = (groupName === "all" ? "Toutes les tâches" : (groupName === "P0" ? "⚡ P0 (Urgent)" : groupName));
+    }
+    const renameBtn = groupContextMenu.querySelector('[data-action="renameGroup"]');
+    if (renameBtn) {
+      const isSystem = groupName === "all" || groupName === "P0";
+      renameBtn.style.display = isSystem ? "none" : "block";
+    }
+    const x = Math.min(e.clientX, window.innerWidth - 220);
+    const y = Math.min(e.clientY, window.innerHeight - 150);
+    groupContextMenu.style.left = `${Math.max(10, x)}px`;
+    groupContextMenu.style.top = `${Math.max(10, y)}px`;
+    groupContextMenu.classList.remove("hidden");
+  }
+
+  function closeGroupContextMenu() {
+    if (groupContextMenu) groupContextMenu.classList.add("hidden");
+    activeContextGroup = null;
+  }
+
+  window.addEventListener("click", () => closeGroupContextMenu());
+  window.addEventListener("contextmenu", (e) => {
+    if (groupContextMenu && !groupContextMenu.contains(e.target) && !e.target.closest(".task-group-tab")) {
+      closeGroupContextMenu();
+    }
+  });
+
+  if (groupContextMenu && !groupContextMenu.dataset.bound) {
+    groupContextMenu.dataset.bound = "1";
+    groupContextMenu.querySelectorAll(".context-menu-item").forEach(item => {
+      item.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const action = item.dataset.action;
+        const group = activeContextGroup;
+        closeGroupContextMenu();
+        if (!group) return;
+
+        if (action === "renameGroup") {
+          promptRenameGroup(group);
+        } else if (action === "exportZip") {
+          exportTasksGroupZip(group);
+        }
+      });
+    });
+  }
+
+  // ➕ Ajouter un nouveau groupe / liste de tâches
+  async function promptAddNewGroup() {
+    const raw = prompt("Nom du nouveau groupe / liste de tâches (ex: Projets, Travaux, Vacances...) :");
+    if (!raw) return;
+    const groupName = raw.trim();
+    if (!groupName) return;
+
+    if (groupName.toLowerCase() === "toutes" || groupName.toLowerCase() === "all" || groupName.toUpperCase() === "P0") {
+      showToast("ℹ️ Ce nom est réservé par le système.");
+      return;
+    }
+
+    if (!Array.isArray(tasksSettings.customGroups)) tasksSettings.customGroups = [];
+    if (!tasksSettings.customGroups.includes(groupName)) {
+      tasksSettings.customGroups.push(groupName);
+    }
+    if (!Array.isArray(tasksSettings.groupOrder)) tasksSettings.groupOrder = [];
+    if (!tasksSettings.groupOrder.includes(groupName)) {
+      tasksSettings.groupOrder.push(groupName);
+    }
+
+    activeGroup = groupName;
+    tasksSettings.filterGroup = activeGroup;
+    chrome.storage.local.set({ tasksSettings });
+
+    // Synchronisation création de liste Google Tasks
+    if (chrome.identity && chrome.identity.getAuthToken) {
+      chrome.identity.getAuthToken({ interactive: false }, async (token) => {
+        if (!token) return;
+        try {
+          await fetch(`https://tasks.googleapis.com/tasks/v1/users/@me/lists`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ title: groupName })
+          });
+        } catch (eG) {
+          console.warn("Erreur création liste Google Tasks:", eG);
+        }
+      });
+    }
+
+    renderGroupTabs();
+    renderTasks();
+    showToast(`➕ Groupe « ${groupName} » créé avec succès !`);
+  }
+
+  // ✏️ Renommer un groupe de tâches
+  async function promptRenameGroup(oldGroup) {
+    if (!oldGroup || oldGroup === "all" || oldGroup === "P0") {
+      showToast("ℹ️ Les groupes système « Toutes » et « P0 » ne peuvent pas être renommés.");
+      return;
+    }
+
+    const raw = prompt(`Renommer le groupe « ${oldGroup} » en :`, oldGroup);
+    if (!raw) return;
+    const newGroup = raw.trim();
+    if (!newGroup || newGroup === oldGroup) return;
+
+    if (newGroup.toLowerCase() === "toutes" || newGroup.toLowerCase() === "all" || newGroup.toUpperCase() === "P0") {
+      showToast("ℹ️ Ce nom est réservé par le système.");
+      return;
+    }
+
+    pushTasksHistory(`Renommage groupe « ${oldGroup} » en « ${newGroup} »`);
+
+    // 1. Mettre à jour toutes les tâches de ce groupe
+    let rawListId = null;
+    tasksList.forEach(t => {
+      if (t.groupId === oldGroup) {
+        t.groupId = newGroup;
+        if (t.rawGroupId && !rawListId) rawListId = t.rawGroupId;
+      }
+    });
+
+    // 2. Mettre à jour customGroups et groupOrder
+    if (Array.isArray(tasksSettings.customGroups)) {
+      const idx = tasksSettings.customGroups.indexOf(oldGroup);
+      if (idx !== -1) tasksSettings.customGroups[idx] = newGroup;
+      else tasksSettings.customGroups.push(newGroup);
+    } else {
+      tasksSettings.customGroups = [newGroup];
+    }
+
+    if (Array.isArray(tasksSettings.groupOrder)) {
+      const idx = tasksSettings.groupOrder.indexOf(oldGroup);
+      if (idx !== -1) tasksSettings.groupOrder[idx] = newGroup;
+    }
+
+    if (activeGroup === oldGroup) {
+      activeGroup = newGroup;
+      tasksSettings.filterGroup = activeGroup;
+    }
+
+    saveTasks();
+
+    // 3. Synchronisation Google Tasks API (PATCH /users/@me/lists/{tasklist})
+    if (chrome.identity && chrome.identity.getAuthToken && rawListId) {
+      chrome.identity.getAuthToken({ interactive: false }, async (token) => {
+        if (!token) return;
+        try {
+          await fetch(`https://tasks.googleapis.com/tasks/v1/users/@me/lists/${encodeURIComponent(rawListId)}`, {
+            method: "PATCH",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ id: rawListId, title: newGroup })
+          });
+        } catch (eG) {
+          console.warn("Erreur renommage liste Google Tasks:", eG);
+        }
+      });
+    }
+
+    renderGroupTabs();
+    renderTasks();
+    showToast(`✏️ Groupe renommé en « ${newGroup} » !`);
+  }
+
+  // Bouton + pour ajouter un groupe
+  const addGroupBtn = document.getElementById("tasksAddGroupBtn");
+  if (addGroupBtn && !addGroupBtn.dataset.bound) {
+    addGroupBtn.dataset.bound = "1";
+    addGroupBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      promptAddNewGroup();
+    });
+  }
+
   function renderGroupTabs() {
     if (!groupsBar) return;
     const groupsSet = new Set(["all", "P0"]);
+
+    if (Array.isArray(tasksSettings.customGroups)) {
+      tasksSettings.customGroups.forEach(g => {
+        if (g && g !== "all" && g !== "P0") groupsSet.add(g);
+      });
+    }
 
     tasksList.forEach(t => {
       if (t.groupId && t.groupId !== "P0") groupsSet.add(t.groupId);
@@ -3777,6 +3971,19 @@ function setupTasksWidget() {
     // Synchroniser l'ordre dans tasksSettings
     tasksSettings.groupOrder = allGroups;
 
+    // Mettre à jour dynamiquement la liste déroulante des groupes dans le formulaire d'ajout
+    if (newGroupSelect) {
+      const curVal = newGroupSelect.value;
+      newGroupSelect.innerHTML = "";
+      allGroups.filter(g => g !== "all" && g !== "P0").forEach(g => {
+        const opt = document.createElement("option");
+        opt.value = g;
+        opt.textContent = g;
+        if (g === curVal) opt.selected = true;
+        newGroupSelect.appendChild(opt);
+      });
+    }
+
     // Mode Wrap (multi-lignes) pour visualiser tous les groupes d'un coup
     const isWrap = Boolean(tasksSettings.groupsWrapMode);
     groupsBar.classList.toggle("wrap-mode", isWrap);
@@ -3794,12 +4001,19 @@ function setupTasksWidget() {
       btn.className = "task-group-tab" + (activeGroup === g ? " active" : "") + (g === "P0" ? " p0-tab" : "");
       btn.dataset.group = g;
       btn.textContent = g === "all" ? "Toutes" : (g === "P0" ? "⚡ P0" : g);
-      btn.title = (g === "all" ? "Toutes" : g) + " (Clic: filtrer, Clic droit: exporter ZIP, Glissez une tâche ici pour changer de groupe)";
+      const isSystem = g === "all" || g === "P0";
+      btn.title = (g === "all" ? "Toutes" : g) + (isSystem ? " (Clic: filtrer, Clic droit: menu)" : " (Clic: filtrer, Double-clic: renommer, Clic droit: menu, Glissez pour réorganiser)");
       btn.draggable = true;
 
+      btn.addEventListener("dblclick", (e) => {
+        e.stopPropagation();
+        if (!isSystem) {
+          promptRenameGroup(g);
+        }
+      });
+
       btn.addEventListener("contextmenu", (e) => {
-        e.preventDefault();
-        exportTasksGroupZip(g);
+        openGroupContextMenu(e, g);
       });
 
       btn.addEventListener("click", () => {

@@ -425,6 +425,7 @@
               <button type="button" class="task-group-tab" data-group="Perso">Perso</button>
             </div>
             <button type="button" id="tasksGroupsScrollRight" class="tasks-groups-nav-btn" title="Défiler vers la droite (ou molette)">▶</button>
+            <button type="button" id="tasksAddGroupBtn" class="tasks-groups-add-btn" title="Créer un nouveau groupe / liste de tâches (➕)">+</button>
             <button type="button" id="tasksGroupsWrapToggle" class="tasks-groups-wrap-btn" title="Déplier tous les groupes sur plusieurs lignes">⊞</button>
           </div>
 
@@ -1330,6 +1331,13 @@
       <button type="button" class="context-menu-item" data-action="clearDue">❌ Retirer l'échéance (Sans date)</button>
       <button type="button" class="context-menu-item" data-action="openReader">📖 Voir les détails & sous-tâches</button>
       <button type="button" class="context-menu-item" data-action="copyTask">📋 Copier le texte</button>
+    </div>
+
+    <!-- Menu contextuel Onglet de Groupe de Tâches -->
+    <div id="groupContextMenu" class="context-menu hidden">
+      <div id="groupContextTitle" class="context-menu-header">Groupe</div>
+      <button type="button" class="context-menu-item" data-action="renameGroup">✏️ Renommer ce groupe</button>
+      <button type="button" class="context-menu-item" data-action="exportZip">📦 Exporter en archive ZIP (IA)</button>
     </div>
 
 
