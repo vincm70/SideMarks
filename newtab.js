@@ -3388,8 +3388,13 @@ function setupTasksWidget() {
       btn.className = "task-group-tab" + (activeGroup === g ? " active" : "") + (g === "P0" ? " p0-tab" : "");
       btn.dataset.group = g;
       btn.textContent = g === "all" ? "Toutes" : (g === "P0" ? "⚡ P0" : g);
-      btn.title = (g === "all" ? "Toutes" : g) + " (Glisser pour réorganiser)";
+      btn.title = (g === "all" ? "Toutes" : g) + " (Clic gauche: filtrer, Clic droit: exporter ZIP pour analyse IA)";
       btn.draggable = true;
+
+      btn.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        exportTasksGroupZip(g);
+      });
 
       btn.addEventListener("click", () => {
         groupsBar.querySelectorAll(".task-group-tab").forEach(t => t.classList.remove("active"));
@@ -3397,6 +3402,11 @@ function setupTasksWidget() {
         activeGroup = g;
         tasksSettings.filterGroup = activeGroup;
         chrome.storage.local.set({ tasksSettings });
+        const expBtn = document.getElementById("tasksExportZipBtn");
+        if (expBtn) {
+          const gl = activeGroup === "all" ? "Toutes" : (activeGroup === "P0" ? "⚡ P0" : activeGroup);
+          expBtn.title = `Exporter le groupe « ${gl} » en archive ZIP (formaté pour analyse IA avec notes et pièces jointes)`;
+        }
         renderTasks();
         btn.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
       });
@@ -3508,6 +3518,12 @@ function setupTasksWidget() {
       if (!newGroupSelect.children || newGroupSelect.children.length === 0) {
         newGroupSelect.innerHTML = '<option value="Général">Général</option>';
       }
+    }
+
+    const expBtn = document.getElementById("tasksExportZipBtn");
+    if (expBtn) {
+      const gl = activeGroup === "all" ? "Toutes" : (activeGroup === "P0" ? "⚡ P0" : activeGroup);
+      expBtn.title = `Exporter le groupe « ${gl} » en archive ZIP (formaté pour analyse IA avec notes et pièces jointes)`;
     }
   }
 
@@ -4734,6 +4750,13 @@ function renderTasks() {
     });
   }
 
+  const exportZipBtn = document.getElementById("tasksExportZipBtn");
+  if (exportZipBtn) {
+    exportZipBtn.addEventListener("click", () => {
+      exportTasksGroupZip(activeGroup);
+    });
+  }
+
   if (syncBtn) {
     syncBtn.addEventListener("click", async () => {
       syncBtn.textContent = "⏳";
@@ -4918,20 +4941,100 @@ function openTaskConversationDialog(task, kind = 'task') {
         article.className = 'task-conversation-entry';
         const date = document.createElement('time');
         date.textContent = entry.date;
-        const comment = document.createElement('p');
-        let offset = 0;
-        for (const match of entry.comment.matchAll(/https?:\/\/[^\s<>"']+/g)) {
-          comment.append(document.createTextNode(entry.comment.slice(offset, match.index)));
-          const link = document.createElement('a');
-          link.textContent = match[0];
-          link.href = match[0];
-          link.target = '_blank';
-          link.rel = 'noopener noreferrer';
-          comment.append(link);
-          offset = match.index + match[0].length;
+        article.appendChild(date);
+
+        const lines = (entry.comment || '').split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) {
+            article.appendChild(document.createElement('br'));
+            continue;
+          }
+
+          // Cas 1 : Pièce jointe / lien formalisé "📎 Nom : URL/Chemin"
+          const attachMatch = trimmed.match(/^📎\s*(.*?)\s*:\s*(\S.*)$/);
+          if (attachMatch) {
+            const attName = attachMatch[1] || 'Pièce jointe';
+            const attTarget = attachMatch[2].trim();
+            const isLocal = /^[a-zA-Z]:\\|^\\\\|^file:\/\/\//i.test(attTarget);
+
+            const p = document.createElement('p');
+            p.className = 'task-attachment-item';
+
+            if (isLocal) {
+              const cleanLocalPath = attTarget.replace(/^file:\/\/\//, '');
+              const link = document.createElement('a');
+              link.href = '#';
+              link.className = 'task-local-link';
+              link.title = `Ouvrir le document ou dossier local avec SideMarksBridge :\n${cleanLocalPath}`;
+              link.textContent = `📁 ${attName} : ${cleanLocalPath}`;
+              link.onclick = (e) => {
+                e.preventDefault();
+                if (typeof triggerLocalShortcut === 'function') {
+                  triggerLocalShortcut(cleanLocalPath);
+                  if (typeof showToast === 'function') showToast(`Ouverture locale : ${attName}`);
+                }
+              };
+              p.appendChild(link);
+            } else {
+              const icon = attTarget.startsWith('http') ? '🌐' : '📎';
+              const link = document.createElement('a');
+              link.href = attTarget;
+              link.target = '_blank';
+              link.rel = 'noopener noreferrer';
+              link.textContent = `${icon} ${attName} : ${attTarget}`;
+              p.appendChild(link);
+            }
+            article.appendChild(p);
+            continue;
+          }
+
+          // Cas 2 : Ligne de texte avec détection d'URL web et de chemins locaux Windows
+          const p = document.createElement('p');
+          const regex = /(https?:\/\/[^\s<>"']+|file:\/\/\/[^\s<>"']+|[a-zA-Z]:\\(?:[^\s\\/:*?"<>|\r\n]+\\)*[^\s\\/:*?"<>|\r\n]+)/g;
+          let offset = 0;
+          let match;
+
+          while ((match = regex.exec(line)) !== null) {
+            if (match.index > offset) {
+              p.appendChild(document.createTextNode(line.slice(offset, match.index)));
+            }
+            const matchStr = match[0];
+            const isLocal = /^[a-zA-Z]:\\|^file:\/\/\//i.test(matchStr);
+
+            if (isLocal) {
+              const cleanLocalPath = matchStr.replace(/^file:\/\/\//, '');
+              const link = document.createElement('a');
+              link.href = '#';
+              link.className = 'task-local-link';
+              link.title = `Ouvrir avec SideMarksBridge :\n${cleanLocalPath}`;
+              link.textContent = `📁 ${cleanLocalPath}`;
+              link.onclick = (e) => {
+                e.preventDefault();
+                if (typeof triggerLocalShortcut === 'function') {
+                  triggerLocalShortcut(cleanLocalPath);
+                  if (typeof showToast === 'function') showToast(`Ouverture locale...`);
+                }
+              };
+              p.appendChild(link);
+            } else {
+              const link = document.createElement('a');
+              link.textContent = matchStr;
+              link.href = matchStr;
+              link.target = '_blank';
+              link.rel = 'noopener noreferrer';
+              p.appendChild(link);
+            }
+            offset = match.index + matchStr.length;
+          }
+
+          if (offset < line.length) {
+            p.appendChild(document.createTextNode(line.slice(offset)));
+          }
+
+          article.appendChild(p);
         }
-        comment.append(document.createTextNode(entry.comment.slice(offset)));
-        article.append(date, comment);
+
         history.append(article);
       }
     }
@@ -4943,7 +5046,8 @@ function openTaskConversationDialog(task, kind = 'task') {
     attachments.forEach((item, index) => {
       const row = document.createElement('div');
       row.className = 'followup-draft-item';
-      row.textContent = '📎 ' + item.name + ' ';
+      const icon = item.isLocal ? '📁 ' : (item.url && item.url.startsWith('http') ? '🔗 ' : '📎 ');
+      row.textContent = icon + item.name + ' ';
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.textContent = 'Retirer';
@@ -4980,13 +5084,22 @@ function openTaskConversationDialog(task, kind = 'task') {
 
   linkBtn.onclick = () => {
     if (uploading || saving) return;
-    const url = prompt('Lien HTTP(S) à joindre au commentaire');
-    if (!url) return;
-    if (!/^https?:\/\/[^\s]+$/.test(url.trim())) {
-      status.textContent = 'Lien HTTP(S) requis.';
+    const inputVal = prompt('Lien web HTTP(S) ou chemin local Windows (ex: C:\\MonDossier ou C:\\Documents\\rapport.pdf) :');
+    if (!inputVal) return;
+    const val = inputVal.trim();
+    const isHttp = /^https?:\/\/[^\s]+$/i.test(val);
+    const isLocal = /^[a-zA-Z]:\\|^\\\\|^file:\/\/\//i.test(val);
+    if (!isHttp && !isLocal) {
+      status.textContent = 'Lien HTTP(S) ou chemin local Windows (C:\\...) requis.';
       return;
     }
-    attachments.push({ name: 'Lien', url: url.trim() });
+    const cleanPath = val.replace(/^file:\/\/\//, '');
+    let label = 'Lien web';
+    if (isLocal) {
+      const parts = cleanPath.replace(/\\$/, '').split('\\');
+      label = parts[parts.length - 1] || 'Dossier local';
+    }
+    attachments.push({ name: label, url: val, isLocal });
     draftRender();
   };
 
@@ -5147,6 +5260,412 @@ function openTaskConversationDialog(task, kind = 'task') {
 
 function openTaskConversationModal(item, isEvent = false) {
   openTaskConversationDialog(item, isEvent ? 'event' : 'task');
+}
+
+// ========================================================
+// CLASSE PURE JS DE GÉNÉRATION D'ARCHIVES ZIP (PKZIP V2.0 / STORE)
+// Compatible 100% avec Windows Explorer, macOS, Linux, 7-Zip, Python
+// ========================================================
+class SimpleZip {
+  constructor() {
+    this.files = [];
+    this._crcTable = SimpleZip._makeCrcTable();
+  }
+
+  static _makeCrcTable() {
+    const table = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+      let c = i;
+      for (let k = 0; k < 8; k++) {
+        c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      }
+      table[i] = c >>> 0;
+    }
+    return table;
+  }
+
+  _crc32(bytes) {
+    let crc = 0 ^ (-1);
+    const table = this._crcTable;
+    for (let i = 0; i < bytes.length; i++) {
+      crc = (crc >>> 8) ^ table[(crc ^ bytes[i]) & 0xFF];
+    }
+    return (crc ^ (-1)) >>> 0;
+  }
+
+  _dosDateTime(date = new Date()) {
+    const year = Math.max(1980, date.getFullYear());
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const seconds = Math.floor(date.getSeconds() / 2);
+
+    const dosTime = (hours << 11) | (minutes << 5) | seconds;
+    const dosDate = ((year - 1980) << 9) | (month << 5) | day;
+    return { dosTime, dosDate };
+  }
+
+  addFile(filename, content) {
+    let bytes;
+    if (typeof content === 'string') {
+      bytes = new TextEncoder().encode(content);
+    } else if (content instanceof Uint8Array) {
+      bytes = content;
+    } else if (content instanceof ArrayBuffer) {
+      bytes = new Uint8Array(content);
+    } else {
+      bytes = new Uint8Array(0);
+    }
+
+    const cleanName = filename.replace(/\\/g, '/').replace(/^\/+/, '');
+    const nameBytes = new TextEncoder().encode(cleanName);
+    const crc = this._crc32(bytes);
+    const { dosTime, dosDate } = this._dosDateTime();
+
+    this.files.push({
+      nameBytes,
+      cleanName,
+      bytes,
+      crc,
+      dosTime,
+      dosDate,
+      size: bytes.length
+    });
+  }
+
+  generate() {
+    let totalSize = 0;
+    for (const f of this.files) {
+      totalSize += 30 + f.nameBytes.length + f.size;
+      totalSize += 46 + f.nameBytes.length;
+    }
+    totalSize += 22;
+
+    const out = new Uint8Array(totalSize);
+    const view = new DataView(out.buffer);
+    let offset = 0;
+
+    for (const f of this.files) {
+      f.localHeaderOffset = offset;
+      view.setUint32(offset, 0x04034b50, true);
+      view.setUint16(offset + 4, 20, true);
+      view.setUint16(offset + 6, 0x0800, true);
+      view.setUint16(offset + 8, 0, true);
+      view.setUint16(offset + 10, f.dosTime, true);
+      view.setUint16(offset + 12, f.dosDate, true);
+      view.setUint32(offset + 14, f.crc, true);
+      view.setUint32(offset + 18, f.size, true);
+      view.setUint32(offset + 22, f.size, true);
+      view.setUint16(offset + 26, f.nameBytes.length, true);
+      view.setUint16(offset + 28, 0, true);
+      offset += 30;
+
+      out.set(f.nameBytes, offset);
+      offset += f.nameBytes.length;
+
+      out.set(f.bytes, offset);
+      offset += f.size;
+    }
+
+    const cdOffset = offset;
+    for (const f of this.files) {
+      view.setUint32(offset, 0x02014b50, true);
+      view.setUint16(offset + 4, 20, true);
+      view.setUint16(offset + 6, 20, true);
+      view.setUint16(offset + 8, 0x0800, true);
+      view.setUint16(offset + 10, 0, true);
+      view.setUint16(offset + 12, f.dosTime, true);
+      view.setUint16(offset + 14, f.dosDate, true);
+      view.setUint32(offset + 16, f.crc, true);
+      view.setUint32(offset + 20, f.size, true);
+      view.setUint32(offset + 24, f.size, true);
+      view.setUint16(offset + 28, f.nameBytes.length, true);
+      view.setUint16(offset + 30, 0, true);
+      view.setUint16(offset + 32, 0, true);
+      view.setUint16(offset + 34, 0, true);
+      view.setUint16(offset + 36, 0, true);
+      view.setUint32(offset + 38, 0, true);
+      view.setUint32(offset + 42, f.localHeaderOffset, true);
+      offset += 46;
+
+      out.set(f.nameBytes, offset);
+      offset += f.nameBytes.length;
+    }
+
+    const cdSize = offset - cdOffset;
+
+    view.setUint32(offset, 0x06054b50, true);
+    view.setUint16(offset + 4, 0, true);
+    view.setUint16(offset + 6, 0, true);
+    view.setUint16(offset + 8, this.files.length, true);
+    view.setUint16(offset + 10, this.files.length, true);
+    view.setUint32(offset + 12, cdSize, true);
+    view.setUint32(offset + 16, cdOffset, true);
+    view.setUint16(offset + 20, 0, true);
+
+    return out;
+  }
+}
+
+// Helpers pour export
+function escapeCsvValue(val) {
+  const s = String(val == null ? '' : val);
+  if (/[",\r\n]/.test(s)) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function collectTaskAttachmentsForExport(task, list) {
+  if (!task) return;
+  const rawNotes = task.userNotes ?? task.notes ?? task.description ?? '';
+  const lines = rawNotes.split('\n');
+  for (const line of lines) {
+    const match = line.match(/^📎\s*(.*?)\s*:\s*(\S.*)$/);
+    if (match) {
+      list.push({
+        taskTitle: task.title || 'Tâche',
+        name: match[1].trim(),
+        url: match[2].trim()
+      });
+    }
+  }
+  if (Array.isArray(task.attachments)) {
+    task.attachments.forEach(att => {
+      list.push({
+        taskTitle: task.title || 'Tâche',
+        name: att.name || 'Pièce jointe',
+        url: att.url || att.path || ''
+      });
+    });
+  }
+}
+
+// ========================================================
+// FONCTION D'EXPORT DE GROUPE EN ARCHIVE ZIP POUR ANALYSE IA
+// ========================================================
+async function exportTasksGroupZip(targetGroup = 'all') {
+  try {
+    if (typeof tasksList === 'undefined' || !Array.isArray(tasksList) || !tasksList.length) {
+      if (typeof showToast === 'function') showToast("Aucune tâche à exporter.");
+      return;
+    }
+
+    const groupLabel = targetGroup === 'all' ? 'Toutes les catégories' : (targetGroup === 'P0' ? '⚡ Urgences P0' : targetGroup);
+    const safeGroupName = (targetGroup === 'all' ? 'Toutes' : targetGroup).replace(/[\\/:*?"<>|]/g, '_');
+
+    // Filtrer les tâches correspondant au groupe ou P0
+    let matchedTasks = tasksList.filter(t => {
+      if (targetGroup === 'P0') return t.priority === 'P0';
+      if (targetGroup === 'all') return true;
+      return (t.groupId || 'Général') === targetGroup;
+    });
+
+    // Inclure aussi les sous-tâches dont le parent est dans le groupe
+    const taskIdsSet = new Set(matchedTasks.map(t => t.id));
+    const subtasksToAdd = tasksList.filter(t => t.parent && taskIdsSet.has(t.parent) && !taskIdsSet.has(t.id));
+    matchedTasks = matchedTasks.concat(subtasksToAdd);
+
+    if (!matchedTasks.length) {
+      if (typeof showToast === 'function') showToast(`Aucune tâche trouvée pour le groupe « ${targetGroup} »`);
+      return;
+    }
+
+    if (typeof showToast === 'function') showToast(`Préparation de l'archive ZIP pour « ${groupLabel} »...`);
+
+    const zip = new SimpleZip();
+    const dateIso = new Date().toISOString().slice(0, 10);
+    const dateFr = new Date().toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short' });
+
+    // Statistiques
+    const total = matchedTasks.length;
+    const roots = matchedTasks.filter(t => !t.parent);
+    const todos = matchedTasks.filter(t => t.status !== 'done' && t.status !== 'completed').length;
+    const dones = matchedTasks.filter(t => t.status === 'done' || t.status === 'completed').length;
+    const p0s = matchedTasks.filter(t => t.priority === 'P0').length;
+    const p1s = matchedTasks.filter(t => t.priority === 'P1').length;
+    const p2s = matchedTasks.filter(t => t.priority === 'P2').length;
+
+    // 1. GÉNÉRATION DE SYNTHESE_POUR_IA.md (Formaté spécialement pour injection dans un LLM)
+    let md = `# SYNTHÈSE DU GROUPE « ${groupLabel} » POUR ANALYSE IA\n\n`;
+    md += `- **Date d'exportation** : ${dateFr}\n`;
+    md += `- **Total de tâches & sous-tâches** : ${total} (${todos} à faire, ${dones} terminées, ${p0s} urgentes P0)\n`;
+    md += `- **Taux d'avancement global** : ${total > 0 ? Math.round((dones / total) * 100) : 0}%\n\n`;
+
+    md += `> [!IMPORTANT]\n`;
+    md += `> **Directives suggérées pour l'assistant IA (Claude, ChatGPT, Gemini, etc.) :**\n`;
+    md += `> 1. Analyser la charge de travail globale et la répartition des priorités (P0, P1, P2).\n`;
+    md += `> 2. Détecter les éventuels blocages ou retards à partir des conversations de suivi horodatées ci-dessous.\n`;
+    md += `> 3. Résumer les décisions prises et les pièces jointes associées aux tâches.\n`;
+    md += `> 4. Établir une proposition de plan d'action hiérarchisé pour la semaine.\n\n`;
+
+    md += `## 📊 Statistiques du groupe\n`;
+    md += `- **Tâches principales** : ${roots.length}\n`;
+    md += `- **Sous-tâches** : ${total - roots.length}\n`;
+    md += `- **Priorité P0 (Critique immédiate)** : ${p0s}\n`;
+    md += `- **Priorité P1 (Haute)** : ${p1s}\n`;
+    md += `- **Priorité P2 (Normale)** : ${p2s}\n\n`;
+
+    md += `## 📋 Détail complet des tâches et historiques de conversation\n\n`;
+
+    const attachmentsList = [];
+
+    roots.forEach((task, idx) => {
+      const isDone = task.status === 'done' || task.status === 'completed';
+      const statusLabel = isDone ? '✅ [TERMINÉE]' : '⏳ [À FAIRE]';
+      md += `### ${idx + 1}. ${task.title || 'Sans titre'} (${task.priority || 'P2'}) ${statusLabel}\n`;
+      md += `- **ID** : \`${task.id}\`\n`;
+      md += `- **Groupe / Catégorie** : \`${task.groupId || 'Général'}\`\n`;
+      if (task.due) md += `- **Échéance** : ${task.due}\n`;
+
+      const timeline = taskConversation(task);
+      if (timeline.cleanDescription) {
+        md += `\n**Description / Notes initiales :**\n${timeline.cleanDescription.trim()}\n`;
+      }
+
+      if (timeline.entries && timeline.entries.length) {
+        md += `\n#### 💬 Fil de conversation et commentaires de suivi (${timeline.entries.length}) :\n`;
+        timeline.entries.forEach(entry => {
+          md += `- **[${entry.date || 'Horodatage'}]** :\n`;
+          const lines = (entry.comment || '').split('\n');
+          lines.forEach(l => {
+            md += `  > ${l}\n`;
+          });
+        });
+      }
+
+      collectTaskAttachmentsForExport(task, attachmentsList);
+
+      const subtasks = matchedTasks.filter(st => st.parent === task.id);
+      if (subtasks.length) {
+        md += `\n#### ↳ Sous-tâches (${subtasks.length}) :\n`;
+        subtasks.forEach(st => {
+          const stDone = st.status === 'done' || st.status === 'completed';
+          const stBox = stDone ? '[x]' : '[ ]';
+          md += `- ${stBox} **${st.title || 'Sous-tâche'}** (Priorité: ${st.priority || 'P2'} - Statut: ${stDone ? 'Terminée' : 'À faire'})\n`;
+          if (st.due) md += `  - Échéance : ${st.due}\n`;
+          const stTimeline = taskConversation(st);
+          if (stTimeline.cleanDescription) {
+            md += `  - Notes : ${stTimeline.cleanDescription.trim()}\n`;
+          }
+          collectTaskAttachmentsForExport(st, attachmentsList);
+        });
+      }
+
+      md += `\n---\n\n`;
+    });
+
+    // Tâches orphelines éventuelles
+    const orphans = matchedTasks.filter(t => t.parent && !roots.some(r => r.id === t.parent));
+    if (orphans.length) {
+      md += `### 🧩 Tâches complémentaires isolées\n`;
+      orphans.forEach(st => {
+        const stDone = st.status === 'done' || st.status === 'completed';
+        md += `- ${stDone ? '✅' : '⏳'} **${st.title}** (${st.priority || 'P2'}) - ID Parent: \`${st.parent}\`\n`;
+        collectTaskAttachmentsForExport(st, attachmentsList);
+      });
+      md += `\n---\n\n`;
+    }
+
+    // 2. DOSSIER PIÈCES JOINTES
+    let pjIndex = 0;
+    for (const att of attachmentsList) {
+      pjIndex++;
+      const safeTitle = (att.taskTitle || 'Tache').replace(/[\\/:*?"<>|]/g, '_').slice(0, 30);
+      const safeName = (att.name || `piece_jointe_${pjIndex}`).replace(/[\\/:*?"<>|]/g, '_').slice(0, 40);
+      const prefix = `${safeTitle}_${safeName}`;
+
+      if (att.url.startsWith('data:')) {
+        try {
+          const parts = att.url.split(',');
+          if (parts.length >= 2) {
+            const rawBinary = atob(parts[1]);
+            const u8 = new Uint8Array(rawBinary.length);
+            for (let i = 0; i < rawBinary.length; i++) {
+              u8[i] = rawBinary.charCodeAt(i);
+            }
+            const ext = att.url.includes('image/png') ? '.png' : (att.url.includes('image/jpeg') ? '.jpg' : (att.url.includes('pdf') ? '.pdf' : '.bin'));
+            const finalFilename = `pieces_jointes/${prefix}${safeName.includes('.') ? '' : ext}`;
+            zip.addFile(finalFilename, u8);
+          }
+        } catch (b64Err) {
+          console.warn('Erreur conversion PJ base64:', b64Err);
+        }
+      } else if (/^[a-zA-Z]:\\|^\\\\|^file:\/\/\//i.test(att.url)) {
+        const cleanPath = att.url.replace(/^file:\/\/\//, '');
+        const content = `CHEMIN D'ACCÈS DU DOCUMENT OU RÉPERTOIRE LOCAL :\r\n${cleanPath}\r\n\r\n(Ce fichier se trouve sur votre disque ou réseau local).\r\n`;
+        zip.addFile(`pieces_jointes/${prefix}.txt`, content);
+      } else {
+        const urlContent = `[InternetShortcut]\r\nURL=${att.url}\r\n`;
+        zip.addFile(`pieces_jointes/${prefix}.url`, urlContent);
+      }
+    }
+
+    if (attachmentsList.length) {
+      md += `## 📎 Répertoire des pièces jointes et documents (${attachmentsList.length})\n`;
+      attachmentsList.forEach((att, i) => {
+        md += `${i + 1}. **${att.name}** (Tâche : « ${att.taskTitle} ») : \`${att.url.slice(0, 90)}${att.url.length > 90 ? '...' : ''}\`\n`;
+      });
+      md += `\n*Note : Les fichiers et raccourcis correspondants sont placés dans le dossier \`pieces_jointes/\` de ce ZIP.*\n`;
+    }
+
+    zip.addFile('SYNTHESE_POUR_IA.md', md);
+
+    // 3. EXPORT taches.json (Dump brut structuré)
+    const jsonExport = matchedTasks.map(t => {
+      const tl = taskConversation(t);
+      return {
+        ...t,
+        timelineParsed: {
+          cleanDescription: tl.cleanDescription,
+          entries: tl.entries
+        }
+      };
+    });
+    zip.addFile('taches.json', JSON.stringify(jsonExport, null, 2));
+
+    // 4. EXPORT taches.csv (Format tableur / analyse de données)
+    let csv = 'ID,Titre,Groupe,Priorite,Statut,Echeance,Commentaires_Nb,Parent\r\n';
+    matchedTasks.forEach(t => {
+      const tl = taskConversation(t);
+      const row = [
+        escapeCsvValue(t.id),
+        escapeCsvValue(t.title || ''),
+        escapeCsvValue(t.groupId || 'Général'),
+        escapeCsvValue(t.priority || 'P2'),
+        escapeCsvValue(t.status || 'todo'),
+        escapeCsvValue(t.due || ''),
+        tl.entries ? tl.entries.length : 0,
+        escapeCsvValue(t.parent || '')
+      ];
+      csv += row.join(',') + '\r\n';
+    });
+    zip.addFile('taches.csv', csv);
+
+    // 5. CRÉATION DU BLOB & TÉLÉCHARGEMENT DIRECT
+    const zipBytes = zip.generate();
+    const blob = new Blob([zipBytes], { type: 'application/zip' });
+    const downloadUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = `Export_Taches_${safeGroupName}_${dateIso}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      a.remove();
+      URL.revokeObjectURL(downloadUrl);
+    }, 4000);
+
+    if (typeof showToast === 'function') {
+      showToast(`Archive ZIP téléchargée : « ${a.download} » (${total} tâches)`);
+    }
+  } catch (err) {
+    console.error("Erreur exportTasksGroupZip:", err);
+    if (typeof showToast === 'function') {
+      showToast("Erreur lors de l'exportation ZIP : " + err.message);
+    }
+  }
 }
 
 document.addEventListener("DOMContentLoaded", async () => {

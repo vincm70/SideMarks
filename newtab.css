@@ -5347,6 +5347,37 @@ html, body {
 .task-conversation-entry a:hover {
   color: #7dd3fc;
 }
+.task-local-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(14, 165, 233, 0.12);
+  color: #38bdf8 !important;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 12.5px;
+  text-decoration: none !important;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin: 3px 2px;
+  vertical-align: middle;
+  word-break: break-all;
+}
+.task-local-link:hover {
+  background: rgba(14, 165, 233, 0.25);
+  border-color: #38bdf8;
+  color: #bae6fd !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+.task-local-link:active {
+  transform: translateY(0);
+}
+.task-attachment-item {
+  display: block;
+  margin: 4px 0;
+}
 .task-conversation-form {
   padding: 14px 22px 18px;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
