@@ -402,6 +402,7 @@
               <button type="button" id="tasksP0AlertBadge" class="tasks-p0-alert-badge hidden" title="Tâches P0 urgentes immédiates !">⚡ P0 : 0</button>
             </div>
             <div class="tasks-header-actions">
+              <button type="button" id="tasksUndoBtn" class="widget-header-btn disabled" title="Revenir en arrière / Annuler la dernière action (↩️ ou Ctrl+Z)" disabled>↩️</button>
               <button type="button" id="tasksExportZipBtn" class="widget-header-btn" title="Exporter le groupe actif en archive ZIP (formaté pour analyse IA avec notes et pièces jointes)">📦</button>
               <button type="button" id="tasksKanbanToggleBtn" class="widget-header-btn" title="Basculer en Vue Kanban / Liste (🍱)">🍱</button>
               <button type="button" id="tasksDesktopsBtn" class="widget-header-btn" title="Afficher les Tâches sur plusieurs bureaux (🖥️)">🖥️</button>
@@ -1318,11 +1319,9 @@
       <button type="button" class="context-menu-item" data-action="hideDay">👁️ Masquer pour ce jour</button>
       <button type="button" class="context-menu-item" data-action="openGoogle">📅 Ouvrir dans Google Agenda</button>
       <button type="button" class="context-menu-item" data-action="notify">🔔 Programmer alerte Windows</button>
-      <div class="context-menu-divider"></div>
-      <button type="button" class="context-menu-item danger" data-action="deleteEvent">🗑️ Supprimer définitivement</button>
     </div>
 
-    <!-- Menu contextuel Tâche (Clic Droit sécurisé avec options de report et remise à faire) -->
+    <!-- Menu contextuel Tâche (Clic Droit sécurisé avec options de report et remise à faire - ZÉRO suppression) -->
     <div id="taskContextMenu" class="context-menu hidden">
       <div id="taskContextTitle" class="context-menu-header">Tâche</div>
       <button type="button" class="context-menu-item" data-action="toggleDone">↩️ Remettre à faire (ou Terminer)</button>
@@ -1331,8 +1330,6 @@
       <button type="button" class="context-menu-item" data-action="clearDue">❌ Retirer l'échéance (Sans date)</button>
       <button type="button" class="context-menu-item" data-action="openReader">📖 Voir les détails & sous-tâches</button>
       <button type="button" class="context-menu-item" data-action="copyTask">📋 Copier le texte</button>
-      <div class="context-menu-divider"></div>
-      <button type="button" class="context-menu-item danger" data-action="deleteTask">🗑️ Supprimer définitivement</button>
     </div>
 
 

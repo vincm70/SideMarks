@@ -848,6 +848,7 @@ let tasksList = [
 let currentHoveredItem = null;
 let deleteTask = null;
 let deleteGoogleEvent = null;
+let performTasksUndo = null;
 
 window.addEventListener("keydown", (e) => {
   if (e.key === "Delete" || e.key === "Del") {
@@ -865,6 +866,15 @@ window.addEventListener("keydown", (e) => {
         currentHoveredItem = null;
         e.preventDefault();
       }
+    }
+  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+    const active = document.activeElement;
+    if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable)) {
+      return;
+    }
+    if (typeof performTasksUndo === "function") {
+      e.preventDefault();
+      performTasksUndo();
     }
   }
 });
@@ -3522,11 +3532,70 @@ function setupTasksWidget() {
 
   function saveTasks() {
     chrome.storage.local.set({ tasksData: tasksList, tasksSettings });
+    updateUndoButtonState();
+  }
+
+  // Historique Undo / Retour en arrière pour les tâches (Flèche ↩️ et Ctrl+Z)
+  const tasksUndoHistory = [];
+  const MAX_TASKS_UNDO = 30;
+
+  function pushTasksHistory(actionDesc = "Action") {
+    try {
+      tasksUndoHistory.push({
+        desc: actionDesc,
+        data: JSON.parse(JSON.stringify(tasksList))
+      });
+      if (tasksUndoHistory.length > MAX_TASKS_UNDO) {
+        tasksUndoHistory.shift();
+      }
+      updateUndoButtonState();
+    } catch (_) {}
+  }
+
+  performTasksUndo = function() {
+    if (tasksUndoHistory.length === 0) {
+      showToast("ℹ️ Aucun retour en arrière disponible");
+      return;
+    }
+    const previous = tasksUndoHistory.pop();
+    tasksList = previous.data;
+    saveTasks();
+    renderGroupTabs();
+    renderTasks();
+    updateUndoButtonState();
+    showToast(`↩️ Retour en arrière : « ${previous.desc} » annulé(e) !`);
+  };
+
+  function updateUndoButtonState() {
+    const undoBtn = document.getElementById("tasksUndoBtn");
+    if (!undoBtn) return;
+    if (tasksUndoHistory.length > 0) {
+      undoBtn.disabled = false;
+      undoBtn.classList.remove("disabled");
+      undoBtn.classList.add("undo-active");
+      const last = tasksUndoHistory[tasksUndoHistory.length - 1];
+      undoBtn.title = `↩️ Revenir en arrière : Annuler « ${last.desc} » (ou Ctrl+Z)`;
+    } else {
+      undoBtn.disabled = true;
+      undoBtn.classList.add("disabled");
+      undoBtn.classList.remove("undo-active");
+      undoBtn.title = "Revenir en arrière (aucune action à annuler)";
+    }
+  }
+
+  const tasksUndoBtn = document.getElementById("tasksUndoBtn");
+  if (tasksUndoBtn && !tasksUndoBtn.dataset.bound) {
+    tasksUndoBtn.dataset.bound = "1";
+    tasksUndoBtn.addEventListener("click", () => {
+      performTasksUndo();
+    });
   }
 
   deleteTask = async function(task, showUndo = true) {
     if (!task) return;
     const taskTitle = task.title || "Tâche";
+
+    pushTasksHistory(`Suppression de « ${taskTitle} »`);
 
     const idx = tasksList.findIndex(t => t.id === task.id);
     if (idx === -1) return;
@@ -3637,24 +3706,28 @@ function setupTasksWidget() {
         const tomorrowStr = tomDate.toISOString().slice(0, 10);
 
         if (action === "toggleDone") {
+          pushTasksHistory(`Changement d'état : « ${task.title} »`);
           task.status = task.status === "done" ? "todo" : "done";
           saveTasks();
           renderTasks();
           syncGoogleTaskStatus(task);
           showToast(`« ${task.title} » : ${task.status === "done" ? "Terminée" : "Remise à faire"}`);
         } else if (action === "postponeToday") {
+          pushTasksHistory(`Report à aujourd'hui : « ${task.title} »`);
           task.due = todayStr;
           saveTasks();
           renderTasks();
           syncGoogleTaskStatus(task);
           showToast(`📅 « ${task.title} » reportée à aujourd'hui !`);
         } else if (action === "postponeTomorrow") {
+          pushTasksHistory(`Report à demain : « ${task.title} »`);
           task.due = tomorrowStr;
           saveTasks();
           renderTasks();
           syncGoogleTaskStatus(task);
           showToast(`⏩ « ${task.title} » reportée à demain !`);
         } else if (action === "clearDue") {
+          pushTasksHistory(`Effacement échéance : « ${task.title} »`);
           task.due = "";
           saveTasks();
           renderTasks();
@@ -3664,8 +3737,6 @@ function setupTasksWidget() {
           openTaskReader(task);
         } else if (action === "copyTask") {
           copyTaskTreeToClipboard(task);
-        } else if (action === "deleteTask") {
-          deleteTask(task, true);
         }
       });
     });
@@ -5299,7 +5370,7 @@ function renderTasks() {
       const initStatus = (newTitleInput && newTitleInput.dataset.defaultStatus) ? newTitleInput.dataset.defaultStatus : "todo";
       if (newTitleInput) delete newTitleInput.dataset.defaultStatus;
 
-      tasksList.unshift({
+      const newTaskObj = {
         id: "task_" + Date.now(),
         title,
         priority,
@@ -5307,11 +5378,48 @@ function renderTasks() {
         status: initStatus,
         due,
         orderIndex: 0
-      });
+      };
+
+      pushTasksHistory(`Ajout de « ${title} »`);
+      tasksList.unshift(newTaskObj);
 
       saveTasks();
       renderGroupTabs();
       renderTasks();
+
+      // Synchronisation création directe vers Google Tasks si compte connecté
+      if (chrome.identity && chrome.identity.getAuthToken) {
+        chrome.identity.getAuthToken({ interactive: false }, async (token) => {
+          if (!token) return;
+          try {
+            const matchTask = tasksList.find(t => t.groupId === groupId && t.rawGroupId);
+            const targetListId = matchTask ? matchTask.rawGroupId : "@default";
+            const res = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${encodeURIComponent(targetListId)}/tasks`, {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                title,
+                notes: "",
+                due: due ? due + "T00:00:00.000Z" : null,
+                status: initStatus === "done" ? "completed" : "needsAction"
+              })
+            });
+            if (res.ok) {
+              const createdGTask = await res.json();
+              if (createdGTask && createdGTask.id) {
+                newTaskObj.id = createdGTask.id;
+                newTaskObj.rawGroupId = targetListId;
+                saveTasks();
+              }
+            }
+          } catch (eG) {
+            console.warn("Erreur création Google Tasks:", eG);
+          }
+        });
+      }
 
       if (newTitleInput) newTitleInput.value = "";
       if (newDueDateInput) newDueDateInput.value = "";
