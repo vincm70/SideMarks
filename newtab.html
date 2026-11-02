@@ -1322,6 +1322,19 @@
       <button type="button" class="context-menu-item danger" data-action="deleteEvent">🗑️ Supprimer définitivement</button>
     </div>
 
+    <!-- Menu contextuel Tâche (Clic Droit sécurisé avec options de report et remise à faire) -->
+    <div id="taskContextMenu" class="context-menu hidden">
+      <div id="taskContextTitle" class="context-menu-header">Tâche</div>
+      <button type="button" class="context-menu-item" data-action="toggleDone">↩️ Remettre à faire (ou Terminer)</button>
+      <button type="button" class="context-menu-item" data-action="postponeToday">📅 Reporter à aujourd'hui</button>
+      <button type="button" class="context-menu-item" data-action="postponeTomorrow">⏩ Reporter à demain</button>
+      <button type="button" class="context-menu-item" data-action="clearDue">❌ Retirer l'échéance (Sans date)</button>
+      <button type="button" class="context-menu-item" data-action="openReader">📖 Voir les détails & sous-tâches</button>
+      <button type="button" class="context-menu-item" data-action="copyTask">📋 Copier le texte</button>
+      <div class="context-menu-divider"></div>
+      <button type="button" class="context-menu-item danger" data-action="deleteTask">🗑️ Supprimer définitivement</button>
+    </div>
+
 
     <!-- Modal d'Autorisation Google (Simple et Évident) -->
     <div id="googleAuthModal" class="side-modal hidden">

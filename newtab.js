@@ -3584,6 +3584,93 @@ function setupTasksWidget() {
     }
   };
 
+  // Menu contextuel Clic Droit pour les Tâches & Sous-tâches
+  const taskContextMenu = document.getElementById("taskContextMenu");
+  const taskContextTitle = document.getElementById("taskContextTitle");
+  let activeContextTask = null;
+
+  function openTaskContextMenu(e, task) {
+    if (!taskContextMenu || !task) return;
+    e.preventDefault();
+    e.stopPropagation();
+    activeContextTask = task;
+    if (taskContextTitle) {
+      taskContextTitle.textContent = (task.title || "Tâche").slice(0, 38);
+    }
+    const isDone = task.status === "done" || task.status === "completed";
+    const toggleDoneBtn = taskContextMenu.querySelector('[data-action="toggleDone"]');
+    if (toggleDoneBtn) {
+      toggleDoneBtn.textContent = isDone ? "↩️ Remettre à faire (Normal)" : "✓ Marquer comme terminée";
+    }
+    const x = Math.min(e.clientX, window.innerWidth - 240);
+    const y = Math.min(e.clientY, window.innerHeight - 280);
+    taskContextMenu.style.left = `${Math.max(10, x)}px`;
+    taskContextMenu.style.top = `${Math.max(10, y)}px`;
+    taskContextMenu.classList.remove("hidden");
+  }
+
+  function closeTaskContextMenu() {
+    if (taskContextMenu) taskContextMenu.classList.add("hidden");
+    activeContextTask = null;
+  }
+
+  window.addEventListener("click", () => closeTaskContextMenu());
+  window.addEventListener("contextmenu", (e) => {
+    if (taskContextMenu && !taskContextMenu.contains(e.target) && !e.target.closest(".kanban-card, .kanban-subtask-row, .task-row")) {
+      closeTaskContextMenu();
+    }
+  });
+
+  if (taskContextMenu && !taskContextMenu.dataset.bound) {
+    taskContextMenu.dataset.bound = "1";
+    taskContextMenu.querySelectorAll(".context-menu-item").forEach(item => {
+      item.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const action = item.dataset.action;
+        const task = activeContextTask;
+        closeTaskContextMenu();
+        if (!task) return;
+
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const tomDate = new Date();
+        tomDate.setDate(tomDate.getDate() + 1);
+        const tomorrowStr = tomDate.toISOString().slice(0, 10);
+
+        if (action === "toggleDone") {
+          task.status = task.status === "done" ? "todo" : "done";
+          saveTasks();
+          renderTasks();
+          syncGoogleTaskStatus(task);
+          showToast(`« ${task.title} » : ${task.status === "done" ? "Terminée" : "Remise à faire"}`);
+        } else if (action === "postponeToday") {
+          task.due = todayStr;
+          saveTasks();
+          renderTasks();
+          syncGoogleTaskStatus(task);
+          showToast(`📅 « ${task.title} » reportée à aujourd'hui !`);
+        } else if (action === "postponeTomorrow") {
+          task.due = tomorrowStr;
+          saveTasks();
+          renderTasks();
+          syncGoogleTaskStatus(task);
+          showToast(`⏩ « ${task.title} » reportée à demain !`);
+        } else if (action === "clearDue") {
+          task.due = "";
+          saveTasks();
+          renderTasks();
+          syncGoogleTaskStatus(task);
+          showToast(`❌ Échéance effacée pour « ${task.title} » (Couleur normale)`);
+        } else if (action === "openReader") {
+          openTaskReader(task);
+        } else if (action === "copyTask") {
+          copyTaskTreeToClipboard(task);
+        } else if (action === "deleteTask") {
+          deleteTask(task, true);
+        }
+      });
+    });
+  }
+
   let draggedGroup = null;
 
   function renderGroupTabs() {
@@ -4261,8 +4348,7 @@ function renderTasks() {
     });
 
     card.addEventListener("contextmenu", (e) => {
-      e.preventDefault();
-      deleteTask(task, true);
+      openTaskContextMenu(e, task);
     });
 
     card.addEventListener("dragover", (e) => {
@@ -4513,9 +4599,7 @@ function renderTasks() {
         });
 
         subRow.addEventListener("contextmenu", (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          deleteTask(sub, true);
+          openTaskContextMenu(e, sub);
         });
 
         const isSubDone = sub.status === "done" || sub.status === "completed";
@@ -4643,8 +4727,7 @@ function renderTasks() {
     });
 
     row.addEventListener("contextmenu", (e) => {
-      e.preventDefault();
-      deleteTask(task, true);
+      openTaskContextMenu(e, task);
     });
 
     row.addEventListener("dragover", (e) => {
@@ -9016,6 +9099,64 @@ async function loadAllWidgetsSettings() {
                 { id: "t2_s2", title: "Envoyer le compte-rendu d'appel", parent: "t2", groupId: "Perso", priority: "P1", status: "todo", due: "" }
               );
             }
+            chrome.storage.local.set({ tasksData: tasksList });
+          }
+
+          // Restauration automatique et sécurisée des tâches de Vincent
+          const RESTORED_TASKS_EMERGENCY = [
+            {
+              attachments: [],
+              due: "",
+              groupId: "DVRC",
+              id: "VFJkbFhnajBQci1HYlFxSA",
+              notes: "Je te conseille de faire examiner par un avocat en droit de la famille, lors d'une consultation gratuite, la possibilité de saisir le JAF sans divorcer immédiatement.\n\n──────── ⚙ SAUVEGARDE ALARMBIP ────────\nDonnées techniques — ne pas modifier\n[AB:v1|s=MANUAL|taskState=todo|hiddenUntil=0|mode=TASK|internal=c9f7ab68-e5d4-423f-8456-783fbb42aef6]",
+              orderIndex: 409,
+              parent: "eEREeTN4VFZzRVQzZlppXw",
+              position: "00000000000000000001",
+              priority: "NONE",
+              rawGroupId: "eHVibGRhcGVObktERGtadQ",
+              status: "todo",
+              title: "avocat gratuit droit de la famille"
+            },
+            {
+              attachments: [],
+              due: "",
+              groupId: "Liste de Vincent",
+              id: "eEREeTN4VFZzRVQzZlppXw",
+              notes: "https://chatgpt.com/share/6ad53a80-f20c-83ed-9334-62bf980d457a?ogimg=plain\n\n──────── ⚙ SAUVEGARDE ALARMBIP ────────\nDonnées techniques — ne pas modifier\n[AB:v1|s=MANUAL|taskState=todo|hiddenUntil=0|mode=TASK|internal=07606558-0d70-4377-afbf-26a435ef0b73]",
+              orderIndex: 410,
+              parent: null,
+              position: "00000000000000000002",
+              priority: "NONE",
+              rawGroupId: "RVhUanBFd1dGZGU3ODUwVw",
+              status: "todo",
+              title: "achat pantalon et chemise belucia"
+            },
+            {
+              attachments: [],
+              due: "",
+              groupId: "Liste de Vincent",
+              id: "SDgxdEZZZVVKX2djWUlsTQ",
+              notes: "E-mail envoyé à : Vincent touzot <vincm70@gmail.com>\nDate : 14/10/2026 00:12\n\nAgdbip\n\nRécupérer coordonnées gérant snu\n\n---------- Forwarded message ---------\nDe : Service National Universel <no_reply-contact@snu.gouv.fr>\nDate: mar. 13 oct. 2026, 21:30\nSubject: Votre parcours SNU est terminé : pensez à récupérer vos\nattestations\nTo: <vincm70@gmail.com>\n\n\nLa plateforme SNU sera définitivement fermée à partir du 15 décembre 2026‌\n\nOuvrir dans Gmail : https://mail.google.com/mail/u/?authuser=vincm70%40gmail.com#sent/1a136bee84a57a45\n\n──────── 💬 SUIVI ────────\n📅 02/11/2026 à 18:59\n│ C:\\Users\\touzo\\OneDrive\\00000-My_Projects\\CODEX\\DVRC\\Dossier AE - E20-0142 - TOUZOT Daphnée\n\n──────── ⚙ RESTAURATION DU SUIVI ────────\nDonnées techniques — ne pas modifier\n[AB:S2|789bca45-26b9-4abd-a270-d08f6f7c7dd5,1793642340470,%2B01%3A00]\n──────── FIN DU SUIVI ────────\n\n──────── ⚙ SAUVEGARDE ALARMBIP ────────\nDonnées techniques — ne pas modifier\n[AB:v1|s=GMAIL|sid=gmail-message%3A1f56fc733736ca8930836e80926ab4c609248151adf9510606fd72fe2f1db532|taskState=todo|hiddenUntil=0|mode=TASK|internal=16020c7a-9363-4b7a-bcad-01407c462052]",
+              orderIndex: 411,
+              parent: null,
+              position: "00000000000000000003",
+              priority: "NONE",
+              rawGroupId: "RVhUanBFd1dGZGU3ODUwVw",
+              status: "todo",
+              title: "Fwd: Votre parcours SNU est terminé : pensez à récupérer vos attestations"
+            }
+          ];
+
+          let hasRestoredAny = false;
+          RESTORED_TASKS_EMERGENCY.forEach(rt => {
+            if (!tasksList.some(t => t.id === rt.id)) {
+              tasksList.push(rt);
+              hasRestoredAny = true;
+              console.log(`[Restauration automatique] Tâche restaurée avec succès : « ${rt.title} »`);
+            }
+          });
+          if (hasRestoredAny) {
             chrome.storage.local.set({ tasksData: tasksList });
           }
         }
