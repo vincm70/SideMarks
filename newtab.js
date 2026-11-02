@@ -642,127 +642,183 @@ function getIsoWeekNumber(d) {
 function parseAgendaBipConversation(notes) {
   const source = String(notes || "").replace(/\r\n/g, "\n");
   const entries = [];
-  const v2 = "──────── 💬 SUIVI ────────";
-  const end2 = "──────── FIN DU SUIVI ────────";
-  const v1 = "[AgendaBIP_SUIVI_V1]";
-  const end1 = "[/AgendaBIP_SUIVI_V1]";
+// Constantes et gestion des métadonnées AgendaBIP
+const AGENDA_INFO = "──────── ℹ INFORMATIONS ────────";
+const AGENDA_INFO_END = "──────── FIN DES INFORMATIONS ────────";
+const AGENDA_BACKUP = "──────── ⚙ SAUVEGARDE ALARMBIP ────────\nDonnées techniques — ne pas modifier";
+const AGENDA_TASK_RE = /(?:^|\n)\[AB:v(\d+)((?:\|[^\]\r\n]*)?)\]\s*$/;
 
-  try {
-    if (source.includes(v2) || source.includes(end2)) {
-      const start = source.indexOf(v2);
-      const end = source.indexOf(end2);
-      if (start >= 0 && end > start) {
-        const block = source.slice(start + v2.length, end);
-        const comments = [];
-        let current = null;
-        for (const line of block.split("\n")) {
-          if (line.startsWith("📅 ")) {
-            if (current !== null) comments.push(current.join("\n"));
-            current = [];
-          } else if (line.startsWith("│ ")) {
-            if (current === null) current = [];
-            current.push(line.slice(2));
-          }
-        }
-        if (current !== null) comments.push(current.join("\n"));
+function taskUser(notes) {
+  let s = String(notes || "").replace(/\r\n/g, "\n");
+  s = s.replace(AGENDA_TASK_RE, "").trim();
+  if (s.endsWith(AGENDA_BACKUP)) s = s.slice(0, -AGENDA_BACKUP.length).trim();
+  s = s.replace(/──────── ℹ INFORMATIONS ────────[\s\S]*?──────── FIN DES INFORMATIONS ────────\s*$/, "").trim();
+  return s;
+}
 
-        const refs = block.match(/\[AB:S2\|([^\]]*)\]/);
-        const rows = (refs && refs[1]) ? refs[1].split(";") : [];
-        if (rows.length === comments.length) {
-          for (let i = 0; i < rows.length; i++) {
-            const fields = rows[i].split(",");
-            const at = Number(fields[1]);
-            const zone = decodeURIComponent((fields[2] || "").replace(/\+/g, " "));
-            let date;
-            try {
-              date = new Date(at).toLocaleString("fr-FR", { timeZone: zone || undefined });
-            } catch (_) {
-              date = new Date(at).toLocaleString("fr-FR");
-            }
-            entries.push({ id: decodeURIComponent(fields[0]), at, date, comment: comments[i] });
-          }
-        } else {
-          let idx = 0;
-          for (const line of block.split("\n")) {
-            if (line.startsWith("📅 ")) {
-              entries.push({ id: `c_${idx}`, date: line.slice(3).trim(), comment: comments[idx] || "" });
-              idx++;
-            }
-          }
-        }
-      }
-    } else if (source.includes(v1) || source.includes(end1)) {
-      const start = source.indexOf(v1);
-      const end = source.indexOf(end1);
-      if (start >= 0 && end > start) {
-        let current = null;
-        for (const line of source.slice(start + v1.length, end).replace(/^\n|\n$/g, "").split("\n")) {
-          if (line.startsWith("  ") && current) {
-            current.comment += "\n" + line.slice(2);
-            continue;
-          }
-          const old = line.match(/^(.*?) \[([a-zA-Z0-9-]+)\] — (.*)$/);
-          const chat = line.match(/^💬 (.*?) — (.*) · \[([a-zA-Z0-9-]+)\]$/);
-          if (old) {
-            current = { id: old[2], date: old[1], comment: old[3] };
-            entries.push(current);
-          } else if (chat) {
-            current = { id: chat[3], date: chat[1], comment: chat[2] };
-            entries.push(current);
-          }
-        }
+function taskParse(notes) {
+  const match = String(notes || "").match(AGENDA_TASK_RE);
+  const fields = {};
+  if (match && match[2]) {
+    for (const part of match[2].replace(/^\|/, "").split("|")) {
+      const idx = part.indexOf("=");
+      if (idx !== -1) {
+        const k = part.slice(0, idx);
+        const v = decodeURIComponent(part.slice(idx + 1).replace(/\+/g, " "));
+        fields[k] = v;
       }
     }
+  }
+  return fields;
+}
+
+function taskWrite(userNotes, fields = {}) {
+  let user = taskUser(userNotes);
+  const human = [];
+  const labels = [["p", "Priorité"], ["pr", "Projet"], ["t", "Tags"], ["r", "Responsable"], ["pa", "Participants"], ["a", "Alarme"]];
+  for (const [k, label] of labels) {
+    if (fields[k] && fields[k] !== "NONE") human.push(`${label} : ${fields[k]}`);
+  }
+  if (human.length > 0) {
+    user += "\n\n" + AGENDA_INFO + "\n" + human.join("\n") + "\n" + AGENDA_INFO_END;
+  }
+  const fieldKeys = Object.keys(fields);
+  if (fieldKeys.length > 0) {
+    const block = "[AB:v1" + fieldKeys.map(k => "|" + k + "=" + encodeURIComponent(fields[k])).join("") + "]";
+    user = user.trim() + "\n\n" + AGENDA_BACKUP + "\n" + block;
+  }
+  return user.trim();
+}
+
+function taskConversation(task) {
+  const source = String(task?.userNotes ?? task?.notes ?? task?.description ?? task ?? "").replace(/\r\n/g, "\n");
+  const entries = [];
+  const v2 = "──────── 💬 SUIVI ────────", end2 = "──────── FIN DU SUIVI ────────", v1 = "[AgendaBIP_SUIVI_V1]", end1 = "[/AgendaBIP_SUIVI_V1]";
+  try {
+    if (source.includes(v2) || source.includes(end2)) {
+      const start = source.indexOf(v2), end = source.indexOf(end2);
+      if (start < 0 || end < start || source.indexOf(v2, start + v2.length) >= 0) throw Error("Format V2 corrompu");
+      const block = source.slice(start + v2.length, end), comments = [];
+      let current = null;
+      for (const line of block.split("\n")) {
+        if (line.startsWith("📅 ")) {
+          if (current !== null) comments.push(current.join("\n"));
+          current = [];
+        } else if (line.startsWith("│ ")) {
+          if (current === null) throw Error("Ligne orpheline");
+          current.push(line.slice(2));
+        }
+      }
+      if (current !== null) comments.push(current.join("\n"));
+      const refs = block.match(/\[AB:S2\|([^\]]*)\]/);
+      if (!refs) throw Error("Référence AB:S2 manquante");
+      const rows = refs[1] ? refs[1].split(";") : [];
+      if (rows.length !== comments.length) throw Error("Désalignement commentaires/métadonnées");
+      for (let i = 0; i < rows.length; i++) {
+        const fields = rows[i].split(",");
+        if (fields.length !== 3 || !comments[i].trim()) throw Error("Champ de métadonnées invalide");
+        const at = Number(fields[1]), zone = decodeURIComponent(fields[2].replace(/\+/g, " "));
+        if (!Number.isFinite(at)) throw Error("Horodatage invalide");
+        let date;
+        try { date = new Date(at).toLocaleString("fr-FR", { timeZone: zone }); } catch { date = new Date(at).toLocaleString("fr-FR"); }
+        entries.push({ id: decodeURIComponent(fields[0]), at, date, comment: comments[i] });
+      }
+    } else if (source.includes(v1) || source.includes(end1)) {
+      const start = source.indexOf(v1), end = source.indexOf(end1);
+      if (start < 0 || end < start || source.indexOf(v1, start + v1.length) >= 0) throw Error("Format V1 corrompu");
+      let current = null;
+      for (const line of source.slice(start + v1.length, end).replace(/^\n|\n$/g, "").split("\n")) {
+        if (line.startsWith("  ") && current) {
+          current.comment += "\n" + line.slice(2);
+          continue;
+        }
+        const old = line.match(/^(.*?) \[([a-zA-Z0-9-]+)\] — (.*)$/);
+        const chat = line.match(/^💬 (.*?) — (.*) · \[([a-zA-Z0-9-]+)\]$/);
+        if (!old && !chat) throw Error("Ligne V1 invalide");
+        current = { id: old ? old[2] : chat[3], date: old ? old[1] : chat[1], comment: old ? old[3] : chat[2] };
+        entries.push(current);
+      }
+    }
+    if (new Set(entries.map(e => e.id)).size !== entries.length) throw Error("Identifiants de suivi en double");
     return { entries, error: false };
   } catch (err) {
     return { entries: [], error: true, raw: source };
   }
 }
+const parseAgendaBipConversation = taskConversation;
 
-// Ajoute un commentaire de suivi au format AgendaBIP standard
-function addAgendaBipFollowup(notes, comment) {
+// Ajoute un commentaire de suivi au format AgendaBIP standard (Android & Windows V2)
+function addAgendaBipFollowup(notes, comment, now = new Date()) {
   if (!comment || !comment.trim()) return notes || "";
-  let user = String(notes || "").replace(/\r\n/g, "\n");
-  const now = new Date();
-  const stamp = now.toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-  const uid = "suivi_" + Date.now();
+  const parsedFields = taskParse(notes);
+  let user = taskUser(notes);
 
   const begin = "[AgendaBIP_SUIVI_V1]";
   const end = "[/AgendaBIP_SUIVI_V1]";
+  const v2Header = "──────── 💬 SUIVI ────────";
   const v2Marker = "──────── ⚙ RESTAURATION DU SUIVI ────────";
+  const v2End = "──────── FIN DU SUIVI ────────";
 
-  if (user.includes("──────── 💬 SUIVI ────────") && user.includes(v2Marker)) {
-    const entry = `📅 ${stamp.replace(" ", " à ")}\n` + comment.trim().split("\n").map(l => "│ " + l).join("\n") + "\n\n";
+  const uid = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : ("suivi_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9));
+  
+  const pad = n => String(n).padStart(2, "0");
+  const d = pad(now.getDate()), m = pad(now.getMonth() + 1), y = now.getFullYear();
+  const h = pad(now.getHours()), min = pad(now.getMinutes());
+  const dateStr = `${d}/${m}/${y} à ${h}:${min}`;
+
+  const tzOffset = -now.getTimezoneOffset();
+  const sign = tzOffset >= 0 ? "+" : "-";
+  const tzH = pad(Math.floor(Math.abs(tzOffset) / 60));
+  const tzM = pad(Math.abs(tzOffset) % 60);
+  const zone = encodeURIComponent(`${sign}${tzH}:${tzM}`);
+  const ref = `${encodeURIComponent(uid)},${now.getTime()},${zone}`;
+
+  if (user.includes(v2Header) && user.includes(v2Marker) && user.includes("[AB:S2|") && user.includes(v2End)) {
+    const entry = "📅 " + dateStr + "\n" + comment.trim().split("\n").map(x => "│ " + x).join("\n") + "\n\n";
     user = user.replace(v2Marker, entry + v2Marker);
     const match = user.match(/\[AB:S2\|([^\]]*)\]/);
     if (match) {
-      const ref = `${encodeURIComponent(uid)},${now.getTime()},Europe%2FParis`;
-      user = user.slice(0, match.index) + `[AB:S2|${match[1] ? match[1] + ";" : ""}${ref}]` + user.slice(match.index + match[0].length);
+      user = user.slice(0, match.index) + "[AB:S2|" + match[1] + (match[1] ? ";" : "") + ref + "]" + user.slice(match.index + match[0].length);
     }
   } else if (user.includes(begin) && user.includes(end)) {
-    const entry = `${stamp} [${uid}] — ${comment.trim().replace(/\n/g, "\n  ")}`;
+    const sec = pad(now.getSeconds());
+    const line = `${d}/${m}/${y} ${h}:${min}:${sec} ${sign}${tzH}:${tzM}`;
+    const entry = line + " [" + uid + "] — " + comment.trim().replace(/\n/g, "\n  ");
     user = user.replace(end, entry + "\n" + end);
   } else {
-    const entry = `${stamp} [${uid}] — ${comment.trim().replace(/\n/g, "\n  ")}`;
-    user = (user.trim() ? user.trim() + "\n\n" : "") + `${begin}\n${entry}\n${end}`;
+    const entry = "📅 " + dateStr + "\n" + comment.trim().split("\n").map(x => "│ " + x).join("\n") + "\n\n";
+    const v2Block = `${v2Header}\n${entry}${v2Marker}\nDonnées techniques — ne pas modifier\n[AB:S2|${ref}]\n${v2End}`;
+    user = (user.trim() ? user.trim() + "\n\n" : "") + v2Block;
   }
-  return user;
+
+  return taskWrite(user, parsedFields);
+}
+
+// Bouton cliquable bulle de conversation identique AgendaBIP
+function taskConversationButton(task, escape = (s => s)) {
+  const timeline = taskConversation(task);
+  const count = timeline.entries.length;
+  const event = Boolean(task.calendarId);
+  return `<button type="button" class="task-conversation-button conversation-bubble" ${event ? "data-conversation-event" : "data-conversation"}="${escape(task.id)}" ${event ? "data-calendar" : "data-group"}="${escape(event ? task.calendarId : task.groupId)}" title="Conversation de suivi${count ? " · " + count + " commentaire(s)" : ""}" aria-label="Ouvrir la conversation de suivi${count ? " : " + count + " commentaire(s)" : ""}"><svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-8l-6 4v-4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M7 9h10M7 13h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>${count ? `<span class="conversation-count" aria-hidden="true">${count}</span>` : ""}</button>`;
 }
 
 // Crée le bouton cliquable « bulle de conversation » AgendaBIP
 function createConversationBubbleBtn(item, isEvent = false) {
-  const conv = parseAgendaBipConversation(item.notes || item.description);
-  const count = conv.entries.length;
+  const timeline = taskConversation(item);
+  const count = timeline.entries.length;
   const btn = document.createElement("button");
   btn.type = "button";
-  btn.className = "conversation-bubble";
+  btn.className = "task-conversation-button conversation-bubble";
   btn.title = `Conversation de suivi${count > 0 ? ` · ${count} commentaire(s)` : ""}`;
-  btn.innerHTML = `💬${count > 0 ? `<span class="conversation-count">${count}</span>` : ""}`;
+  btn.setAttribute("aria-label", `Ouvrir la conversation de suivi${count > 0 ? ` : ${count} commentaire(s)` : ""}`);
+  btn.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-8l-6 4v-4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M7 9h10M7 13h7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>${count > 0 ? `<span class="conversation-count" aria-hidden="true">${count}</span>` : ""}`;
   btn.addEventListener("click", (e) => {
+    e.preventDefault();
     e.stopPropagation();
-    openTaskConversationModal(item, isEvent);
+    openTaskConversationDialog(item, isEvent ? "event" : "task");
   });
   return btn;
+}
 }
 
 const CALENDAR_COLOR_PALETTE = {
@@ -4797,455 +4853,292 @@ function escapeHtml(str) {
     .replace(/'/g, "&#039;");
 }
 
-let conversationDraftAttachments = [];
+// ==========================================================================
+// 💬 CONVERSATION DE SUIVI AGENDABIP (PARITÉ 100% AVEC ALARM_BIP)
+// ==========================================================================
 
-function formatChatDateTime(entry) {
-  let dateObj = null;
-  if (entry.at && Number.isFinite(entry.at)) {
-    dateObj = new Date(entry.at);
-  } else if (entry.date) {
-    const m = String(entry.date).match(/(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})(?:\s*(?:à|at|-)?\s*(\d{1,2}):(\d{2}))?/i);
-    if (m) {
-      const day = parseInt(m[1], 10);
-      const month = parseInt(m[2], 10) - 1;
-      const year = parseInt(m[3], 10) < 100 ? 2000 + parseInt(m[3], 10) : parseInt(m[3], 10);
-      const hours = m[4] !== undefined ? parseInt(m[4], 10) : 0;
-      const minutes = m[5] !== undefined ? parseInt(m[5], 10) : 0;
-      dateObj = new Date(year, month, day, hours, minutes);
+function openTaskConversationDialog(task, kind = 'task') {
+  if (!task) return;
+  let dialog = document.querySelector('#taskConversationDialog');
+  if (!dialog) {
+    dialog = document.createElement('dialog');
+    dialog.id = 'taskConversationDialog';
+    dialog.setAttribute('aria-labelledby', 'taskConversationTitle');
+    dialog.innerHTML = '<header class="task-reader-header"><h2 id="taskConversationTitle">Conversation de suivi</h2><button type="button" data-conversation-close>Fermer</button></header><p class="task-conversation-title"></p><div class="task-conversation-history"></div><form class="task-conversation-form"><label>Ajouter un commentaire<textarea name="comment" rows="4" required maxlength="6000" placeholder="Votre commentaire…"></textarea></label><div class="followup-attachments"><button type="button" data-followup-file>📎 Joindre un fichier</button><button type="button" data-followup-link>🔗 Ajouter un lien</button><input type="file" data-followup-input multiple hidden><div data-followup-draft></div></div><p class="help">Horodaté et enregistré dans la tâche Google. Visible sur Android après synchronisation.</p><button type="submit">Ajouter au suivi</button><p role="status" data-conversation-status></p></form>';
+    document.body.append(dialog);
+  }
+
+  const isEvent = kind === 'event' || Boolean(task.calendarId);
+  dialog.querySelector('.help').textContent = isEvent
+    ? 'Horodaté et enregistré dans la description Google Agenda.'
+    : 'Horodaté et enregistré dans la tâche Google. Visible sur Android après synchronisation.';
+
+  const history = dialog.querySelector('.task-conversation-history');
+  const form = dialog.querySelector('form');
+  const status = dialog.querySelector('[data-conversation-status]');
+  const send = form.querySelector('button[type=submit]');
+  const input = form.querySelector('textarea');
+  const draft = dialog.querySelector('[data-followup-draft]');
+  const fileInput = dialog.querySelector('[data-followup-input]');
+  const closeBtn = dialog.querySelector('[data-conversation-close]');
+  const fileBtn = dialog.querySelector('[data-followup-file]');
+  const linkBtn = dialog.querySelector('[data-followup-link]');
+
+  let saving = false, uploading = false, failedUpload = false;
+  const attachments = [];
+
+  function display() {
+    const timeline = taskConversation(task);
+    dialog.querySelector('.task-conversation-title').textContent = task.title || task.summary || (isEvent ? 'Rendez-vous' : 'Tâche');
+    history.replaceChildren();
+
+    if (timeline.error) {
+      const warning = document.createElement('p');
+      warning.textContent = 'Le suivi est incomplet ou illisible. Ajout désactivé pour préserver la conversation.';
+      history.append(warning);
+      const raw = document.createElement('pre');
+      raw.textContent = timeline.raw || '';
+      history.append(raw);
+    } else if (!timeline.entries.length) {
+      const empty = document.createElement('p');
+      empty.textContent = 'Aucun commentaire de suivi pour cette tâche.';
+      history.append(empty);
     } else {
-      const parsed = Date.parse(entry.date);
-      if (!isNaN(parsed)) dateObj = new Date(parsed);
-    }
-  }
-
-  const now = new Date();
-  if (dateObj && !isNaN(dateObj.getTime())) {
-    const isToday = dateObj.getFullYear() === now.getFullYear() &&
-                    dateObj.getMonth() === now.getMonth() &&
-                    dateObj.getDate() === now.getDate();
-    
-    const yesterday = new Date(now);
-    yesterday.setDate(now.getDate() - 1);
-    const isYesterday = dateObj.getFullYear() === yesterday.getFullYear() &&
-                        dateObj.getMonth() === yesterday.getMonth() &&
-                        dateObj.getDate() === yesterday.getDate();
-
-    const timeStr = dateObj.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-    let dayStr = "";
-    if (isToday) {
-      dayStr = "Aujourd'hui";
-    } else if (isYesterday) {
-      dayStr = "Hier";
-    } else {
-      dayStr = dateObj.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: dateObj.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
-    }
-    const fullDateKey = `${dateObj.getFullYear()}-${dateObj.getMonth()}-${dateObj.getDate()}`;
-    return { dayStr, timeStr, fullDateKey, rawDate: dateObj };
-  }
-
-  const rawStr = String(entry.date || "Date inconnue");
-  return { dayStr: rawStr, timeStr: "", fullDateKey: rawStr, rawDate: null };
-}
-
-function renderConversationDraftAttachments() {
-  const container = document.getElementById("taskConversationDraftAttachments");
-  if (!container) return;
-  container.innerHTML = "";
-  conversationDraftAttachments.forEach((att, idx) => {
-    const chip = document.createElement("span");
-    chip.className = "chat-draft-chip";
-    chip.innerHTML = `<span>📎 ${escapeHtml(att.name)}</span>`;
-    const removeBtn = document.createElement("button");
-    removeBtn.type = "button";
-    removeBtn.className = "chip-remove-btn";
-    removeBtn.title = "Retirer cette pièce jointe";
-    removeBtn.textContent = "✕";
-    removeBtn.addEventListener("click", () => {
-      conversationDraftAttachments.splice(idx, 1);
-      renderConversationDraftAttachments();
-    });
-    chip.appendChild(removeBtn);
-    container.appendChild(chip);
-  });
-}
-
-async function uploadFollowupFileToDrive(file) {
-  if (!file) return null;
-  if (file.size > 20 * 1024 * 1024) {
-    showToast("Fichier supérieur à 20 Mo (limite Google/AgendaBIP)");
-    return null;
-  }
-  const statusEl = document.getElementById("taskConversationStatus");
-  if (statusEl) statusEl.textContent = `Téléversement vers Google Drive : ${file.name}...`;
-
-  try {
-    const token = await getFreshGoogleToken(false);
-    if (token) {
-      const metadata = { name: file.name, mimeType: file.type || "application/octet-stream" };
-      const form = new FormData();
-      form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
-      form.append("file", file);
-
-      const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: form
-      });
-
-      if (res.ok) {
-        const d = await res.json();
-        const driveUrl = d.webViewLink || (`https://drive.google.com/file/d/${d.id}/view`);
-        if (statusEl) statusEl.textContent = `📎 « ${file.name} » prêt dans Google Drive !`;
-        return { name: file.name, url: driveUrl };
-      }
-    }
-  } catch (err) {
-    console.warn("Erreur upload Google Drive pour conversation:", err);
-  }
-
-  // Fallback local si non connecté à Google Drive
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (statusEl) statusEl.textContent = `📎 « ${file.name} » joint localement.`;
-      resolve({ name: file.name, url: reader.result });
-    };
-    reader.onerror = () => resolve(null);
-    reader.readAsDataURL(file);
-  });
-}
-
-function openTaskConversationModal(item, isEvent = false) {
-  initTaskConversation();
-  const modal = document.getElementById("taskConversationModal");
-  if (!modal) return;
-  currentConversationTarget = item;
-  currentConversationIsEvent = isEvent;
-  conversationDraftAttachments = [];
-  renderConversationDraftAttachments();
-
-  const typeBadge = document.getElementById("taskConversationTypeBadge");
-  if (typeBadge) typeBadge.textContent = isEvent ? "Événement Google Agenda" : "Tâche Google Tasks";
-
-  const titleEl = document.getElementById("taskConversationItemTitle");
-  if (titleEl) titleEl.textContent = item.title || (isEvent ? "Rendez-vous" : "Tâche");
-
-  renderTaskConversationHistory();
-
-  const input = document.getElementById("taskConversationInput");
-  if (input) input.value = "";
-  const statusEl = document.getElementById("taskConversationStatus");
-  if (statusEl) statusEl.textContent = "";
-
-  modal.classList.remove("hidden");
-  if (input) setTimeout(() => input.focus(), 80);
-}
-
-function renderTaskConversationHistory() {
-  const historyContainer = document.getElementById("taskConversationHistory");
-  if (!historyContainer || !currentConversationTarget) return;
-  historyContainer.innerHTML = "";
-
-  const notes = currentConversationTarget.notes || currentConversationTarget.description || "";
-  const conv = parseAgendaBipConversation(notes);
-
-  const countBadge = document.getElementById("taskConversationCountBadge");
-  if (countBadge) {
-    countBadge.textContent = conv.entries.length > 0 ? `${conv.entries.length} message(s)` : "Aucun message";
-  }
-
-  if (conv.entries.length === 0) {
-    historyContainer.innerHTML = `<div style="text-align: center; color: #94a3b8; font-size: 11.5px; padding: 28px 12px; font-style: italic; display: flex; flex-direction: column; align-items: center; gap: 8px;">
-      <span style="font-size: 28px;">💬</span>
-      <span>Aucun message dans cette conversation pour le moment.</span>
-      <span style="font-size: 10.5px; color: #64748b;">Écrivez ci-dessous ou glissez-déposez des fichiers pour ajouter un suivi horodaté.</span>
-    </div>`;
-    return;
-  }
-
-  let lastDateKey = null;
-
-  conv.entries.forEach(entry => {
-    const dt = formatChatDateTime(entry);
-
-    // Séparateur de date (Aujourd'hui, Hier, 12 octobre 2026)
-    if (dt.fullDateKey !== lastDateKey) {
-      lastDateKey = dt.fullDateKey;
-      const dateDivider = document.createElement("div");
-      dateDivider.className = "chat-date-divider";
-      dateDivider.innerHTML = `<span>${escapeHtml(dt.dayStr)}</span>`;
-      historyContainer.appendChild(dateDivider);
-    }
-
-    // Ligne de message
-    const row = document.createElement("div");
-    row.className = "chat-message-row";
-
-    const isAndroid = entry.id && (entry.id.includes("android") || entry.id.length === 36);
-    const authorName = isAndroid ? "Android" : "Vous (PC)";
-    const authorIcon = isAndroid ? "📱" : "💻";
-
-    const avatar = document.createElement("div");
-    avatar.className = "chat-message-avatar";
-    avatar.title = authorName;
-    avatar.textContent = authorIcon;
-    row.appendChild(avatar);
-
-    const bubble = document.createElement("div");
-    bubble.className = "chat-bubble";
-
-    const header = document.createElement("div");
-    header.className = "chat-bubble-header";
-    header.innerHTML = `
-      <span class="chat-bubble-author">${authorIcon} ${escapeHtml(authorName)}</span>
-      <span class="chat-bubble-time" title="${escapeHtml(entry.date || "")}">🕒 ${escapeHtml(dt.timeStr || entry.date || "")}</span>
-    `;
-    bubble.appendChild(header);
-
-    const content = document.createElement("div");
-    content.className = "chat-bubble-content";
-
-    // Parsing du texte, des liens et des pièces jointes "📎 Nom : URL"
-    let rawText = entry.comment || "";
-    const lines = rawText.split("\n");
-    lines.forEach((line, lineIdx) => {
-      const pjMatch = line.match(/^(?:📎|\[Pièce jointe\]|Pièce jointe\s*:)\s*([^\r\n:]+)\s*:\s*(https?:\/\/[^\s\r\n]+)/i);
-      if (pjMatch) {
-        const attName = pjMatch[1].trim();
-        const attUrl = pjMatch[2].trim();
-        const attCard = document.createElement("a");
-        attCard.className = "chat-attachment-card";
-        attCard.href = attUrl;
-        attCard.target = "_blank";
-        attCard.rel = "noopener noreferrer";
-        attCard.innerHTML = `
-          <span class="chat-att-icon">📎</span>
-          <span class="chat-att-name" title="${escapeHtml(attName)}">${escapeHtml(attName)}</span>
-          <span class="chat-att-link-btn">Ouvrir ↗</span>
-        `;
-        content.appendChild(attCard);
-      } else {
-        const pLine = document.createElement("div");
+      for (const entry of timeline.entries) {
+        const article = document.createElement('article');
+        article.className = 'task-conversation-entry';
+        const date = document.createElement('time');
+        date.textContent = entry.date;
+        const comment = document.createElement('p');
         let offset = 0;
-        for (const match of line.matchAll(/https?:\/\/[^\s<>"']+/g)) {
-          pLine.appendChild(document.createTextNode(line.slice(offset, match.index)));
-          const link = document.createElement("a");
+        for (const match of entry.comment.matchAll(/https?:\/\/[^\s<>"']+/g)) {
+          comment.append(document.createTextNode(entry.comment.slice(offset, match.index)));
+          const link = document.createElement('a');
           link.textContent = match[0];
           link.href = match[0];
-          link.target = "_blank";
-          link.rel = "noopener noreferrer";
-          pLine.appendChild(link);
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          comment.append(link);
           offset = match.index + match[0].length;
         }
-        pLine.appendChild(document.createTextNode(line.slice(offset)));
-        if (!line.trim() && lineIdx > 0) pLine.innerHTML = "&nbsp;";
-        content.appendChild(pLine);
+        comment.append(document.createTextNode(entry.comment.slice(offset)));
+        article.append(date, comment);
+        history.append(article);
       }
-    });
-
-    bubble.appendChild(content);
-    row.appendChild(bubble);
-    historyContainer.appendChild(row);
-  });
-
-  setTimeout(() => {
-    historyContainer.scrollTop = historyContainer.scrollHeight;
-  }, 20);
-}
-
-// Initialisation sécurisée des écouteurs de la modale de conversation
-function initTaskConversation() {
-  const convModal = document.getElementById("taskConversationModal");
-  const convCloseBtn = document.getElementById("taskConversationCloseBtn");
-  const convForm = document.getElementById("taskConversationForm");
-  const dropZone = document.getElementById("taskConversationDropZone");
-  const attachFileBtn = document.getElementById("taskConversationAttachFileBtn");
-  const fileInput = document.getElementById("taskConversationFileInput");
-  const attachLinkBtn = document.getElementById("taskConversationAttachLinkBtn");
-  const inputEl = document.getElementById("taskConversationInput");
-
-  if (convCloseBtn && !convCloseBtn.dataset.bound) {
-    convCloseBtn.dataset.bound = "1";
-    convCloseBtn.addEventListener("click", () => {
-      if (convModal) convModal.classList.add("hidden");
-      currentConversationTarget = null;
-      conversationDraftAttachments = [];
-    });
+    }
+    input.disabled = send.disabled = timeline.error;
   }
 
-  // Glisser-déposer sur la fenêtre de conversation
-  if (convModal && !convModal.dataset.dragBound) {
-    convModal.dataset.dragBound = "1";
-    let dragCounter = 0;
-    convModal.addEventListener("dragenter", (e) => {
-      e.preventDefault();
-      dragCounter++;
-      if (dropZone) dropZone.classList.remove("hidden");
+  function draftRender() {
+    draft.replaceChildren();
+    attachments.forEach((item, index) => {
+      const row = document.createElement('div');
+      row.className = 'followup-draft-item';
+      row.textContent = '📎 ' + item.name + ' ';
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.textContent = 'Retirer';
+      remove.onclick = () => {
+        attachments.splice(index, 1);
+        draftRender();
+      };
+      row.append(remove);
+      draft.append(row);
     });
-    convModal.addEventListener("dragleave", (e) => {
-      e.preventDefault();
-      dragCounter--;
-      if (dragCounter <= 0) {
-        dragCounter = 0;
-        if (dropZone) dropZone.classList.add("hidden");
-      }
-    });
-    convModal.addEventListener("dragover", (e) => {
-      e.preventDefault();
-    });
-    convModal.addEventListener("drop", async (e) => {
-      e.preventDefault();
-      dragCounter = 0;
-      if (dropZone) dropZone.classList.add("hidden");
-      const files = Array.from(e.dataTransfer?.files || []);
-      for (const f of files) {
-        const att = await uploadFollowupFileToDrive(f);
-        if (att) {
-          conversationDraftAttachments.push(att);
-          renderConversationDraftAttachments();
-        }
-      }
-    });
+    if (failedUpload) {
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.textContent = 'Retirer le fichier non transféré';
+      remove.onclick = () => {
+        failedUpload = false;
+        send.disabled = taskConversation(task).error;
+        draftRender();
+      };
+      draft.append(remove);
+    }
   }
 
-  // Bouton Joindre un fichier
-  if (attachFileBtn && fileInput && !attachFileBtn.dataset.bound) {
-    attachFileBtn.dataset.bound = "1";
-    attachFileBtn.addEventListener("click", () => fileInput.click());
-    fileInput.addEventListener("change", async () => {
-      const files = Array.from(fileInput.files || []);
-      for (const f of files) {
-        const att = await uploadFollowupFileToDrive(f);
-        if (att) {
-          conversationDraftAttachments.push(att);
-          renderConversationDraftAttachments();
-        }
-      }
-      fileInput.value = "";
-    });
-  }
+  closeBtn.onclick = () => {
+    if (!saving && !uploading) dialog.close();
+  };
+  dialog.oncancel = (e) => {
+    if (saving || uploading) e.preventDefault();
+  };
 
-  // Bouton Ajouter un lien
-  if (attachLinkBtn && !attachLinkBtn.dataset.bound) {
-    attachLinkBtn.dataset.bound = "1";
-    attachLinkBtn.addEventListener("click", () => {
-      const url = prompt("Adresse URL du lien à joindre au suivi (ex: https://...) :");
-      if (!url || !url.trim()) return;
-      const cleanUrl = url.trim();
-      if (!/^https?:\/\//i.test(cleanUrl)) {
-        alert("L'adresse doit commencer par http:// ou https://");
-        return;
-      }
-      const name = prompt("Nom ou libellé du lien :", "Lien") || "Lien";
-      conversationDraftAttachments.push({ name: name.trim(), url: cleanUrl });
-      renderConversationDraftAttachments();
-    });
-  }
+  fileBtn.onclick = () => {
+    if (!uploading && !saving) fileInput.click();
+  };
 
-  // Touche Entrée pour envoyer (Maj+Entrée pour saut de ligne)
-  if (inputEl && !inputEl.dataset.keyBound) {
-    inputEl.dataset.keyBound = "1";
-    inputEl.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        if (convForm) convForm.requestSubmit();
-      }
-    });
-  }
+  linkBtn.onclick = () => {
+    if (uploading || saving) return;
+    const url = prompt('Lien HTTP(S) à joindre au commentaire');
+    if (!url) return;
+    if (!/^https?:\/\/[^\s]+$/.test(url.trim())) {
+      status.textContent = 'Lien HTTP(S) requis.';
+      return;
+    }
+    attachments.push({ name: 'Lien', url: url.trim() });
+    draftRender();
+  };
 
-  if (convForm && !convForm.dataset.bound) {
-    convForm.dataset.bound = "1";
-    convForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const statusEl = document.getElementById("taskConversationStatus");
-      let comment = inputEl ? inputEl.value.trim() : "";
-      
-      // Ajouter les pièces jointes attachées au commentaire selon le standard AgendaBIP
-      for (const file of conversationDraftAttachments) {
-        comment += (comment ? "\n" : "") + "📎 " + String(file.name).replace(/[\r\n]/g, " ") + " : " + file.url;
-      }
-
-      if (!comment || !currentConversationTarget) return;
-
-      if (statusEl) statusEl.textContent = "Enregistrement...";
-      const oldNotes = currentConversationTarget.notes || currentConversationTarget.description || "";
-      const updatedNotes = addAgendaBipFollowup(oldNotes, comment);
-
-      currentConversationTarget.notes = updatedNotes;
-      if (currentConversationIsEvent) {
-        currentConversationTarget.description = updatedNotes;
-      }
-
-      // Si c'est une tâche, ajouter également les pièces jointes à task.attachments pour affichage direct
-      if (!currentConversationIsEvent && Array.isArray(conversationDraftAttachments) && conversationDraftAttachments.length > 0) {
-        if (!Array.isArray(currentConversationTarget.attachments)) currentConversationTarget.attachments = [];
-        conversationDraftAttachments.forEach(att => {
-          if (!currentConversationTarget.attachments.some(a => a.url === att.url)) {
-            currentConversationTarget.attachments.push({
-              id: "att_" + Date.now(),
-              name: att.name,
-              driveUrl: att.url,
-              url: att.url,
-              date: new Date().toISOString()
+  async function processFiles(files) {
+    if (!files || !files.length || uploading || saving) return;
+    uploading = true;
+    failedUpload = false;
+    send.disabled = true;
+    try {
+      for (const file of files) {
+        if (file.size > 20 * 1024 * 1024) throw Error('Fichier limité à 20 Mo.');
+        status.textContent = 'Transfert vers Google Drive : ' + file.name;
+        
+        let driveUrl = null;
+        try {
+          const token = await getFreshGoogleToken(false);
+          if (token) {
+            const metadata = { name: file.name, mimeType: file.type || 'application/octet-stream' };
+            const form = new FormData();
+            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+            form.append('file', file);
+            const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
+              method: 'POST',
+              headers: { Authorization: 'Bearer ' + token },
+              body: form
             });
+            if (res.ok) {
+              const d = await res.json();
+              driveUrl = d.webViewLink || ('https://drive.google.com/file/d/' + d.id + '/view');
+            }
           }
-        });
-      }
+        } catch (uploadErr) {
+          console.warn('Erreur Drive API direct:', uploadErr);
+        }
 
-      if (currentConversationIsEvent) {
-        chrome.storage.local.set({ googleEventsList });
+        if (!driveUrl) {
+          driveUrl = await new Promise(resolve => {
+            const r = new FileReader();
+            r.onload = () => resolve(r.result);
+            r.onerror = () => resolve(null);
+            r.readAsDataURL(file);
+          });
+        }
+        if (!driveUrl) throw Error('Transfert impossible.');
+
+        attachments.push({ name: file.name, url: driveUrl });
+        draftRender();
+      }
+      status.textContent = 'Pièce jointe prête. Enregistrez le commentaire.';
+    } catch (error) {
+      failedUpload = true;
+      status.textContent = error.message + ' — commentaire conservé. Réessayez le fichier ou retirez-le.';
+      draftRender();
+    } finally {
+      uploading = false;
+      send.disabled = failedUpload || taskConversation(task).error;
+      fileInput.value = '';
+    }
+  }
+
+  fileInput.onchange = async () => {
+    await processFiles(fileInput.files);
+  };
+
+  dialog.ondragover = (e) => {
+    e.preventDefault();
+  };
+  dialog.ondrop = async (e) => {
+    e.preventDefault();
+    if (e.dataTransfer && e.dataTransfer.files) {
+      await processFiles(e.dataTransfer.files);
+    }
+  };
+
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    let comment = input.value.trim();
+    for (const file of attachments) {
+      comment += (comment ? '\n' : '') + '📎 ' + String(file.name).replace(/[\r\n]/g, ' ') + ' : ' + file.url;
+    }
+    if (!comment || saving || uploading || failedUpload) return;
+    saving = true;
+    input.disabled = send.disabled = true;
+    status.textContent = 'Enregistrement…';
+
+    try {
+      const oldNotes = task.userNotes ?? task.notes ?? task.description ?? '';
+      const updatedNotes = addAgendaBipFollowup(oldNotes, comment);
+      task.notes = updatedNotes;
+      if (isEvent) task.description = updatedNotes;
+
+      if (isEvent) {
+        if (typeof googleEventsList !== 'undefined') {
+          const evIdx = googleEventsList.findIndex(e => e.id === task.id);
+          if (evIdx !== -1) googleEventsList[evIdx].description = updatedNotes;
+          chrome.storage.local.set({ googleEventsList });
+        }
       } else {
-        chrome.storage.local.set({ tasksData: tasksList });
+        if (typeof tasksList !== 'undefined') {
+          const tIdx = tasksList.findIndex(t => t.id === task.id);
+          if (tIdx !== -1) tasksList[tIdx].notes = updatedNotes;
+          chrome.storage.local.set({ tasksData: tasksList });
+        }
       }
-
-      conversationDraftAttachments = [];
-      renderConversationDraftAttachments();
-      renderTaskConversationHistory();
-      if (inputEl) inputEl.value = "";
-      if (statusEl) statusEl.textContent = "✅ Message envoyé ! Synchronisation en cours...";
 
       try {
         const token = await getFreshGoogleToken(false);
         if (token) {
-          if (currentConversationIsEvent && currentConversationTarget.id && currentConversationTarget.calendarId) {
-            await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(currentConversationTarget.calendarId)}/events/${encodeURIComponent(currentConversationTarget.id)}`, {
-              method: "PATCH",
-              headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({ id: currentConversationTarget.id, description: updatedNotes })
+          if (isEvent && task.id && task.calendarId) {
+            await fetch('https://www.googleapis.com/calendar/v3/calendars/' + encodeURIComponent(task.calendarId) + '/events/' + encodeURIComponent(task.id), {
+              method: 'PATCH',
+              headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: task.id, description: updatedNotes })
             });
-            if (statusEl) statusEl.textContent = "✅ Synchronisé avec Google Agenda !";
-          } else if (!currentConversationIsEvent && currentConversationTarget.id && currentConversationTarget.rawGroupId) {
-            await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${encodeURIComponent(currentConversationTarget.rawGroupId)}/tasks/${encodeURIComponent(currentConversationTarget.id)}`, {
-              method: "PATCH",
-              headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({ id: currentConversationTarget.id, notes: updatedNotes })
+          } else if (!isEvent && task.id && (task.rawGroupId || task.groupId)) {
+            const gid = task.rawGroupId || task.groupId;
+            await fetch('https://tasks.googleapis.com/tasks/v1/lists/' + encodeURIComponent(gid) + '/tasks/' + encodeURIComponent(task.id), {
+              method: 'PATCH',
+              headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: task.id, notes: updatedNotes })
             });
-            if (statusEl) statusEl.textContent = "✅ Synchronisé avec Google Tasks !";
           }
         }
-      } catch (err) {
-        console.warn("Erreur réseau suivi Google:", err);
+      } catch (syncErr) {
+        console.warn('Erreur synchro cloud:', syncErr);
       }
 
-      if (currentConversationIsEvent) {
-        if (typeof renderCurrentView === "function") renderCurrentView();
-      } else {
-        if (typeof renderTasks === "function") renderTasks();
-      }
-    });
-  }
+      input.value = '';
+      attachments.length = 0;
+      draftRender();
+      display();
+      status.textContent = isEvent
+        ? 'Commentaire enregistré dans Google Agenda.'
+        : 'Commentaire enregistré. Synchronisez Android pour le retrouver.';
+      history.lastElementChild?.scrollIntoView({ block: 'nearest' });
+
+      if (isEvent && typeof renderCurrentView === 'function') renderCurrentView();
+      if (!isEvent && typeof renderTasks === 'function') renderTasks();
+    } catch (error) {
+      status.textContent = error.message;
+      console.error(error);
+    } finally {
+      saving = false;
+      input.disabled = send.disabled = taskConversation(task).error;
+    }
+  };
+
+  draft.replaceChildren();
+  fileInput.value = '';
+  input.required = false;
+  input.value = '';
+  status.textContent = '';
+  display();
+
+  dialog.showModal();
+  dialog.scrollTop = 0;
 }
 
-// Initialiser les écouteurs dès le chargement
-initTaskConversation();
-
-
+function openTaskConversationModal(item, isEvent = false) {
+  openTaskConversationDialog(item, isEvent ? 'event' : 'task');
+}
 
 document.addEventListener("DOMContentLoaded", async () => {
   if (window.I18N && typeof I18N.init === "function") {

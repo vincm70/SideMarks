@@ -1267,57 +1267,29 @@
       </div>
     </div>
 
-    <!-- Modal Conversation de Suivi (AgendaBIP Follow-up Chat) -->
-    <div id="taskConversationModal" class="side-modal hidden">
-      <div class="side-modal-content task-conversation-modal-card">
-        <div class="side-modal-header">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="side-modal-title">💬 Conversation de suivi</span>
-            <span id="taskConversationTypeBadge" class="agenda-active-badge">Tâche</span>
-          </div>
-          <button type="button" id="taskConversationCloseBtn" class="close-btn">&times;</button>
+    <!-- Dialog Conversation de Suivi (AgendaBIP Identique) -->
+    <dialog id="taskConversationDialog" aria-labelledby="taskConversationTitle">
+      <header class="task-reader-header">
+        <h2 id="taskConversationTitle">Conversation de suivi</h2>
+        <button type="button" data-conversation-close>Fermer</button>
+      </header>
+      <p class="task-conversation-title"></p>
+      <div class="task-conversation-history"></div>
+      <form class="task-conversation-form">
+        <label>Ajouter un commentaire
+          <textarea name="comment" rows="4" required maxlength="6000" placeholder="Votre commentaire…"></textarea>
+        </label>
+        <div class="followup-attachments">
+          <button type="button" data-followup-file>📎 Joindre un fichier</button>
+          <button type="button" data-followup-link>🔗 Ajouter un lien</button>
+          <input type="file" data-followup-input multiple hidden>
+          <div data-followup-draft></div>
         </div>
-        <div class="task-conversation-body" id="taskConversationBody">
-          <!-- Overlay de glisser-déposer de fichiers -->
-          <div id="taskConversationDropZone" class="chat-drop-overlay hidden">
-            <span style="font-size: 36px;">📁</span>
-            <span style="font-size: 14px; font-weight: 600; color: #60a5fa;">Déposez votre fichier ici pour le joindre</span>
-            <span style="font-size: 11px; color: #94a3b8;">Format AgendaBIP (Google Drive) jusqu'à 20 Mo</span>
-          </div>
-
-          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-            <h3 id="taskConversationItemTitle" class="task-conversation-item-title" style="margin: 0; font-size: 13.5px; font-weight: 600; color: #f8fafc; word-break: break-word;"></h3>
-            <span id="taskConversationCountBadge" style="font-size: 11px; color: #94a3b8; background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 12px; white-space: nowrap;"></span>
-          </div>
-
-          <!-- Zone de messages chat avec dates & horaires -->
-          <div id="taskConversationHistory" class="task-conversation-history"></div>
-
-          <!-- Brouillon de pièces jointes en attente d'envoi -->
-          <div id="taskConversationDraftAttachments" class="chat-draft-attachments"></div>
-
-          <form id="taskConversationForm" class="task-conversation-form" style="border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 8px; display: flex; flex-direction: column; gap: 8px;">
-            <!-- Barre d'outils pièces jointes et liens -->
-            <div class="chat-toolbar">
-              <button type="button" id="taskConversationAttachFileBtn" class="chat-tool-btn" title="Joindre un fichier (Glisser-déposer supporté)">📎 Joindre un fichier</button>
-              <button type="button" id="taskConversationAttachLinkBtn" class="chat-tool-btn" title="Ajouter un lien web">🔗 Ajouter un lien</button>
-              <input type="file" id="taskConversationFileInput" multiple style="display: none;">
-              <span style="margin-left: auto; font-size: 10px; color: #64748b;">💡 Glisser-déposer un fichier possible</span>
-            </div>
-
-            <div class="chat-input-row">
-              <textarea id="taskConversationInput" class="chat-textarea" rows="2" placeholder="Écrire un message de suivi... (Entrée pour envoyer, Maj+Entrée pour saut de ligne)" required></textarea>
-              <button type="submit" id="taskConversationSubmitBtn" class="chat-send-btn" title="Envoyer le message">➤</button>
-            </div>
-
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span id="taskConversationStatus" style="font-size: 11px; color: #94a3b8;"></span>
-              <span style="font-size: 9.5px; color: #64748b;">Horodaté AgendaBIP · Google Tasks & Agenda</span>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+        <p class="help">Horodaté et enregistré dans la tâche Google. Visible sur Android après synchronisation.</p>
+        <button type="submit">Ajouter au suivi</button>
+        <p role="status" data-conversation-status></p>
+      </form>
+    </dialog>
 
 
     <!-- Menu contextuel flottant pour événements d'agenda -->
