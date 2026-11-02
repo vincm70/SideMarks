@@ -3842,6 +3842,13 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 1px 4px;
+  transition: background 0.15s ease;
+}
+.task-content-box:hover {
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .task-title {
@@ -3851,11 +3858,31 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color 0.15s ease;
+}
+.task-content-box:hover .task-title {
+  color: #60a5fa;
 }
 
 .task-row.done .task-title {
   text-decoration: line-through;
   color: #94a3b8;
+}
+.task-row.done .task-content-box:hover .task-title {
+  color: #93c5fd;
+}
+
+.task-notes-badge {
+  background: rgba(96, 165, 250, 0.15);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  color: #93c5fd;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 9px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .task-meta {
@@ -4413,8 +4440,14 @@ html, body {
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.5;
-  max-height: 180px;
+  max-height: 200px;
   overflow-y: auto;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.task-reader-notes:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(96, 165, 250, 0.4);
 }
 
 .task-reader-notes a {
@@ -4423,6 +4456,41 @@ html, body {
 }
 .task-reader-notes a:hover {
   color: #93c5fd;
+}
+
+.task-reader-subtask-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background 0.15s ease;
+}
+.task-reader-subtask-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+.task-reader-subtask-check {
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  color: #10b981;
+  font-weight: 700;
+  font-size: 11px;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+.task-reader-subtask-check:hover {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.15);
+  transform: scale(1.05);
 }
 
 .task-reader-subtasks-list {
@@ -5020,6 +5088,11 @@ html, body {
   color: #f8fafc;
   line-height: 1.3;
   word-break: break-word;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.kanban-card-title:hover {
+  color: #60a5fa;
 }
 .kanban-card.done-card .kanban-card-title {
   text-decoration: line-through;

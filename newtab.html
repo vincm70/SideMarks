@@ -1254,7 +1254,7 @@
 
   <div id="toast" class="toast hidden"></div>
 
-    <!-- Modal Lecture Seule de Tâche & Sous-tâches (AgendaBIP Task Reader) -->
+    <!-- Modal Fiche Détaillée de Tâche & Sous-tâches (AgendaBIP Task Reader) -->
     <div id="taskReaderModal" class="side-modal hidden">
       <div class="side-modal-content task-reader-modal-card">
         <div class="side-modal-header">
@@ -1266,13 +1266,42 @@
           <button type="button" id="taskReaderCloseBtn" class="close-btn">&times;</button>
         </div>
         <div class="task-reader-body">
-          <h2 id="taskReaderTitle" class="task-reader-title"></h2>
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
+            <h2 id="taskReaderTitle" class="task-reader-title" style="flex: 1;"></h2>
+            <button type="button" id="taskReaderEditTitleBtn" class="btn-xs" title="Modifier le titre">✏️</button>
+          </div>
           <div id="taskReaderDue" class="task-reader-due"></div>
-          <div class="task-reader-section-title">Description & Notes</div>
-          <div id="taskReaderNotes" class="task-reader-notes"></div>
+
+          <!-- Pièces jointes (si présentes) -->
+          <div id="taskReaderAttachmentsSection" class="task-reader-attachments-section hidden">
+            <div class="task-reader-section-title">📎 Pièces jointes</div>
+            <div id="taskReaderAttachmentsList" class="task-reader-attachments-list" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;"></div>
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
+            <div class="task-reader-section-title" style="margin-top: 0; border-bottom: none;">Description & Notes</div>
+            <button type="button" id="taskReaderEditNotesBtn" class="btn-xs" style="padding: 2px 7px; font-size: 11px;">✏️ Modifier la note</button>
+          </div>
+          <div id="taskReaderNotes" class="task-reader-notes" title="Cliquer pour modifier la note"></div>
+          <div id="taskReaderNotesEditBox" class="task-reader-notes-edit-box hidden" style="display: flex; flex-direction: column; gap: 6px;">
+            <textarea id="taskReaderNotesTextarea" class="form-textarea" rows="6" style="width: 100%; font-size: 12px; font-family: inherit; line-height: 1.4; border-radius: 6px; padding: 8px;" placeholder="Écrire une note ou description pour cette tâche..."></textarea>
+            <div style="display: flex; justify-content: flex-end; gap: 6px;">
+              <button type="button" id="taskReaderSaveNotesBtn" class="btn-xs btn-xs-primary" style="padding: 3px 10px; font-weight: 600;">💾 Enregistrer</button>
+              <button type="button" id="taskReaderCancelNotesBtn" class="btn-xs" style="padding: 3px 8px;">Annuler</button>
+            </div>
+          </div>
+
           <div id="taskReaderSubtasksSection" class="task-reader-subtasks-section">
-            <div class="task-reader-section-title">Arborescence des Sous-tâches</div>
-            <div id="taskReaderSubtasksList" class="task-reader-subtasks-list"></div>
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div class="task-reader-section-title" style="border-bottom: none; margin-top: 0;">Arborescence des Sous-tâches</div>
+              <button type="button" id="taskReaderAddSubtaskBtn" class="btn-xs" style="padding: 2px 7px; font-size: 11px;">+ Ajouter sous-tâche</button>
+            </div>
+            <div id="taskReaderNewSubtaskBox" class="hidden" style="display: flex; gap: 6px; margin-top: 6px;">
+              <input type="text" id="taskReaderNewSubtaskInput" class="form-input" placeholder="Titre de la sous-tâche..." style="flex: 1; font-size: 11.5px; padding: 4px 8px;">
+              <button type="button" id="taskReaderSaveSubtaskBtn" class="btn-xs btn-xs-primary" style="padding: 4px 8px;">OK</button>
+              <button type="button" id="taskReaderCancelSubtaskBtn" class="btn-xs" style="padding: 4px 6px;">✕</button>
+            </div>
+            <div id="taskReaderSubtasksList" class="task-reader-subtasks-list" style="margin-top: 6px;"></div>
           </div>
         </div>
         <div class="side-modal-footer" style="display: flex; justify-content: space-between; align-items: center;">

@@ -3454,6 +3454,20 @@ function setupTasksWidget() {
   const readerCloseBtn = document.getElementById("taskReaderCloseBtn");
   const readerDoneBtn = document.getElementById("taskReaderDoneBtn");
   const readerDeleteBtn = document.getElementById("taskReaderDeleteBtn");
+  const readerEditTitleBtn = document.getElementById("taskReaderEditTitleBtn");
+  const readerAttachmentsSection = document.getElementById("taskReaderAttachmentsSection");
+  const readerAttachmentsList = document.getElementById("taskReaderAttachmentsList");
+  const readerEditNotesBtn = document.getElementById("taskReaderEditNotesBtn");
+  const readerNotesEditBox = document.getElementById("taskReaderNotesEditBox");
+  const readerNotesTextarea = document.getElementById("taskReaderNotesTextarea");
+  const readerSaveNotesBtn = document.getElementById("taskReaderSaveNotesBtn");
+  const readerCancelNotesBtn = document.getElementById("taskReaderCancelNotesBtn");
+  const readerAddSubtaskBtn = document.getElementById("taskReaderAddSubtaskBtn");
+  const readerNewSubtaskBox = document.getElementById("taskReaderNewSubtaskBox");
+  const readerNewSubtaskInput = document.getElementById("taskReaderNewSubtaskInput");
+  const readerSaveSubtaskBtn = document.getElementById("taskReaderSaveSubtaskBtn");
+  const readerCancelSubtaskBtn = document.getElementById("taskReaderCancelSubtaskBtn");
+  let lastDragEndTime = 0;
 
   let activeGroup = tasksSettings.filterGroup || "all";
   let activeState = tasksSettings.filterState || "todo";
@@ -4609,6 +4623,7 @@ function renderTasks() {
 
     card.addEventListener("dragend", () => {
       card.classList.remove("dragging");
+      lastDragEndTime = Date.now();
       const tasksTrash = document.getElementById("tasksTrashDropZone");
       if (tasksTrash) {
         tasksTrash.classList.remove("dragover");
@@ -4714,7 +4729,12 @@ function renderTasks() {
     titleEl.className = "kanban-card-title";
     titleEl.style.flex = "1";
     titleEl.textContent = task.title;
-    titleEl.title = `${task.title} — Double-clic pour ouvrir | Clic droit pour supprimer`;
+    titleEl.title = `${task.title} — Cliquer pour ouvrir la fiche détaillée`;
+    titleEl.addEventListener("click", (e) => {
+      if (e.target.closest("button, input, select, textarea")) return;
+      if (draggedTaskId || (Date.now() - lastDragEndTime < 250)) return;
+      openTaskReader(task);
+    });
     titleEl.addEventListener("dblclick", () => openTaskReader(task));
 
     const cardActionsBox = document.createElement("div");
@@ -4860,6 +4880,7 @@ function renderTasks() {
         subRow.addEventListener("dragend", (e) => {
           e.stopPropagation();
           subRow.classList.remove("dragging");
+          lastDragEndTime = Date.now();
           const tasksTrash = document.getElementById("tasksTrashDropZone");
           if (tasksTrash) {
             tasksTrash.classList.remove("dragover");
@@ -4904,7 +4925,13 @@ function renderTasks() {
         const subTitle = document.createElement("span");
         subTitle.className = `kanban-subtask-title${isSubDone ? " done" : ""}`;
         subTitle.textContent = sub.title;
-        subTitle.title = sub.title;
+        subTitle.style.cursor = "pointer";
+        subTitle.title = `${sub.title} — Cliquer pour ouvrir la fiche`;
+        subTitle.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (draggedTaskId || (Date.now() - lastDragEndTime < 250)) return;
+          openTaskReader(sub);
+        });
 
         // Badge de statut cliquable pour changer l'état de la sous-tâche
         const statusBadge = document.createElement("span");
@@ -4988,6 +5015,7 @@ function renderTasks() {
     row.addEventListener("dragend", (e) => {
       e.stopPropagation();
       row.classList.remove("dragging");
+      lastDragEndTime = Date.now();
       const tasksTrash = document.getElementById("tasksTrashDropZone");
       if (tasksTrash) {
         tasksTrash.classList.remove("dragover");
@@ -5133,15 +5161,29 @@ function renderTasks() {
 
     const contentBox = document.createElement("div");
     contentBox.className = "task-content-box";
+    contentBox.title = `${task.title} — Cliquer pour ouvrir la fiche détaillée`;
+
+    contentBox.addEventListener("click", (e) => {
+      if (e.target.closest("button, input, select, textarea, .agenda-active-badge, .subtasks-fold")) return;
+      if (draggedTaskId || (Date.now() - lastDragEndTime < 250)) return;
+      openTaskReader(task);
+    });
 
     const titleEl = document.createElement("div");
     titleEl.className = "task-title";
     titleEl.textContent = task.title;
-    titleEl.title = `${task.title} — Double-clic pour ouvrir en lecture seule`;
     titleEl.addEventListener("dblclick", () => openTaskReader(task));
 
     const metaEl = document.createElement("div");
     metaEl.className = "task-meta";
+
+    if (task.notes && task.notes.trim()) {
+      const notesBadge = document.createElement("span");
+      notesBadge.className = "task-notes-badge";
+      notesBadge.textContent = "📝 Note";
+      notesBadge.title = task.notes.slice(0, 100) + (task.notes.length > 100 ? "…" : "");
+      metaEl.appendChild(notesBadge);
+    }
 
     if (task.priority === "P0") {
       const pBadge = document.createElement("span");
@@ -5434,9 +5476,9 @@ function renderTasks() {
     }
   }
 
-  // MODE LECTURE SEULE (TASK READER)
+  // MODE FICHE DÉTAILLÉE DE TÂCHE (TASK READER & ÉDITEUR)
   function openTaskReader(task) {
-    if (!readerModal) return;
+    if (!readerModal || !task) return;
     readerActiveTask = task;
 
     if (readerTitle) readerTitle.textContent = task.title;
@@ -5449,37 +5491,102 @@ function renderTasks() {
       readerDue.textContent = task.due ? `📅 Échéance : ${task.due}` : "Aucune échéance fixée";
     }
 
+    // Réinitialisation de l'affichage de la note
+    if (readerNotesEditBox) readerNotesEditBox.classList.add("hidden");
     if (readerNotes) {
+      readerNotes.classList.remove("hidden");
       readerNotes.innerHTML = "";
-      const raw = task.notes || "(Aucune note)";
-      // Regex pour rendre les URLs cliquables
-      const urlPattern = /https?:\/\/[^\s<>"']+/g;
-      let offset = 0;
-      for (const match of raw.matchAll(urlPattern)) {
-        readerNotes.append(document.createTextNode(raw.slice(offset, match.index)));
-        const a = document.createElement("a");
-        a.textContent = match[0];
-        a.href = match[0];
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        readerNotes.append(a);
-        offset = match.index + match[0].length;
+      const raw = task.notes && task.notes.trim() ? task.notes : "";
+      if (!raw) {
+        readerNotes.innerHTML = '<span style="color:#64748b;font-style:italic;">(Aucune note. Cliquez ici ou sur « ✏️ Modifier la note » pour ajouter une description ou des liens.)</span>';
+      } else {
+        // Regex pour rendre les URLs cliquables
+        const urlPattern = /https?:\/\/[^\s<>"']+/g;
+        let offset = 0;
+        for (const match of raw.matchAll(urlPattern)) {
+          readerNotes.append(document.createTextNode(raw.slice(offset, match.index)));
+          const a = document.createElement("a");
+          a.textContent = match[0];
+          a.href = match[0];
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+          readerNotes.append(a);
+          offset = match.index + match[0].length;
+        }
+        readerNotes.append(document.createTextNode(raw.slice(offset)));
       }
-      readerNotes.append(document.createTextNode(raw.slice(offset)));
+    }
+
+    // Pièces jointes
+    if (readerAttachmentsSection && readerAttachmentsList) {
+      readerAttachmentsList.innerHTML = "";
+      if (Array.isArray(task.attachments) && task.attachments.length > 0) {
+        readerAttachmentsSection.classList.remove("hidden");
+        task.attachments.forEach(att => {
+          const attBadge = document.createElement("button");
+          attBadge.type = "button";
+          attBadge.className = "agenda-active-badge";
+          attBadge.style.cursor = "pointer";
+          attBadge.style.background = "rgba(16, 185, 129, 0.2)";
+          attBadge.style.borderColor = "#10b981";
+          attBadge.style.color = "#a7f3d0";
+          attBadge.style.padding = "3px 8px";
+          attBadge.style.borderRadius = "5px";
+          attBadge.innerHTML = `📎 ${att.name} <span style="opacity:0.7;font-size:9px;">(${Math.round((att.size || 0) / 1024)} Ko)</span>`;
+          attBadge.title = `Ouvrir « ${att.name} »`;
+          attBadge.addEventListener("click", (e) => {
+            e.stopPropagation();
+            openAttachmentFile(att);
+          });
+          readerAttachmentsList.appendChild(attBadge);
+        });
+      } else {
+        readerAttachmentsSection.classList.add("hidden");
+      }
     }
 
     // Sous-tâches
+    if (readerNewSubtaskBox) readerNewSubtaskBox.classList.add("hidden");
+    if (readerNewSubtaskInput) readerNewSubtaskInput.value = "";
     if (readerSubtasksList) {
       readerSubtasksList.innerHTML = "";
       const children = tasksList.filter(c => c.parent === task.id);
       if (children.length === 0) {
-        readerSubtasksList.innerHTML = '<span style="color:#64748b;font-size:10.5px;font-style:italic;">Aucune sous-tâche</span>';
+        readerSubtasksList.innerHTML = '<span style="color:#64748b;font-size:10.5px;font-style:italic;">Aucune sous-tâche pour le moment</span>';
       } else {
         children.forEach(c => {
           const item = document.createElement("div");
-          item.style.fontSize = "11px";
-          item.style.padding = "3px 0";
-          item.innerHTML = `<span style="color:${c.status === "done" ? "#10b981" : "#94a3b8"};font-weight:700;margin-right:6px;">${c.status === "done" ? "✓" : "○"}</span><span style="${c.status === "done" ? "text-decoration:line-through;color:#64748b;" : ""}">${c.title}</span>`;
+          item.className = "task-reader-subtask-item";
+
+          const chk = document.createElement("button");
+          chk.type = "button";
+          chk.className = "task-reader-subtask-check";
+          chk.textContent = (c.status === "done" || c.status === "completed") ? "✓" : "○";
+          chk.title = (c.status === "done" || c.status === "completed") ? "Marquer comme à faire" : "Marquer comme terminée";
+          chk.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const isDone = c.status === "done" || c.status === "completed";
+            c.status = isDone ? "todo" : "done";
+            saveTasks();
+            renderTasks();
+            syncGoogleTaskStatus(c);
+            openTaskReader(task);
+          });
+
+          const lbl = document.createElement("span");
+          lbl.style.fontSize = "11.5px";
+          lbl.style.flex = "1";
+          lbl.style.wordBreak = "break-word";
+          if (c.status === "done" || c.status === "completed") {
+            lbl.style.textDecoration = "line-through";
+            lbl.style.color = "#64748b";
+          } else {
+            lbl.style.color = "#f1f5f9";
+          }
+          lbl.textContent = c.title;
+
+          item.appendChild(chk);
+          item.appendChild(lbl);
           readerSubtasksList.appendChild(item);
         });
       }
@@ -5495,6 +5602,198 @@ function renderTasks() {
 
   if (readerCloseBtn) readerCloseBtn.addEventListener("click", closeTaskReader);
   if (readerDoneBtn) readerDoneBtn.addEventListener("click", closeTaskReader);
+
+  if (readerModal && !readerModal._backdropBound) {
+    readerModal._backdropBound = true;
+    readerModal.addEventListener("click", (e) => {
+      if (e.target === readerModal) closeTaskReader();
+    });
+  }
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && readerModal && !readerModal.classList.contains("hidden")) {
+      closeTaskReader();
+    }
+  });
+
+  // Édition de note
+  function enterNotesEditMode() {
+    if (!readerActiveTask) return;
+    if (readerNotes) readerNotes.classList.add("hidden");
+    if (readerNotesEditBox) {
+      readerNotesEditBox.classList.remove("hidden");
+      if (readerNotesTextarea) {
+        readerNotesTextarea.value = readerActiveTask.notes || "";
+        readerNotesTextarea.focus();
+      }
+    }
+  }
+
+  if (readerEditNotesBtn) readerEditNotesBtn.addEventListener("click", enterNotesEditMode);
+  if (readerNotes) {
+    readerNotes.addEventListener("click", (e) => {
+      if (e.target.tagName !== "A") enterNotesEditMode();
+    });
+  }
+
+  if (readerCancelNotesBtn) {
+    readerCancelNotesBtn.addEventListener("click", () => {
+      if (readerNotesEditBox) readerNotesEditBox.classList.add("hidden");
+      if (readerNotes) readerNotes.classList.remove("hidden");
+    });
+  }
+
+  if (readerSaveNotesBtn) {
+    readerSaveNotesBtn.addEventListener("click", () => {
+      if (!readerActiveTask) return;
+      const newNotes = readerNotesTextarea ? readerNotesTextarea.value.trim() : "";
+      pushTasksHistory(`Modification de note pour « ${readerActiveTask.title} »`);
+      readerActiveTask.notes = newNotes;
+      saveTasks();
+      renderTasks();
+
+      // Synchronisation Google Tasks API
+      if (chrome.identity && chrome.identity.getAuthToken && readerActiveTask.rawGroupId) {
+        chrome.identity.getAuthToken({ interactive: false }, (token) => {
+          if (!token) return;
+          fetch(`https://tasks.googleapis.com/tasks/v1/lists/${encodeURIComponent(readerActiveTask.rawGroupId)}/tasks/${encodeURIComponent(readerActiveTask.id)}`, {
+            method: "PATCH",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              id: readerActiveTask.id,
+              notes: readerActiveTask.notes
+            })
+          }).catch(err => console.warn("Google Tasks notes patch error:", err));
+        });
+      }
+
+      openTaskReader(readerActiveTask);
+      showToast("💾 Note enregistrée et synchronisée !");
+    });
+  }
+
+  // Modification du titre
+  if (readerEditTitleBtn) {
+    readerEditTitleBtn.addEventListener("click", () => {
+      if (!readerActiveTask) return;
+      const newTitle = prompt("Modifier le titre de la tâche :", readerActiveTask.title);
+      if (!newTitle) return;
+      const cleanTitle = newTitle.trim();
+      if (!cleanTitle || cleanTitle === readerActiveTask.title) return;
+
+      pushTasksHistory(`Renommer « ${readerActiveTask.title} » en « ${cleanTitle} »`);
+      readerActiveTask.title = cleanTitle;
+      saveTasks();
+      renderTasks();
+
+      // Synchronisation Google Tasks API
+      if (chrome.identity && chrome.identity.getAuthToken && readerActiveTask.rawGroupId) {
+        chrome.identity.getAuthToken({ interactive: false }, (token) => {
+          if (!token) return;
+          fetch(`https://tasks.googleapis.com/tasks/v1/lists/${encodeURIComponent(readerActiveTask.rawGroupId)}/tasks/${encodeURIComponent(readerActiveTask.id)}`, {
+            method: "PATCH",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              id: readerActiveTask.id,
+              title: readerActiveTask.title
+            })
+          }).catch(err => console.warn("Google Tasks title patch error:", err));
+        });
+      }
+
+      if (readerTitle) readerTitle.textContent = cleanTitle;
+      showToast("✏️ Titre mis à jour !");
+    });
+  }
+
+  // Ajout rapide de sous-tâche depuis la fiche
+  if (readerAddSubtaskBtn) {
+    readerAddSubtaskBtn.addEventListener("click", () => {
+      if (readerNewSubtaskBox) {
+        readerNewSubtaskBox.classList.remove("hidden");
+        if (readerNewSubtaskInput) {
+          readerNewSubtaskInput.value = "";
+          readerNewSubtaskInput.focus();
+        }
+      }
+    });
+  }
+
+  if (readerCancelSubtaskBtn) {
+    readerCancelSubtaskBtn.addEventListener("click", () => {
+      if (readerNewSubtaskBox) readerNewSubtaskBox.classList.add("hidden");
+    });
+  }
+
+  function handleSaveSubtaskFromReader() {
+    if (!readerActiveTask || !readerNewSubtaskInput) return;
+    const subTitle = readerNewSubtaskInput.value.trim();
+    if (!subTitle) return;
+
+    const sub = {
+      id: "task_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+      title: subTitle,
+      status: "todo",
+      parent: readerActiveTask.id,
+      groupId: readerActiveTask.groupId || "Général",
+      rawGroupId: readerActiveTask.rawGroupId || null,
+      priority: "NONE",
+      createdAt: new Date().toISOString()
+    };
+
+    pushTasksHistory(`Ajout de sous-tâche « ${subTitle} »`);
+    tasksList.push(sub);
+    expandedSubtasksSet.add(readerActiveTask.id);
+    collapsedSubtasksSet.delete(readerActiveTask.id);
+    saveTasks();
+    renderTasks();
+    openTaskReader(readerActiveTask);
+    showToast(`➕ Sous-tâche « ${subTitle} » ajoutée !`);
+
+    // Synchronisation création Google Tasks si disponible
+    if (chrome.identity && chrome.identity.getAuthToken && readerActiveTask.rawGroupId) {
+      chrome.identity.getAuthToken({ interactive: false }, async (token) => {
+        if (!token) return;
+        try {
+          const res = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${encodeURIComponent(readerActiveTask.rawGroupId)}/tasks?parent=${encodeURIComponent(readerActiveTask.id)}`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              title: sub.title,
+              status: "needsAction"
+            })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            sub.id = data.id;
+            saveTasks();
+          }
+        } catch (_) {}
+      });
+    }
+  }
+
+  if (readerSaveSubtaskBtn) readerSaveSubtaskBtn.addEventListener("click", handleSaveSubtaskFromReader);
+  if (readerNewSubtaskInput) {
+    readerNewSubtaskInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handleSaveSubtaskFromReader();
+      } else if (e.key === "Escape") {
+        if (readerNewSubtaskBox) readerNewSubtaskBox.classList.add("hidden");
+      }
+    });
+  }
+
   if (readerDeleteBtn) {
     readerDeleteBtn.addEventListener("click", () => {
       if (readerActiveTask) {
