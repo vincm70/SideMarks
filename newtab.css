@@ -5069,7 +5069,17 @@ html, body {
   border-radius: 4px;
   padding: 3px 6px;
   font-size: 10.5px;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+  cursor: grab;
+  user-select: none;
+}
+.kanban-subtask-row:active {
+  cursor: grabbing;
+}
+.kanban-subtask-row.dragging {
+  opacity: 0.45;
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.2);
 }
 .kanban-subtask-row:hover {
   background: rgba(15, 23, 42, 0.8);

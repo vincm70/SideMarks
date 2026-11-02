@@ -1795,12 +1795,13 @@ function setupAgendaWidget() {
     targetContainer.appendChild(details);
   }
 
-  // Configuration du Drag & Drop sur une cellule de date (Agenda) :
-  // - Accepte une tâche glissée -> ouvre la modale de planification pour créer le rendez-vous Google Agenda
+  // Configuration du Drag & Drop sur une cellule de date ou bloc horaire (Agenda) :
+  // - Accepte une tâche ou sous-tâche glissée -> ouvre la modale de planification pour créer le rendez-vous Google Agenda
   // - Accepte un événement glissé -> le reporte à la nouvelle date et synchronise Google Calendar
-  function setupDateDropTarget(element, dateKey) {
+  function setupDateDropTarget(element, dateKey, defaultTime = null) {
     if (!element) return;
     element.dataset.dropDate = dateKey;
+    if (defaultTime) element.dataset.dropTime = defaultTime;
 
     element.addEventListener("dragover", (e) => {
       e.preventDefault();
@@ -1832,14 +1833,15 @@ function setupAgendaWidget() {
         }
       }
 
-      // 2. Dépose d'une tâche sur une date -> Ouvrir la fenêtre de planification Google Agenda
+      // 2. Dépose d'une tâche ou sous-tâche sur une date -> Ouvrir la fenêtre de planification Google Agenda
       try {
         const raw = e.dataTransfer.getData("application/task") || e.dataTransfer.getData("text/plain");
         if (!raw) return;
         const taskData = JSON.parse(raw);
         if (!taskData || !taskData.id) return;
 
-        openScheduleTaskModal(taskData, dateKey);
+        const dropTime = element.dataset.dropTime || null;
+        openScheduleTaskModal(taskData, dateKey, dropTime);
       } catch (err) {
         console.error("Drop task error:", err);
       }
@@ -1901,16 +1903,21 @@ function setupAgendaWidget() {
     showToast(`📅 Événement « ${evData.title} » déplacé au ${newDateKey} !`);
   }
 
-  // Fenêtre modale : Planifier une tâche ou ajouter un rendez-vous dans Google Agenda
-  function openScheduleTaskModal(taskData, targetDate) {
+  // Fenêtre modale : Planifier une tâche ou sous-tâche ou ajouter un rendez-vous dans Google Agenda
+  function openScheduleTaskModal(taskData, targetDate, targetTime = null) {
     const modal = scheduleTaskModal || document.getElementById("scheduleTaskModal");
     if (!modal) return;
     pendingScheduleTaskId = taskData ? taskData.id : null;
     const task = taskData ? (tasksList.find(t => t.id === taskData.id) || taskData) : null;
+    const isSubtask = task ? Boolean(task.parent) : false;
 
     const modalTitle = document.getElementById("scheduleTaskModalTitle");
     if (modalTitle) {
-      modalTitle.textContent = task ? "📅 Planifier la tâche dans Google Agenda" : "📅 Nouveau Rendez-vous Google Agenda";
+      if (task) {
+        modalTitle.textContent = isSubtask ? "📅 Planifier la sous-tâche dans Google Agenda" : "📅 Planifier la tâche dans Google Agenda";
+      } else {
+        modalTitle.textContent = "📅 Nouveau Rendez-vous Google Agenda";
+      }
     }
 
     const titleInput = scheduleTaskTitleInput || document.getElementById("scheduleTaskTitleInput");
@@ -1921,8 +1928,19 @@ function setupAgendaWidget() {
 
     if (titleInput) titleInput.value = task ? (task.title || "") : "";
     if (dateInput) dateInput.value = targetDate || toDateKey(selectedDate);
-    if (timeInput) timeInput.value = "09:00";
-    if (notesInput) notesInput.value = task ? (task.notes || "") : "";
+    if (timeInput) timeInput.value = targetTime || "09:00";
+
+    if (notesInput) {
+      let desc = task ? (task.notes || "") : "";
+      if (task && isSubtask) {
+        const parentTask = tasksList.find(p => p.id === task.parent);
+        const parentTitle = parentTask ? parentTask.title : (taskData.parentTitle || "");
+        if (parentTitle && !desc.includes("↳ Sous-tâche de :")) {
+          desc = desc ? `↳ Sous-tâche de : ${parentTitle}\n\n${desc}` : `↳ Sous-tâche de : ${parentTitle}`;
+        }
+      }
+      notesInput.value = desc;
+    }
 
     if (calSelect) {
       calSelect.innerHTML = "";
@@ -2847,7 +2865,7 @@ function setupAgendaWidget() {
       const hStr = String(h).padStart(2, "0") + ":00";
       const block = document.createElement("div");
       block.className = "agenda-day-hour-block";
-      setupDateDropTarget(block, selKey);
+      setupDateDropTarget(block, selKey, hStr);
 
       const label = document.createElement("div");
       label.className = "agenda-day-time-label";
@@ -4441,6 +4459,64 @@ function renderTasks() {
       children.forEach(sub => {
         const subRow = document.createElement("div");
         subRow.className = "kanban-subtask-row";
+        subRow.draggable = true;
+        subRow.dataset.taskId = sub.id;
+        subRow.title = `${sub.title} — Glisser pour planifier dans l'agenda ou supprimer | Clic droit pour supprimer`;
+
+        // Support complet du Drag & Drop pour les sous-tâches (Agenda, Réorganisation, Corbeille)
+        subRow.addEventListener("dragstart", (e) => {
+          e.stopPropagation();
+          draggedTaskId = sub.id;
+          draggedTaskObj = sub;
+          e.dataTransfer.setData("application/task", JSON.stringify({
+            id: sub.id,
+            title: sub.title,
+            groupId: sub.groupId || task.groupId,
+            rawGroupId: sub.rawGroupId || sub.groupId || task.rawGroupId || task.groupId,
+            parentTitle: task.title
+          }));
+          e.dataTransfer.setData("text/plain", JSON.stringify({
+            id: sub.id,
+            title: sub.title,
+            parentTitle: task.title
+          }));
+          e.dataTransfer.effectAllowed = "move";
+          subRow.classList.add("dragging");
+          const tasksTrash = document.getElementById("tasksTrashDropZone");
+          if (tasksTrash) tasksTrash.classList.remove("hidden");
+        });
+
+        subRow.addEventListener("dragend", (e) => {
+          e.stopPropagation();
+          subRow.classList.remove("dragging");
+          const tasksTrash = document.getElementById("tasksTrashDropZone");
+          if (tasksTrash) {
+            tasksTrash.classList.remove("dragover");
+            tasksTrash.classList.add("hidden");
+          }
+          document.querySelectorAll(".drop-card-above, .drop-card-below, .drop-as-subtask-target, .drop-target-col, .drop-task-target").forEach(el => {
+            el.classList.remove("drop-card-above", "drop-card-below", "drop-as-subtask-target", "drop-target-col", "drop-task-target");
+          });
+          setTimeout(() => {
+            draggedTaskId = null;
+            draggedTaskObj = null;
+          }, 60);
+        });
+
+        subRow.addEventListener("mouseenter", () => {
+          currentHoveredItem = { type: "task", obj: sub };
+        });
+        subRow.addEventListener("mouseleave", () => {
+          if (currentHoveredItem && currentHoveredItem.obj === sub) {
+            currentHoveredItem = null;
+          }
+        });
+
+        subRow.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          deleteTask(sub, true);
+        });
 
         const isSubDone = sub.status === "done" || sub.status === "completed";
 
@@ -4513,22 +4589,26 @@ function renderTasks() {
     row.className = `task-row priority-${task.priority || "NONE"}${task.status === "done" ? " done" : ""}${isSubtask ? " is-subtask" : ""}`;
     row.draggable = true;
 
-    // 1. DRAG & DROP DE TÂCHE :
+    // 1. DRAG & DROP DE TÂCHE / SOUS-TÂCHE :
     // - Sur l'agenda pour planifier un RDV
     // - Sur une autre tâche pour réordonner (haut/bas) ou transformer en sous-tâche (centre)
     // - Sur la corbeille pour supprimer
     row.addEventListener("dragstart", (e) => {
+      e.stopPropagation();
       draggedTaskId = task.id;
       draggedTaskObj = task;
+      const parentTask = task.parent ? tasksList.find(p => p.id === task.parent) : null;
       e.dataTransfer.setData("application/task", JSON.stringify({
         id: task.id,
         title: task.title,
         groupId: task.groupId,
-        rawGroupId: task.rawGroupId || task.groupId
+        rawGroupId: task.rawGroupId || task.groupId,
+        parentTitle: parentTask ? parentTask.title : null
       }));
       e.dataTransfer.setData("text/plain", JSON.stringify({
         id: task.id,
-        title: task.title
+        title: task.title,
+        parentTitle: parentTask ? parentTask.title : null
       }));
       e.dataTransfer.effectAllowed = "move";
       row.classList.add("dragging");
@@ -4536,7 +4616,8 @@ function renderTasks() {
       if (tasksTrash) tasksTrash.classList.remove("hidden");
     });
 
-    row.addEventListener("dragend", () => {
+    row.addEventListener("dragend", (e) => {
+      e.stopPropagation();
       row.classList.remove("dragging");
       const tasksTrash = document.getElementById("tasksTrashDropZone");
       if (tasksTrash) {
