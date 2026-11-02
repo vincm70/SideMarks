@@ -383,6 +383,12 @@
             </div>
           </div>
 
+          <!-- Zone Corbeille par Glisser-Déposer (Agenda) -->
+          <div id="agendaTrashDropZone" class="widget-trash-dropzone hidden" title="Déposez ici pour supprimer définitivement le rendez-vous">
+            <span class="trash-icon">🗑️</span>
+            <span>Déposer ici pour supprimer le rendez-vous</span>
+          </div>
+
           <div class="widget-drag-handle" title="Glisser pour déplacer l'agenda">✥ Déplacer</div>
           <div class="widget-resize-handle" title="Glisser pour redimensionner l'agenda">⋱</div>
         </div>
@@ -518,6 +524,12 @@
                 <button type="button" id="cancelNewTaskBtn" class="btn-xs">✕</button>
               </div>
             </div>
+          </div>
+
+          <!-- Zone Corbeille par Glisser-Déposer (Tâches) -->
+          <div id="tasksTrashDropZone" class="widget-trash-dropzone hidden" title="Déposez ici pour supprimer définitivement la tâche">
+            <span class="trash-icon">🗑️</span>
+            <span>Déposer ici pour supprimer la tâche</span>
           </div>
 
           <div class="widget-drag-handle" title="Glisser pour déplacer les tâches">✥ Déplacer</div>
@@ -1263,7 +1275,10 @@
         </div>
         <div class="side-modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
           <button type="button" id="taskReaderCopyBtn" class="btn-xs btn-xs-primary">📋 Copier avec sous-tâches</button>
-          <button type="button" id="taskReaderDoneBtn" class="btn-xs">Fermer</button>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" id="taskReaderDeleteBtn" class="btn-xs" style="background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.4);">🗑️ Supprimer</button>
+            <button type="button" id="taskReaderDoneBtn" class="btn-xs">Fermer</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1303,6 +1318,8 @@
       <button type="button" class="context-menu-item" data-action="hideDay">👁️ Masquer pour ce jour</button>
       <button type="button" class="context-menu-item" data-action="openGoogle">📅 Ouvrir dans Google Agenda</button>
       <button type="button" class="context-menu-item" data-action="notify">🔔 Programmer alerte Windows</button>
+      <div class="context-menu-divider"></div>
+      <button type="button" class="context-menu-item danger" data-action="deleteEvent">🗑️ Supprimer définitivement</button>
     </div>
 
 

@@ -844,6 +844,31 @@ let tasksList = [
   { id: "t3", title: "Organisation des raccourcis du bureau", groupId: "Code", priority: "P2", status: "done", due: "", subtasks: [] }
 ];
 
+// Fonctions globales de suppression et élément survolé pour raccourci clavier Suppr (Delete)
+let currentHoveredItem = null;
+let deleteTask = null;
+let deleteGoogleEvent = null;
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Delete" || e.key === "Del") {
+    const active = document.activeElement;
+    if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable)) {
+      return;
+    }
+    if (currentHoveredItem) {
+      if (currentHoveredItem.type === "task" && typeof deleteTask === "function") {
+        deleteTask(currentHoveredItem.obj, true);
+        currentHoveredItem = null;
+        e.preventDefault();
+      } else if (currentHoveredItem.type === "event" && typeof deleteGoogleEvent === "function") {
+        deleteGoogleEvent(currentHoveredItem.obj, true);
+        currentHoveredItem = null;
+        e.preventDefault();
+      }
+    }
+  }
+});
+
 const clockWidget = document.getElementById("clockWidget");
 const notesWidget = document.getElementById("notesWidget");
 const pomodoroWidget = document.getElementById("pomodoroWidget");
@@ -2349,8 +2374,26 @@ function setupAgendaWidget() {
         }));
         e.dataTransfer.effectAllowed = "move";
         item.classList.add("dragging");
+        const agTrash = document.getElementById("agendaTrashDropZone");
+        if (agTrash) agTrash.classList.remove("hidden");
       });
-      item.addEventListener("dragend", () => item.classList.remove("dragging"));
+      item.addEventListener("dragend", () => {
+        item.classList.remove("dragging");
+        const agTrash = document.getElementById("agendaTrashDropZone");
+        if (agTrash) {
+          agTrash.classList.remove("dragover");
+          agTrash.classList.add("hidden");
+        }
+      });
+
+      item.addEventListener("mouseenter", () => {
+        currentHoveredItem = { type: "event", obj: ev };
+      });
+      item.addEventListener("mouseleave", () => {
+        if (currentHoveredItem && currentHoveredItem.obj === ev) {
+          currentHoveredItem = null;
+        }
+      });
 
       const calColor = CALENDAR_COLOR_PALETTE[ev.calendarTitle] || "#3b82f6";
       item.style.borderLeftColor = calColor;
@@ -2366,7 +2409,7 @@ function setupAgendaWidget() {
       const titleSpan = document.createElement("span");
       titleSpan.className = "agenda-event-title";
       titleSpan.textContent = ev.title;
-      titleSpan.title = `${ev.title} (${ev.timeStr}) — Glisser pour reporter | Clic pour ouvrir`;
+      titleSpan.title = `${ev.title} (${ev.timeStr}) — Glisser pour reporter ou supprimer | Clic droit pour menu`;
 
       if (ev.htmlLink) {
         titleSpan.style.cursor = "pointer";
@@ -2384,6 +2427,18 @@ function setupAgendaWidget() {
       const actionsBox = document.createElement("div");
       actionsBox.className = "agenda-event-actions";
 
+      // Bouton supprimer direct
+      const delEvBtn = document.createElement("button");
+      delEvBtn.type = "button";
+      delEvBtn.className = "agenda-event-btn-action del";
+      delEvBtn.textContent = "🗑️";
+      delEvBtn.title = "Supprimer ce rendez-vous";
+      delEvBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        deleteGoogleEvent(ev, true);
+      });
+      actionsBox.appendChild(delEvBtn);
+
       // Bulle de conversation de suivi (AgendaBIP)
       actionsBox.appendChild(createConversationBubbleBtn(ev, true));
 
@@ -2392,7 +2447,7 @@ function setupAgendaWidget() {
       moreBtn.type = "button";
       moreBtn.className = "agenda-event-btn-action";
       moreBtn.textContent = "⋮";
-      moreBtn.title = "Menu : Reporter, masquer, Google Agenda...";
+      moreBtn.title = "Menu : Reporter, masquer, supprimer...";
       moreBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         openContextMenu(e, ev);
@@ -2583,8 +2638,26 @@ function setupAgendaWidget() {
         }));
         e.dataTransfer.effectAllowed = "move";
         item.classList.add("dragging");
+        const agTrash = document.getElementById("agendaTrashDropZone");
+        if (agTrash) agTrash.classList.remove("hidden");
       });
-      item.addEventListener("dragend", () => item.classList.remove("dragging"));
+      item.addEventListener("dragend", () => {
+        item.classList.remove("dragging");
+        const agTrash = document.getElementById("agendaTrashDropZone");
+        if (agTrash) {
+          agTrash.classList.remove("dragover");
+          agTrash.classList.add("hidden");
+        }
+      });
+
+      item.addEventListener("mouseenter", () => {
+        currentHoveredItem = { type: "event", obj: ev };
+      });
+      item.addEventListener("mouseleave", () => {
+        if (currentHoveredItem && currentHoveredItem.obj === ev) {
+          currentHoveredItem = null;
+        }
+      });
 
       const calColor = CALENDAR_COLOR_PALETTE[ev.calendarTitle] || "#3b82f6";
       item.style.borderLeftColor = calColor;
@@ -2600,7 +2673,7 @@ function setupAgendaWidget() {
       const titleSpan = document.createElement("span");
       titleSpan.className = "agenda-event-title";
       titleSpan.textContent = ev.title;
-      titleSpan.title = `${ev.title} (${ev.timeStr}) — Glisser pour reporter | Clic pour ouvrir`;
+      titleSpan.title = `${ev.title} (${ev.timeStr}) — Glisser pour reporter ou supprimer | Clic droit pour menu`;
 
       if (ev.htmlLink) {
         titleSpan.style.cursor = "pointer";
@@ -2617,6 +2690,18 @@ function setupAgendaWidget() {
       const actionsBox = document.createElement("div");
       actionsBox.className = "agenda-event-actions";
 
+      // Bouton supprimer direct
+      const delEvBtn = document.createElement("button");
+      delEvBtn.type = "button";
+      delEvBtn.className = "agenda-event-btn-action del";
+      delEvBtn.textContent = "🗑️";
+      delEvBtn.title = "Supprimer ce rendez-vous";
+      delEvBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        deleteGoogleEvent(ev, true);
+      });
+      actionsBox.appendChild(delEvBtn);
+
       // Bulle de conversation de suivi (AgendaBIP)
       actionsBox.appendChild(createConversationBubbleBtn(ev, true));
 
@@ -2624,7 +2709,7 @@ function setupAgendaWidget() {
       moreBtn.type = "button";
       moreBtn.className = "agenda-event-btn-action";
       moreBtn.textContent = "⋮";
-      moreBtn.title = "Menu : Reporter, masquer, Google Agenda...";
+      moreBtn.title = "Menu : Reporter, masquer, supprimer...";
       moreBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         openContextMenu(e, ev);
@@ -2937,9 +3022,66 @@ function setupAgendaWidget() {
           else window.open("https://calendar.google.com", "_blank");
         } else if (action === "notify") {
           triggerWindowsAlarmNotification(ev);
+        } else if (action === "deleteEvent") {
+          deleteGoogleEvent(ev, true);
         }
       });
     });
+  }
+
+  deleteGoogleEvent = async function(ev, showUndo = true) {
+    if (!ev) return;
+    const evTitle = ev.title || "Rendez-vous";
+
+    if (ev.isLocal && ev.rawEv && ev.agKey) {
+      const list = agendaSettings.agendas[ev.agKey].events[ev.dateStr] || [];
+      const idx = list.findIndex(x => x.id === ev.id);
+      if (idx !== -1) {
+        const removed = list.splice(idx, 1)[0];
+        chrome.storage.local.set({ agendaSettings });
+        renderCurrentView();
+        if (showUndo) {
+          showToast(`🗑️ « ${evTitle} » supprimé.`, "Annuler", () => {
+            list.splice(idx, 0, removed);
+            chrome.storage.local.set({ agendaSettings });
+            renderCurrentView();
+            showToast(`↩️ « ${evTitle} » restauré !`);
+          }, 5000);
+        }
+      }
+      return;
+    }
+
+    const idx = googleEventsList.findIndex(e => e.id === ev.id);
+    if (idx !== -1) {
+      const deletedEv = googleEventsList.splice(idx, 1)[0];
+      chrome.storage.local.set({ googleEventsList });
+      renderCurrentView();
+
+      if (ev.calendarId && ev.id && !String(ev.id).startsWith("local_")) {
+        chrome.identity.getAuthToken({ interactive: false }, async (token) => {
+          if (token) {
+            try {
+              await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(ev.calendarId)}/events/${encodeURIComponent(ev.id)}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${token}` }
+              });
+            } catch (delErr) {
+              console.warn("Erreur suppression Google Calendar API:", delErr);
+            }
+          }
+        });
+      }
+
+      if (showUndo) {
+        showToast(`🗑️ Rendez-vous « ${evTitle} » supprimé.`, "Annuler", () => {
+          googleEventsList.splice(idx, 0, deletedEv);
+          chrome.storage.local.set({ googleEventsList });
+          renderCurrentView();
+          showToast(`↩️ « ${evTitle} » restauré !`);
+        }, 5000);
+      }
+    }
   }
 
   function postponeEventAction(ev, type) {
@@ -3160,6 +3302,33 @@ function setupAgendaWidget() {
     });
   }
 
+  const agendaTrashZone = document.getElementById("agendaTrashDropZone");
+  if (agendaTrashZone) {
+    agendaTrashZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      agendaTrashZone.classList.add("dragover");
+    });
+    agendaTrashZone.addEventListener("dragleave", () => {
+      agendaTrashZone.classList.remove("dragover");
+    });
+    agendaTrashZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      agendaTrashZone.classList.remove("dragover");
+      agendaTrashZone.classList.add("hidden");
+      const eventRaw = e.dataTransfer.getData("application/agenda-event");
+      if (eventRaw) {
+        try {
+          const evData = JSON.parse(eventRaw);
+          const ev = googleEventsList.find(x => x.id === evData.id) || evData;
+          deleteGoogleEvent(ev, true);
+        } catch (err) {
+          console.warn("Erreur drop agenda trash:", err);
+        }
+      }
+    });
+  }
+
   refreshAgendaDisplay = () => {
     renderCurrentView();
   };
@@ -3256,6 +3425,7 @@ function setupTasksWidget() {
   const readerCopyBtn = document.getElementById("taskReaderCopyBtn");
   const readerCloseBtn = document.getElementById("taskReaderCloseBtn");
   const readerDoneBtn = document.getElementById("taskReaderDoneBtn");
+  const readerDeleteBtn = document.getElementById("taskReaderDeleteBtn");
 
   let activeGroup = tasksSettings.filterGroup || "all";
   let activeState = tasksSettings.filterState || "todo";
@@ -3335,6 +3505,66 @@ function setupTasksWidget() {
   function saveTasks() {
     chrome.storage.local.set({ tasksData: tasksList, tasksSettings });
   }
+
+  deleteTask = async function(task, showUndo = true) {
+    if (!task) return;
+    const taskTitle = task.title || "Tâche";
+
+    const idx = tasksList.findIndex(t => t.id === task.id);
+    if (idx === -1) return;
+
+    // Collecter les sous-tâches pour suppression récursive et restauration
+    const descendants = [];
+    function collectDescendants(parentId) {
+      tasksList.forEach(t => {
+        if (t.parent === parentId) {
+          descendants.push(t);
+          collectDescendants(t.id);
+        }
+      });
+    }
+    collectDescendants(task.id);
+
+    // Supprimer la tâche principale et ses sous-tâches
+    const removedTasks = [tasksList.splice(idx, 1)[0]];
+    descendants.forEach(desc => {
+      const dIdx = tasksList.findIndex(t => t.id === desc.id);
+      if (dIdx !== -1) {
+        removedTasks.push(tasksList.splice(dIdx, 1)[0]);
+      }
+    });
+
+    saveTasks();
+    renderTasks();
+    renderGroupTabs();
+
+    // Synchronisation API Google Tasks (si tâche distante)
+    if (chrome.identity && chrome.identity.getAuthToken && task.rawGroupId && task.id && !String(task.id).startsWith("local_")) {
+      chrome.identity.getAuthToken({ interactive: false }, async (token) => {
+        if (!token) return;
+        try {
+          await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${encodeURIComponent(task.rawGroupId)}/tasks/${encodeURIComponent(task.id)}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        } catch (delErr) {
+          console.warn("Erreur suppression Google Tasks API:", delErr);
+        }
+      });
+    }
+
+    if (showUndo) {
+      showToast(`🗑️ Tâche « ${taskTitle} » supprimée.`, "Annuler", () => {
+        removedTasks.forEach(item => {
+          tasksList.push(item);
+        });
+        saveTasks();
+        renderTasks();
+        renderGroupTabs();
+        showToast(`↩️ « ${taskTitle} » restaurée !`);
+      }, 5000);
+    }
+  };
 
   let draggedGroup = null;
 
@@ -3983,10 +4213,17 @@ function renderTasks() {
       e.dataTransfer.setData("text/plain", JSON.stringify({ id: task.id, title: task.title }));
       e.dataTransfer.effectAllowed = "move";
       card.classList.add("dragging");
+      const tasksTrash = document.getElementById("tasksTrashDropZone");
+      if (tasksTrash) tasksTrash.classList.remove("hidden");
     });
 
     card.addEventListener("dragend", () => {
       card.classList.remove("dragging");
+      const tasksTrash = document.getElementById("tasksTrashDropZone");
+      if (tasksTrash) {
+        tasksTrash.classList.remove("dragover");
+        tasksTrash.classList.add("hidden");
+      }
       document.querySelectorAll(".drop-card-above, .drop-card-below, .drop-as-subtask-target, .drop-target-col, .drop-task-target").forEach(el => {
         el.classList.remove("drop-card-above", "drop-card-below", "drop-as-subtask-target", "drop-target-col", "drop-task-target");
       });
@@ -3994,6 +4231,20 @@ function renderTasks() {
         draggedTaskId = null;
         draggedTaskObj = null;
       }, 60);
+    });
+
+    card.addEventListener("mouseenter", () => {
+      currentHoveredItem = { type: "task", obj: task };
+    });
+    card.addEventListener("mouseleave", () => {
+      if (currentHoveredItem && currentHoveredItem.obj === task) {
+        currentHoveredItem = null;
+      }
+    });
+
+    card.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      deleteTask(task, true);
     });
 
     card.addEventListener("dragover", (e) => {
@@ -4063,7 +4314,7 @@ function renderTasks() {
       }
     });
 
-    // En-tête de la carte avec Titre + Bulle de conversation AgendaBIP
+    // En-tête de la carte avec Titre + Boutons d'actions rapides (Supprimer, Bulle de conversation AgendaBIP)
     const headerRow = document.createElement("div");
     headerRow.style.display = "flex";
     headerRow.style.alignItems = "flex-start";
@@ -4074,13 +4325,31 @@ function renderTasks() {
     titleEl.className = "kanban-card-title";
     titleEl.style.flex = "1";
     titleEl.textContent = task.title;
-    titleEl.title = `${task.title} — Double-clic pour ouvrir en lecture seule`;
+    titleEl.title = `${task.title} — Double-clic pour ouvrir | Clic droit pour supprimer`;
     titleEl.addEventListener("dblclick", () => openTaskReader(task));
 
+    const cardActionsBox = document.createElement("div");
+    cardActionsBox.style.display = "flex";
+    cardActionsBox.style.alignItems = "center";
+    cardActionsBox.style.gap = "2px";
+
+    // Bouton de suppression direct
+    const delCardBtn = document.createElement("button");
+    delCardBtn.type = "button";
+    delCardBtn.className = "kanban-card-del-btn";
+    delCardBtn.textContent = "🗑️";
+    delCardBtn.title = "Supprimer cette tâche (ou clic droit / touche Suppr)";
+    delCardBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteTask(task, true);
+    });
+    cardActionsBox.appendChild(delCardBtn);
+
     const bubbleBtn = createConversationBubbleBtn(task, false);
+    cardActionsBox.appendChild(bubbleBtn);
 
     headerRow.appendChild(titleEl);
-    headerRow.appendChild(bubbleBtn);
+    headerRow.appendChild(cardActionsBox);
     card.appendChild(headerRow);
 
     const metaEl = document.createElement("div");
@@ -4247,6 +4516,7 @@ function renderTasks() {
     // 1. DRAG & DROP DE TÂCHE :
     // - Sur l'agenda pour planifier un RDV
     // - Sur une autre tâche pour réordonner (haut/bas) ou transformer en sous-tâche (centre)
+    // - Sur la corbeille pour supprimer
     row.addEventListener("dragstart", (e) => {
       draggedTaskId = task.id;
       draggedTaskObj = task;
@@ -4262,10 +4532,17 @@ function renderTasks() {
       }));
       e.dataTransfer.effectAllowed = "move";
       row.classList.add("dragging");
+      const tasksTrash = document.getElementById("tasksTrashDropZone");
+      if (tasksTrash) tasksTrash.classList.remove("hidden");
     });
 
     row.addEventListener("dragend", () => {
       row.classList.remove("dragging");
+      const tasksTrash = document.getElementById("tasksTrashDropZone");
+      if (tasksTrash) {
+        tasksTrash.classList.remove("dragover");
+        tasksTrash.classList.add("hidden");
+      }
       document.querySelectorAll(".drop-insert-above, .drop-insert-below, .drop-as-subtask-target, .drop-task-target").forEach(el => {
         el.classList.remove("drop-insert-above", "drop-insert-below", "drop-as-subtask-target", "drop-task-target");
       });
@@ -4273,6 +4550,20 @@ function renderTasks() {
         draggedTaskId = null;
         draggedTaskObj = null;
       }, 60);
+    });
+
+    row.addEventListener("mouseenter", () => {
+      currentHoveredItem = { type: "task", obj: task };
+    });
+    row.addEventListener("mouseleave", () => {
+      if (currentHoveredItem && currentHoveredItem.obj === task) {
+        currentHoveredItem = null;
+      }
+    });
+
+    row.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      deleteTask(task, true);
     });
 
     row.addEventListener("dragover", (e) => {
@@ -4492,57 +4783,17 @@ function renderTasks() {
       openTaskReader(task);
     });
 
-    // Bouton Supprimer avec double sécurité (Confirmation en place + Toast Annuler)
+    // Bouton Supprimer direct avec Toast Annuler pendant 5 secondes
     const delBtn = document.createElement("button");
     delBtn.type = "button";
     delBtn.className = "agenda-event-btn-action del";
-    delBtn.textContent = "✕";
-    delBtn.title = "Supprimer cette tâche";
-    let pendingConfirmTimer = null;
-
+    delBtn.textContent = "🗑️";
+    delBtn.title = "Supprimer cette tâche (ou clic droit / touche Suppr)";
     delBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (!delBtn.dataset.confirming) {
-        // Étape 1 : Demande de confirmation visuelle sur le bouton même
-        delBtn.dataset.confirming = "1";
-        delBtn.textContent = "🗑️ Sûr ?";
-        delBtn.style.background = "#ef4444";
-        delBtn.style.color = "#ffffff";
-        delBtn.style.width = "auto";
-        delBtn.style.padding = "2px 6px";
-        delBtn.style.fontSize = "10px";
-
-        pendingConfirmTimer = setTimeout(() => {
-          delete delBtn.dataset.confirming;
-          delBtn.textContent = "✕";
-          delBtn.style.background = "";
-          delBtn.style.color = "";
-          delBtn.style.width = "";
-          delBtn.style.padding = "";
-          delBtn.style.fontSize = "";
-        }, 3500);
-        return;
-      }
-
-      // Étape 2 : Confirmation validée !
-      clearTimeout(pendingConfirmTimer);
-      delete delBtn.dataset.confirming;
-
-      const idx = tasksList.findIndex(t => t.id === task.id);
-      if (idx !== -1) {
-        const deletedTask = tasksList.splice(idx, 1)[0];
-        saveTasks();
-        renderTasks();
-
-        // Étape 3 : Toast avec possibilité d'ANNULER (Undo pendant 5 secondes)
-        showToast(`🗑️ Tâche « ${task.title} » supprimée.`, "Annuler", () => {
-          tasksList.splice(idx, 0, deletedTask);
-          saveTasks();
-          renderTasks();
-          showToast(`↩️ Tâche « ${task.title} » restaurée !`);
-        }, 5000);
-      }
+      deleteTask(task, true);
     });
+    actionsBox.appendChild(delBtn);
 
     if (!isSubtask) {
       const addSubBtn = document.createElement("button");
@@ -4795,6 +5046,15 @@ function renderTasks() {
 
   if (readerCloseBtn) readerCloseBtn.addEventListener("click", closeTaskReader);
   if (readerDoneBtn) readerDoneBtn.addEventListener("click", closeTaskReader);
+  if (readerDeleteBtn) {
+    readerDeleteBtn.addEventListener("click", () => {
+      if (readerActiveTask) {
+        const t = readerActiveTask;
+        closeTaskReader();
+        deleteTask(t, true);
+      }
+    });
+  }
   if (readerCopyBtn) {
     readerCopyBtn.addEventListener("click", () => {
       if (readerActiveTask) copyTaskTreeToClipboard(readerActiveTask);
@@ -4939,6 +5199,37 @@ function renderTasks() {
       }
     });
   });
+
+  // Zone de suppression Corbeille par Glisser-Déposer pour les tâches
+  const tasksTrashZone = document.getElementById("tasksTrashDropZone");
+  if (tasksTrashZone) {
+    tasksTrashZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      tasksTrashZone.classList.add("dragover");
+    });
+    tasksTrashZone.addEventListener("dragleave", () => {
+      tasksTrashZone.classList.remove("dragover");
+    });
+    tasksTrashZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      tasksTrashZone.classList.remove("dragover");
+      tasksTrashZone.classList.add("hidden");
+      let targetTask = draggedTaskObj;
+      if (!targetTask) {
+        const appTask = e.dataTransfer.getData("application/task");
+        if (appTask) {
+          try {
+            const parsed = JSON.parse(appTask);
+            targetTask = tasksList.find(t => t.id === parsed.id);
+          } catch (_) {}
+        }
+      }
+      if (targetTask) {
+        deleteTask(targetTask, true);
+      }
+    });
+  }
 
   refreshTasksDisplay = () => {
     renderGroupTabs();
